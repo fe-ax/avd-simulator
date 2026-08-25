@@ -4,9 +4,12 @@ import { formatTempo } from './RideSettings';
 interface Props {
   snapshot: EngineSnapshot;
   speedLimitKmh: number;
+  /** Debug only: freeze simulated time, and nudge it forward a step at a time. */
+  onTogglePause?: () => void;
+  onStep?: (seconds: number) => void;
 }
 
-export function Hud({ snapshot, speedLimitKmh }: Props) {
+export function Hud({ snapshot, speedLimitKmh, onTogglePause, onStep }: Props) {
   const speed = Math.round(snapshot.speedKmh);
   const over = speed > speedLimitKmh + 1;
   return (
@@ -45,6 +48,19 @@ export function Hud({ snapshot, speedLimitKmh }: Props) {
       {snapshot.rejection && snapshot.rejection.ageS < 2.2 && (
         <div className="hud-rejection" role="status">
           {snapshot.rejection.message}
+        </div>
+      )}
+      {snapshot.debug && (
+        <div className="hud-pause">
+          <button type="button" onClick={onTogglePause}>
+            {snapshot.paused ? '▶ Verder' : '⏸ Pauze'}
+          </button>
+          <button type="button" onClick={() => onStep?.(0.1)}>
+            +0,1s
+          </button>
+          <button type="button" onClick={() => onStep?.(1)}>
+            +1s
+          </button>
         </div>
       )}
       {snapshot.debug && (

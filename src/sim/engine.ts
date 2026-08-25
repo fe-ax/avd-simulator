@@ -93,6 +93,7 @@ export interface EngineSnapshot {
   t: number;
   timeScale: number;
   autoSteer: boolean;
+  paused: boolean;
   rejection: Rejection | null;
   countdown: number | null;
   speedKmh: number;
@@ -150,6 +151,12 @@ export class SimEngine {
   t = 0;
   countdownRemaining: number | null = null;
   debugEnabled = false;
+  /**
+   * Freezes simulated time while the frame loop keeps running, so the scene can be inspected and
+   * the head still moved. A debugging tool: the only way to look hard at a moment that lasts a
+   * sixtieth of a second.
+   */
+  paused = false;
   /**
    * Slow motion for training. Applied only to the real-time loop, so `t` and every recorded
    * timestamp stay in *simulated* seconds — a run at half tempo is directly comparable with one
@@ -270,6 +277,7 @@ export class SimEngine {
     this.actorTracks = Object.fromEntries(this.scenario.actors.map((a) => [a.id, []]));
     this.incidents = [];
     this.turnCompletedAt = null;
+    this.paused = false;
     this.accumulator = 0;
     this.lastFrameMs = null;
     this.nextSampleT = 0;
@@ -287,6 +295,12 @@ export class SimEngine {
     this.lastFrameMs = now;
 
     // Clamp so an alt-tab does not fast-forward the whole ride.
+    if (this.paused) {
+      // Still notify: the host keeps drawing, and the rider can keep looking around.
+      this.onFrame?.();
+      return;
+    }
+
     // Clamped so an alt-tab cannot fast-forward the ride when the tab comes back. The countdown
     // deliberately runs at real time: a three-second countdown should not take twelve.
     const tempo = this.phase === 'riding' ? this.timeScale : 1;
@@ -662,6 +676,7 @@ export class SimEngine {
       t: this.t,
       timeScale: this.timeScale,
       autoSteer: this.autoSteer,
+      paused: this.paused,
       rejection: this.rejection
         ? { message: this.rejection.message, ageS: this.t - this.rejection.t }
         : null,

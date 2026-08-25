@@ -177,6 +177,16 @@ Om te zien waar de snorfiets werkelijk rijdt:
 AVD_TUNE=1 npx vitest run tune
 ```
 
+### Pauzeren
+
+Zet **Debug-overlay** aan en er verschijnt boven in beeld een regel met `⏸ Pauze`, `+0,1s` en
+`+1s`. Pauze bevriest de gesimuleerde tijd terwijl het beeld blijft draaien, dus je kunt rustig
+rondkijken in een moment dat normaal een zestigste seconde duurt. De stapknoppen zetten de tijd
+met de hand vooruit — de manier om te zien wat er precies gebeurt op 5, 6 en 7 seconden.
+
+De regel eronder toont afstand tot het conflictpunt en waar de snorfiets rijdt: hoeveel meter
+achter je, onder welke hoek, en wat hij aan het doen is.
+
 ### Ontwikkelhulp
 
 `public/dev-driver.js` is een gescript ritje voor in de console:

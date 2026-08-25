@@ -115,15 +115,22 @@ function flatGeometry(surface: Surface, height: number): THREE.BufferGeometry {
   return geometry;
 }
 
-/** An upright block standing on its footprint. */
+/**
+ * An upright block standing on its footprint.
+ *
+ * `ExtrudeGeometry` builds in the xy plane and grows along +z, so one rotation about x lays the
+ * footprint flat *and* stands the extrusion up — and it already lands world y on scene −z, which
+ * is the mapping everything else uses. An extra mirror here is not a correction: it flips the
+ * buildings to the wrong side of the world and turns every face inside out. It went unnoticed for
+ * a while because a repeating terrace looks much the same mirrored — until roofs, built with the
+ * correct mapping, started landing on the wrong houses.
+ */
 function extrudedGeometry(surface: Surface): THREE.BufferGeometry {
   const geometry = new THREE.ExtrudeGeometry(toShape(surface), {
     depth: surface.height,
     bevelEnabled: false,
   });
-  // Extrusion grows along +z, so rotating the footprint flat leaves it standing upright.
   geometry.rotateX(-Math.PI / 2);
-  geometry.scale(1, 1, -1);
   return geometry;
 }
 

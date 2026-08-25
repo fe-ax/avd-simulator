@@ -215,7 +215,16 @@ export default function App() {
           ) : (
             <MapView getScene={getScene} resetKey={resetKey} onFrame={onFrame} />
           )}
-          {riding && <Hud snapshot={snapshot} speedLimitKmh={scenario.speedLimitKmh} />}
+          {riding && (
+            <Hud
+              snapshot={snapshot}
+              speedLimitKmh={scenario.speedLimitKmh}
+              onTogglePause={() => {
+                engine.paused = !engine.paused;
+              }}
+              onStep={(seconds) => engine.advance(seconds)}
+            />
+          )}
           {riding && !looking && (
             <div className="look-prompt">
               <strong>Klik om rond te kijken</strong>
