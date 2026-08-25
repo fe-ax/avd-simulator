@@ -8,7 +8,7 @@
  * tarmac rather than floating above it.
  */
 import { FORWARD_VIEW, MIRROR_VIEW, mirrorInFocus } from '../sim/perception';
-import type { ActorState, HeadPose, PoseOnRoute, WorldView } from '../sim/types';
+import type { ActorKind, ActorState, HeadPose, PoseOnRoute, WorldView } from '../sim/types';
 import type { Camera } from './camera';
 import { fillWorldPoly, type WorldPoint } from './paint';
 import { drawRoad, PALETTE } from './roadArt';
@@ -254,6 +254,97 @@ function drawMotorcycle(
   });
 }
 
+/**
+ * The Dutch legal maximums for a trekker-oplegger, repeated from `scene/actors3d.ts` because the
+ * two views have to agree about how much road one takes up — and because they are facts about the
+ * vehicle, not a drawing choice either renderer gets to make. The plan view is where a student
+ * reads a following distance off the replay, so a snorfiets-sized blob here would flatter every
+ * gap by fourteen metres.
+ */
+const TRUCK = { length: 16.5, width: 2.55, trailerLength: 13.6, cabLength: 2.3 };
+
+/** Snorfiets: small deck, rider sitting upright, blue plate at the back. */
+function drawSnorfietsSprite(ctx: Ctx, alarmed: boolean) {
+  box(ctx, -0.85, -0.34, 1.7, 0.68, 0.26, 'rgba(0,0,0,0.25)');
+  box(ctx, -0.7, -0.24, 1.4, 0.48, 0.2, '#d8d4cc');
+  box(ctx, -0.24, -0.28, 0.5, 0.56, 0.2, '#2c3140');
+  ctx.beginPath();
+  ctx.arc(0.06, 0, 0.17, 0, Math.PI * 2);
+  ctx.fillStyle = '#f0ede6';
+  ctx.fill();
+  // Blauwe plaat — the detail that says "snorfiets, 25 km/u, hoort op het fietspad".
+  box(ctx, -0.78, -0.11, 0.16, 0.22, 0.04, '#1f5fbf');
+
+  if (alarmed) box(ctx, -0.8, -0.14, 0.12, 0.28, 0.05, '#ff3b30');
+}
+
+/**
+ * Trekker-oplegger. Local +x is the direction of travel, so the nose is at +length/2 and the
+ * doors are at −length/2, the same way round as the mesh.
+ *
+ * What has to survive being seventeen metres long in a plan view is the *articulation*: cab, a
+ * visible gap at the koppeling, then the trailer. One unbroken rectangle at this length reads as
+ * a wall or a piece of the road, not as a vehicle with a driver at one end.
+ */
+function drawVrachtwagenSprite(ctx: Ctx, alarmed: boolean) {
+  const nose = TRUCK.length / 2;
+  const tail = -nose;
+  const half = TRUCK.width / 2;
+  const cabRear = nose - TRUCK.cabLength;
+
+  box(ctx, tail - 0.15, -half - 0.15, TRUCK.length + 0.3, TRUCK.width + 0.3, 0.5, 'rgba(0,0,0,0.25)');
+  // The chassis goes down first, so the koppeling shows as a dark waist between the two bodies.
+  box(ctx, cabRear - 1.4, -0.45, 2.2, 0.9, 0.2, '#212429');
+  box(ctx, tail, -half, TRUCK.trailerLength, TRUCK.width, 0.3, '#dcd9d2');
+  box(ctx, tail + 0.06, -half + 0.12, 0.2, TRUCK.width - 0.24, 0.06, '#c4c0b7');
+  box(ctx, cabRear, -half + 0.05, TRUCK.cabLength, TRUCK.width - 0.1, 0.35, '#2f5f8f');
+  // The same five axles the mesh has, mirrored because sprite +x is forward and mesh −z is. Last
+  // over both bodies, or the steering axle disappears under the cab standing on it.
+  for (const x of [6.85, 3.15, -4.3, -5.6, -6.9]) {
+    for (const side of [-1, 1]) {
+      box(ctx, x - 0.28, side > 0 ? half - 0.34 : -half, 0.56, 0.34, 0.1, '#17171a');
+    }
+  }
+  // Windscreen, so the plan view says which end the driver is at.
+  box(ctx, nose - 0.55, -half + 0.2, 0.4, TRUCK.width - 0.4, 0.12, '#2f3b47');
+
+  if (alarmed) {
+    for (const side of [-1, 1]) {
+      box(ctx, tail + 0.02, side > 0 ? 0.72 : -1.14, 0.22, 0.42, 0.07, '#ff3b30');
+    }
+  }
+}
+
+/** An ordinary car, 4.4 m. Sprite +x is forward, as with the truck. */
+function drawAutoSprite(ctx: Ctx, alarmed: boolean) {
+  const nose = 4.4 / 2;
+  const tail = -nose;
+  const half = 1.78 / 2;
+
+  box(ctx, tail - 0.12, -half - 0.12, 4.4 + 0.24, 1.78 + 0.24, 0.4, 'rgba(0,0,0,0.25)');
+  box(ctx, tail, -half, 4.4, 1.78, 0.5, '#8d3f3a');
+  // The greenhouse, inset on all four sides, which is what says car rather than crate.
+  box(ctx, tail + 1.05, -half + 0.16, 1.65, 1.78 - 0.32, 0.35, '#7c3733');
+  box(ctx, tail + 1.15, -half + 0.22, 0.16, 1.78 - 0.44, 0.08, '#2f3b47');
+  box(ctx, nose - 1.35, -half + 0.22, 0.16, 1.78 - 0.44, 0.08, '#2f3b47');
+  for (const x of [nose - 1.3, tail + 1.25]) {
+    for (const side of [-1, 1]) {
+      box(ctx, x - 0.26, side > 0 ? half - 0.28 : -half, 0.52, 0.28, 0.08, '#17171a');
+    }
+  }
+  if (alarmed) {
+    for (const side of [-1, 1]) {
+      box(ctx, tail + 0.02, side > 0 ? 0.34 : -0.72, 0.2, 0.38, 0.06, '#ff3b30');
+    }
+  }
+}
+
+/**
+ * How big a screen-space marker ring has to be to clear the vehicle it belongs to. In metres of
+ * the actor's own frame, so it scales with distance like everything else on the map.
+ */
+const MARKER_RADIUS: Partial<Record<ActorKind, number>> = { vrachtwagen: 2.4, auto: 1.7 };
+
 function drawActor(
   ctx: Ctx,
   cam: Camera,
@@ -266,23 +357,14 @@ function drawActor(
   const pulse = 0.5 + 0.5 * Math.sin(opts.time * 9);
 
   const projected = withPose(ctx, cam, pose, () => {
-    box(ctx, -0.85, -0.34, 1.7, 0.68, 0.26, 'rgba(0,0,0,0.25)');
-    // Snorfiets: small deck, rider sitting upright, blue plate at the back.
-    box(ctx, -0.7, -0.24, 1.4, 0.48, 0.2, '#d8d4cc');
-    box(ctx, -0.24, -0.28, 0.5, 0.56, 0.2, '#2c3140');
-    ctx.beginPath();
-    ctx.arc(0.06, 0, 0.17, 0, Math.PI * 2);
-    ctx.fillStyle = '#f0ede6';
-    ctx.fill();
-    // Blauwe plaat — the detail that says "snorfiets, 25 km/u, hoort op het fietspad".
-    box(ctx, -0.78, -0.11, 0.16, 0.22, 0.04, '#1f5fbf');
-
-    if (alarmed) box(ctx, -0.8, -0.14, 0.12, 0.28, 0.05, '#ff3b30');
+    if (actor.spec.kind === 'vrachtwagen') drawVrachtwagenSprite(ctx, alarmed);
+    else if (actor.spec.kind === 'auto') drawAutoSprite(ctx, alarmed);
+    else drawSnorfietsSprite(ctx, alarmed);
   });
   if (!projected) return;
 
   // Decoration is screen-space, but sized by depth so a far marker does not swamp the road.
-  const radius = Math.max(9, cam.scale * projected.q * 1.4);
+  const radius = Math.max(9, cam.scale * projected.q * (MARKER_RADIUS[actor.spec.kind] ?? 1.4));
 
   if (alarmed) {
     ctx.beginPath();

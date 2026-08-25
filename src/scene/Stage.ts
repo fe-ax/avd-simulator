@@ -8,7 +8,7 @@
  */
 import * as THREE from 'three';
 import { buildWorld, disposeWorld } from './buildWorld';
-import { createSnorfiets, placeActor } from './actors3d';
+import { createActorMesh, placeActor } from './actors3d';
 import { headingToYaw } from './coords';
 import { createRider, EYE_HEIGHT, INSTRUMENT_POSITION } from './rider';
 import { Instrument } from './instrument';
@@ -131,7 +131,7 @@ export class Stage {
     for (const actor of view.actors) {
       let mesh = this.actors.get(actor.spec.id);
       if (!mesh) {
-        mesh = createSnorfiets();
+        mesh = createActorMesh(actor.spec.kind);
         this.actors.set(actor.spec.id, mesh);
         this.scene.add(mesh);
       }
@@ -151,6 +151,10 @@ export class Stage {
 
   dispose() {
     for (const mesh of this.actors.values()) {
+      // Detach as well as free. Leaving them parented left a disposed Stage still holding a scene
+      // full of actors whose geometry had been released — which reads, to anything inspecting it,
+      // as a live scene that has lost its actor map.
+      this.scene.remove(mesh);
       mesh.traverse((n) => {
         if (n instanceof THREE.Mesh) {
           n.geometry.dispose();
