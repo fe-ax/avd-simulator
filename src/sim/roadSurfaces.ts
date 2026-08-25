@@ -52,7 +52,7 @@ export interface RoadExtent {
 const SEAM = 0.06;
 
 const HOUSE_PITCH = 9;
-const HOUSE_HEIGHT = 6;
+const HOUSE_HEIGHT = 5.2;
 
 /**
  * Kerbs stand proud of the carriageway. In plan view this changes nothing, but from the saddle it

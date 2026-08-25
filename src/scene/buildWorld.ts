@@ -50,7 +50,12 @@ const LAYER: Record<SurfaceKind, number> = {
  * cannot z-fight with it.
  */
 const FRONTAGE = {
-  proud: 0.03,
+  /**
+   * How far a panel stands off the wall. Frames and the glass they hold sit at *different*
+   * depths: coplanar, they fight for the same depth values and the window comes out striped.
+   */
+  framProud: 0.03,
+  paneProud: 0.055,
   doorWidth: 0.95,
   doorHeight: 2.1,
   windowWidth: 1.25,
@@ -60,12 +65,22 @@ const FRONTAGE = {
   colours: { door: '#5b4634', glass: '#2f3b47', frame: '#e6e2d8' },
 };
 
+/** Wall height is in roadSurfaces; this is what the roof adds on top of it, plus its overhang. */
+const ROOF_RISE = 1.9;
+const EAVES = 0.3;
+const ROOF_COLOUR = '#7d5a4a';
+
 const MATERIALS: Record<string, THREE.Material> = {};
 const detailMaterials: Record<string, THREE.MeshLambertMaterial> = {};
 
-function detailMaterial(colour: string): THREE.MeshLambertMaterial {
+function detailMaterial(colour: string, doubleSided = false): THREE.MeshLambertMaterial {
   if (!detailMaterials[colour]) {
-    detailMaterials[colour] = new THREE.MeshLambertMaterial({ color: new THREE.Color(colour) });
+    detailMaterials[colour] = new THREE.MeshLambertMaterial({
+      color: new THREE.Color(colour),
+      // Roof slopes are built by hand and their winding is not worth policing; three.js flips the
+      // normal for a back face, so the shading comes out right either way.
+      side: doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+    });
   }
   return detailMaterials[colour];
 }
@@ -137,6 +152,7 @@ function panel(
   bottom: number,
   width: number,
   height: number,
+  proud: number,
 ): THREE.BufferGeometry {
   const xs = surface.points.map((p) => p.x);
   const ys = surface.points.map((p) => p.y);
@@ -146,17 +162,77 @@ function panel(
   const maxY = Math.max(...ys);
 
   const geometry = new THREE.PlaneGeometry(width, height);
-  const out = FRONTAGE.proud;
 
   if (facing === 'west' || facing === 'east') {
-    const wall = facing === 'west' ? minX - out : maxX + out;
+    const wall = facing === 'west' ? minX - proud : maxX + proud;
     geometry.rotateY(facing === 'west' ? -Math.PI / 2 : Math.PI / 2);
     geometry.translate(wall, bottom + height / 2, -(minY + along));
   } else {
-    const wall = facing === 'south' ? minY - out : maxY + out;
-    geometry.rotateY(facing === 'south' ? Math.PI : 0);
+    // Scene z runs opposite to world y, so a wall fronting world −y faces scene +z — which is
+    // where an unrotated plane already points. Rotating it here turned every Kerkstraat frontage
+    // to face into its own house.
+    const wall = facing === 'south' ? minY - proud : maxY + proud;
+    geometry.rotateY(facing === 'south' ? 0 : Math.PI);
     geometry.translate(minX + along, bottom + height / 2, -wall);
   }
+  return geometry;
+}
+
+/**
+ * A gable roof over an axis-aligned footprint, ridged along its longer side and overhanging a
+ * little. A bare extruded block reads as a crate; from the saddle the roofline is what tells you
+ * these are houses and where the built-up stretch ends.
+ */
+function roofGeometry(surface: Surface, wallHeight: number): THREE.BufferGeometry {
+  const xs = surface.points.map((p) => p.x);
+  const ys = surface.points.map((p) => p.y);
+  const minX = Math.min(...xs) - EAVES;
+  const maxX = Math.max(...xs) + EAVES;
+  const minY = Math.min(...ys) - EAVES;
+  const maxY = Math.max(...ys) + EAVES;
+
+  const eave = wallHeight;
+  const ridge = wallHeight + ROOF_RISE;
+  const zNear = -minY;
+  const zFar = -maxY;
+
+  const positions: number[] = [];
+  type P = [number, number, number];
+  const tri = (a: P, b: P, c: P) => positions.push(...a, ...b, ...c);
+  const quad = (a: P, b: P, c: P, d: P) => {
+    tri(a, b, c);
+    tri(a, c, d);
+  };
+
+  if (maxX - minX >= maxY - minY) {
+    const zMid = (zNear + zFar) / 2;
+    const a: P = [minX, eave, zNear];
+    const b: P = [maxX, eave, zNear];
+    const c: P = [maxX, ridge, zMid];
+    const d: P = [minX, ridge, zMid];
+    const e: P = [maxX, eave, zFar];
+    const f: P = [minX, eave, zFar];
+    quad(a, b, c, d);
+    quad(d, c, e, f);
+    tri(a, d, f);
+    tri(b, e, c);
+  } else {
+    const xMid = (minX + maxX) / 2;
+    const a: P = [minX, eave, zNear];
+    const b: P = [xMid, ridge, zNear];
+    const c: P = [xMid, ridge, zFar];
+    const d: P = [minX, eave, zFar];
+    const e: P = [maxX, eave, zNear];
+    const f: P = [maxX, eave, zFar];
+    quad(a, b, c, d);
+    quad(b, e, f, c);
+    tri(a, e, b);
+    tri(d, c, f);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
   return geometry;
 }
 
@@ -172,47 +248,57 @@ function frontage(surface: Surface): { colour: string; geometry: THREE.BufferGeo
   const width = frontageWidth(surface, facing);
   const out: { colour: string; geometry: THREE.BufferGeometry }[] = [];
 
-  const add = (colour: string, along: number, bottom: number, w: number, h: number) => {
-    out.push({ colour, geometry: panel(surface, facing, along, bottom, w, h) });
+  const add = (
+    colour: string,
+    along: number,
+    bottom: number,
+    w: number,
+    h: number,
+    proud: number,
+  ) => {
+    out.push({ colour, geometry: panel(surface, facing, along, bottom, w, h, proud) });
   };
 
   // Door a third of the way along, with a window beside it and two above.
-  const doorAt = width * 0.32;
-  add(FRONTAGE.colours.frame, doorAt, 0, FRONTAGE.doorWidth + 0.14, FRONTAGE.doorHeight + 0.1);
-  add(FRONTAGE.colours.door, doorAt, 0, FRONTAGE.doorWidth, FRONTAGE.doorHeight);
-
-  const groundWindowAt = width * 0.68;
-  add(
-    FRONTAGE.colours.frame,
-    groundWindowAt,
-    FRONTAGE.groundSill - 0.07,
-    FRONTAGE.windowWidth + 0.14,
-    FRONTAGE.windowHeight + 0.14,
-  );
-  add(
-    FRONTAGE.colours.glass,
-    groundWindowAt,
-    FRONTAGE.groundSill,
-    FRONTAGE.windowWidth,
-    FRONTAGE.windowHeight,
-  );
-
-  for (const fraction of [0.3, 0.7]) {
+  const window = (along: number, sill: number) => {
     add(
       FRONTAGE.colours.frame,
-      width * fraction,
-      FRONTAGE.upperSill - 0.07,
+      along,
+      sill - 0.07,
       FRONTAGE.windowWidth + 0.14,
       FRONTAGE.windowHeight + 0.14,
+      FRONTAGE.framProud,
     );
     add(
       FRONTAGE.colours.glass,
-      width * fraction,
-      FRONTAGE.upperSill,
+      along,
+      sill,
       FRONTAGE.windowWidth,
       FRONTAGE.windowHeight,
+      FRONTAGE.paneProud,
     );
-  }
+  };
+
+  const doorAt = width * 0.32;
+  add(
+    FRONTAGE.colours.frame,
+    doorAt,
+    0,
+    FRONTAGE.doorWidth + 0.14,
+    FRONTAGE.doorHeight + 0.1,
+    FRONTAGE.framProud,
+  );
+  add(
+    FRONTAGE.colours.door,
+    doorAt,
+    0,
+    FRONTAGE.doorWidth,
+    FRONTAGE.doorHeight,
+    FRONTAGE.paneProud,
+  );
+
+  window(width * 0.68, FRONTAGE.groundSill);
+  for (const fraction of [0.3, 0.7]) window(width * fraction, FRONTAGE.upperSill);
 
   return out;
 }
@@ -250,6 +336,12 @@ export function buildWorld(scenario: Scenario): THREE.Group {
       details.push(geometry);
       byDetail.set(colour, details);
     }
+
+    if (surface.kind === 'house') {
+      const roofs = byDetail.get(ROOF_COLOUR) ?? [];
+      roofs.push(roofGeometry(surface, surface.height));
+      byDetail.set(ROOF_COLOUR, roofs);
+    }
   }
 
   const colours: Record<string, string> = {
@@ -273,8 +365,18 @@ export function buildWorld(scenario: Scenario): THREE.Group {
   }
 
   for (const [colour, geometries] of byDetail) {
-    const mesh = mergedMesh(geometries, detailMaterial(colour), 'frontage');
-    if (mesh) world.add(mesh);
+    const isRoof = colour === ROOF_COLOUR;
+    const mesh = mergedMesh(
+      geometries,
+      detailMaterial(colour, isRoof),
+      isRoof ? 'roof' : 'frontage',
+    );
+    if (!mesh) continue;
+    // Frontages have to take the shadow the wall around them is in, or a door lights up like a
+    // lamp on a wall that is plainly in shade.
+    mesh.receiveShadow = true;
+    mesh.castShadow = isRoof;
+    world.add(mesh);
   }
 
   return world;
