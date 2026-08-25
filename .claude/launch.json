@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "avd-simulator",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-lc",
+        "source \"$NVM_DIR/nvm.sh\" && nvm use >/dev/null && exec npm run dev"
+      ],
+      "port": 5273
+    }
+  ]
+}
