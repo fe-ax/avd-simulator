@@ -42,18 +42,27 @@ herhaling wisten nooit wat een beeld was.
 
 ## De kern
 
-**1 — Kijken doe je met de muis.** Klik in beeld (of sleep) en je hoofd draait mee, tot 140°
-opzij en 45° op en neer. Op elke plek die gecontroleerd moet worden zweeft een grijze stip: houd
-het kruisje er ongeveer een derde seconde op en hij registreert, licht groen op, en dooft weer
-uit naarmate de informatie veroudert.
+**1 — Kijken doe je met de muis, en het is een richting.** Klik in beeld (of sleep) en je hoofd
+draait mee, tot 140° opzij en 45° op en neer. Je hoeft nergens op te mikken: het hele gebied
+telt. Alles voorbij 60° naar rechts *is* een schouderblik rechts, alles opzij-en-omlaag is die
+spiegel, alles opzij-en-vlak is een blik. Zestig graden, omdat je vooruitzicht al 31° bestrijkt —
+verder dan dat kwam gewoon vooruitkijken nooit, dus dan heb je je écht omgedraaid.
 
-Die wachttijd is wat het eerlijk maakt. Je hoofd langs alle stippen vegen registreert er geen
-enkele, want op geen ervan is blijven hangen. Dat is een veel beter antwoord op scannen dan de
-strafteller die het verving: je kunt niet naar zes dingen tegelijk kijken, en nu kun je ook niet
-meer doen alsof.
+Houd zo'n richting ongeveer een derde seconde vast en de controle registreert. Die wachttijd is
+wat het eerlijk maakt: je hoofd in één zwaai langs alles halen registreert niets, want nergens is
+op blijven hangen. Dat is een veel beter antwoord op scannen dan de strafteller die het verving.
+
+De stippen laten zien waar een gebied zijn hart heeft; het gebied eromheen doet het werk. Je
+hoofd blijft staan waar je het laat — het veert niet terug naar de weg, want een beeld dat uit
+zichzelf beweegt terwijl jij nog aan het kijken bent, is niet te onderscheiden van je eigen
+sturen. Je ogen weer op de weg krijgen is jouw werk.
 
 Onder in beeld staat een strook met de zes controles. Die *rapporteert* — hij vertelt niet wat je
 nu moet doen.
+
+**Kijken en zien zijn niet hetzelfde.** Het gebied rekent je aan dát je je omdraaide; hoe ver je
+draaide bepaalt wat je zág. Te ver doordraaien is net zo blind als niet ver genoeg, en de
+nabespreking zegt welke van de twee het was.
 
 **2 — De spiegels zijn echt.** Elke spiegel rendert de scène opnieuw vanuit het gereflecteerde
 oogpunt. Wat erin staat is wat een spiegel onder die hoek zou laten zien. Gemeten, niet gekozen:
@@ -158,8 +167,8 @@ De scherpste getallen en waar ze vandaan komen:
 |---|---|---|
 | Spiegelhoek | 0° uitgedraaid | Het oog zit binnenboord van het glas, dus een recht gemonteerde spiegel kijkt al 26° naar buiten. Verder uitdraaien richt hem naast de weg |
 | Spiegelveld | 40° | Bolle spiegel. Hoe bol bepaalt hoe groot de dode hoek is |
-| Registratiehoek | 5° | De dichtstbijzijnde twee stippen komen tot 12,4° van elkaar; 10° diameter houdt 2,4° marge |
-| Schouderrichting | 102° | Verder naar achteren en het veld stopt bij 86°, net vóór waar de snorfiets op het beslissende moment rijdt |
+| Schouderdrempel | 60° | Vooruitzicht bestrijkt 31°; daarbuiten heb je je werkelijk omgedraaid |
+| Stip schouder | 102° | Waar het gebied zijn hart heeft. Verder naar achteren kijkt langs de dode hoek heen |
 | Wachttijd | 0,3 s | Lang genoeg dat langs vegen niets doet, kort genoeg om niet plakkerig te voelen |
 
 Om te zien waar de snorfiets werkelijk rijdt:
