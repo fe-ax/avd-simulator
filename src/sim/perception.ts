@@ -167,17 +167,27 @@ export function applyPerception(
   for (const actor of actors) {
     if (actor.perceived) continue;
 
-    const dx = actor.x - pose.x;
-    const dy = actor.y - pose.y;
-    const dist = Math.hypot(dx, dy);
-    const bearing = relativeBearingDeg(pose, actor.x, actor.y);
-    // Riders and road users sit a little below eye level; only a hard look up or down loses them.
-    const elevation = Math.atan2(-0.5, Math.max(dist, 0.5)) * DEG;
-
-    const seen =
-      inForwardView(head, bearing, elevation, dist) ||
-      (leftFocused && inMirror(bearing, dist, 'left')) ||
-      (rightFocused && inMirror(bearing, dist, 'right'));
+    // Nose, middle and tail, not just the middle.
+    //
+    // A road user used to be a point, which was harmless while every actor was a snorfiets. A
+    // trekker-oplegger is 16.5 m long: its centre sits eight metres behind its nose, so a truck
+    // filling the whole of a schouderblik counted as unseen until the rider drew level with the
+    // middle of the trailer. You have seen a vehicle when you have seen any of it.
+    const half = (actor.spec.length ?? 1.8) / 2;
+    const ahead = { x: Math.cos(actor.heading), y: Math.sin(actor.heading) };
+    const seen = [-half, 0, half].some((along) => {
+      const px = actor.x + ahead.x * along;
+      const py = actor.y + ahead.y * along;
+      const dist = Math.hypot(px - pose.x, py - pose.y);
+      const bearing = relativeBearingDeg(pose, px, py);
+      // Road users sit a little below eye level; only a hard look up or down loses them.
+      const elevation = Math.atan2(-0.5, Math.max(dist, 0.5)) * DEG;
+      return (
+        inForwardView(head, bearing, elevation, dist) ||
+        (leftFocused && inMirror(bearing, dist, 'left')) ||
+        (rightFocused && inMirror(bearing, dist, 'right'))
+      );
+    });
 
     if (!seen) continue;
     actor.perceived = true;

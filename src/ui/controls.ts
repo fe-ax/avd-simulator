@@ -3,6 +3,7 @@
  * is hold-to-act, and both the button panel and the keyboard handler read from it — so the two
  * input paths can never drift apart.
  */
+import { steeringIsInert, type SteeringScenario } from '../sim/steering';
 import type { ControlGroup, ControlId } from '../sim/types';
 
 export interface ControlDef {
@@ -15,14 +16,26 @@ export interface ControlDef {
   keyHint: string;
   /** Hold-to-act: records a down/up pair instead of a single press. */
   hold?: boolean;
+  /**
+   * Wording for a scenario where a press moves the machine one rijstrook sideways. Only the
+   * controls whose *meaning* changes carry it — the rest read the same on a snelweg as on a
+   * kruispunt, and one row of the table keeps saying so.
+   */
+  lane?: { label: string; short: string };
 }
 
+/** The default wording: what these groups mean when sturen is a choice between two routes. */
 export const GROUP_LABELS: Record<ControlGroup, string> = {
   kijken: 'Kijken',
   richting: 'Richting aangeven',
   snelheid: 'Snelheid',
   aandrijving: 'Aandrijving',
   sturen: 'Sturen',
+};
+
+/** Groups that are called something else once a press means a whole rijstrook. */
+const LANE_GROUP_LABELS: Partial<Record<ControlGroup, string>> = {
+  sturen: 'Rijstrook wisselen',
 };
 
 /**
@@ -42,8 +55,12 @@ export const CONTROLS: ControlDef[] = [
   { id: 'GEAR_UP', label: 'Schakel omhoog', short: 'Schakel +', group: 'aandrijving', code: 'KeyR', keyHint: 'R' },
   { id: 'GEAR_DOWN', label: 'Schakel omlaag', short: 'Schakel −', group: 'aandrijving', code: 'KeyF', keyHint: 'F' },
 
-  { id: 'STEER_LEFT', label: 'Stuur links', short: 'Stuur L', group: 'sturen', code: 'ArrowLeft', keyHint: '←' },
-  { id: 'STEER_RIGHT', label: 'Stuur rechts', short: 'Stuur R', group: 'sturen', code: 'ArrowRight', keyHint: '→' },
+  // The lane wording is the only thing that tells the student one press is one whole rijstrook
+  // rather than a nudge of the bars, so it is part of the table and not something a view invents.
+  { id: 'STEER_LEFT', label: 'Stuur links', short: 'Stuur L', group: 'sturen', code: 'ArrowLeft', keyHint: '←',
+    lane: { label: 'Rijstrook links', short: 'Rijstrook L' } },
+  { id: 'STEER_RIGHT', label: 'Stuur rechts', short: 'Stuur R', group: 'sturen', code: 'ArrowRight', keyHint: '→',
+    lane: { label: 'Rijstrook rechts', short: 'Rijstrook R' } },
 ];
 
 export const CONTROL_BY_ID: Record<ControlId, ControlDef> = Object.fromEntries(
@@ -65,3 +82,39 @@ export const GROUP_ROWS: ControlGroup[][] = [
   ['richting'],
   ['snelheid', 'aandrijving', 'sturen'],
 ];
+
+// ---------------------------------------------------------------------------
+// What the sturen controls mean here
+// ---------------------------------------------------------------------------
+
+/**
+ * What the sturen controls mean is decided in `src/sim/steering.ts` and nowhere else — the engine
+ * has to ask the same question and `src/sim` may not import from a view, so the rule lives there
+ * and this layer imports it. Re-exported rather than wrapped so the control layer still has one
+ * front door, and so there is no second body of it to drift.
+ *
+ * `steeringIsAutomatic` is deliberately not re-exported: it is what a finished run *records*, and
+ * nothing in the UI has any business asking it.
+ */
+export { steeringIsInert };
+export type { SteeringScenario };
+
+/** A control that steers, read off the table rather than by naming the two ids again. */
+export function isSteerControl(control: ControlId): boolean {
+  return CONTROL_BY_ID[control]?.group === 'sturen';
+}
+
+/** The wording for one control in this scenario. Falls back to the table's default row. */
+export function controlLabels(
+  def: ControlDef,
+  scenario: SteeringScenario,
+): { label: string; short: string } {
+  if (scenario.steering === 'lane' && def.lane) return def.lane;
+  return { label: def.label, short: def.short };
+}
+
+/** The heading for one group in this scenario. */
+export function groupLabel(group: ControlGroup, scenario: SteeringScenario): string {
+  if (scenario.steering === 'lane') return LANE_GROUP_LABELS[group] ?? GROUP_LABELS[group];
+  return GROUP_LABELS[group];
+}

@@ -23,8 +23,21 @@
  * a fout; never get off 50 and the truck has to stand on the brakes, which is the critical fault
  * it deserves to be.
  *
- * It also puts the truck exactly where the look sequence needs it: in your mirrors on the
- * approach, then into the dode hoek as it closes. The schouderblik has a reason to exist.
+ * WHAT THE SCHOUDERBLIK IS FOR HERE, measured rather than assumed. The truck stays in the left
+ * mirror the whole way: ride it properly and it is still three seconds back when you go, which is
+ * seventy-odd metres — nowhere near the blind spot. So unlike scenario 1, the schouderblik is not
+ * what reveals the hazard, and the briefing does not pretend it is. It is still required, for the
+ * honest reason an examiner gives: no mirror covers the strook beside you, so looking is the only
+ * way to know it is empty.
+ *
+ * Measured reveal times for the truck, which is the check that this is true:
+ *
+ *     volledige reeks   4,7s   (de linkerspiegel)
+ *     zonder spiegel    nooit  (de schouderblik haalt hem niet)
+ *     niets doen       18,2s   (als hij je al voorbij rijdt)
+ *
+ * A road user that genuinely sits in the dode hoek on this stretch would be a good third actor,
+ * and is the obvious next thing to add.
  */
 import type { Scenario } from './types';
 
@@ -63,8 +76,9 @@ export const invoegenSnelweg: Scenario = {
         'stuurknop werkt pas ná de schouderblik, en één druk is één hele rijstrook.',
       'Houd twee seconden volgafstand. Achter een vrachtwagen zijn het er drie: je kunt zijn ' +
         'remlichten niet zien, dus je hebt langer nodig om te merken dat er iets gebeurt.',
-      'De vrachtwagen haalt je in terwijl je optrekt. Hij zit eerst in je spiegel en verdwijnt ' +
-        'daarna in je dode hoek — dáárom kijk je over je schouder voordat je gaat.',
+      'De vrachtwagen zie je in je linkerspiegel aankomen. De schouderblik gaat niet over hém: ' +
+        'die gaat over de strook zelf, want wat naast je rijdt staat in geen enkele spiegel. Je ' +
+        'kijkt om te weten dát het leeg is.',
     ],
   },
 
