@@ -10,7 +10,8 @@ import * as THREE from 'three';
 import { buildWorld, disposeWorld } from './buildWorld';
 import { createSnorfiets, placeActor } from './actors3d';
 import { headingToYaw } from './coords';
-import { createRider } from './rider';
+import { createRider, INSTRUMENT_POSITION } from './rider';
+import { Instrument } from './instrument';
 import { Mirrors } from './mirrors';
 import { PALETTE } from '../palette';
 import type { HeadPose } from './head';
@@ -40,6 +41,7 @@ export class Stage {
   readonly head = new THREE.Group();
 
   readonly mirrors: Mirrors;
+  readonly instrument: Instrument;
 
   private readonly renderer: THREE.WebGLRenderer;
   private readonly world: THREE.Group;
@@ -97,6 +99,11 @@ export class Stage {
     // The machine hangs off the bike, not the head: turning to look leaves the bars where they
     // are, which is most of what makes a schouderblik feel like turning round.
     this.bike.add(createRider());
+    this.instrument = new Instrument(
+      INSTRUMENT_POSITION.clone().add(new THREE.Vector3(0, 0.017, 0.042)),
+      scenario.speedLimitKmh,
+    );
+    this.bike.add(this.instrument.mesh);
     this.mirrors = new Mirrors(this.bike);
     this.scene.add(this.bike);
   }
@@ -119,6 +126,7 @@ export class Stage {
     this.bike.rotation.y = headingToYaw(view.pose.heading);
     this.head.rotation.y = head.yaw;
     this.camera.rotation.x = head.pitch;
+    this.instrument.update(view.speedKmh, view.gear);
 
     for (const actor of view.actors) {
       let mesh = this.actors.get(actor.spec.id);
@@ -151,6 +159,7 @@ export class Stage {
       });
     }
     this.actors.clear();
+    this.instrument.dispose();
     this.mirrors.dispose();
     disposeWorld(this.world);
     this.renderer.dispose();

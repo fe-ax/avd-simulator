@@ -157,6 +157,8 @@ export default function App() {
       road: world.scenario.road,
       pose: world.bike.pose,
       speedFactor: world.bike.speed / (scenario.speedLimitKmh / 3.6),
+      speedKmh: world.bike.speed * 3.6,
+      gear: world.bike.gear,
       indicator: world.bike.indicator,
       braking: world.bike.brake,
       actors: world.actors,
@@ -218,7 +220,6 @@ export default function App() {
           {riding && (
             <Hud
               snapshot={snapshot}
-              speedLimitKmh={scenario.speedLimitKmh}
               onTogglePause={() => {
                 engine.paused = !engine.paused;
               }}

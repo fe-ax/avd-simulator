@@ -356,6 +356,9 @@ export interface WorldView {
   pose: PoseOnRoute;
   /** 0 at standstill, 1 at the road's speed limit. Drives how far the camera looks ahead. */
   speedFactor: number;
+  /** What the instrument on the cowl reads. */
+  speedKmh: number;
+  gear: number;
   indicator: 'left' | 'right' | 'off';
   braking: boolean;
   actors: ActorState[];

@@ -143,6 +143,8 @@ export class ReplayPlayer {
       road: this.scenario.road,
       pose: { x: bike.x, y: bike.y, heading: bike.heading },
       speedFactor: bike.speed / Math.max(1, this.scenario.speedLimitKmh / 3.6),
+      speedKmh: bike.speed * 3.6,
+      gear: bike.gear,
       indicator: bike.indicator,
       braking: bike.brake,
       actors,

@@ -3,25 +3,16 @@ import { formatTempo } from './RideSettings';
 
 interface Props {
   snapshot: EngineSnapshot;
-  speedLimitKmh: number;
   /** Debug only: freeze simulated time, and nudge it forward a step at a time. */
   onTogglePause?: () => void;
   onStep?: (seconds: number) => void;
 }
 
-export function Hud({ snapshot, speedLimitKmh, onTogglePause, onStep }: Props) {
-  const speed = Math.round(snapshot.speedKmh);
-  const over = speed > speedLimitKmh + 1;
+export function Hud({ snapshot, onTogglePause, onStep }: Props) {
   return (
     <div className="hud">
-      <div className={`hud-item hud-speed${over ? ' over' : ''}`}>
-        <span className="hud-value">{speed}</span>
-        <span className="hud-unit">km/u</span>
-      </div>
-      <div className="hud-item">
-        <span className="hud-label">Versnelling</span>
-        <span className="hud-value small">{snapshot.gear}</span>
-      </div>
+      {/* Speed and gear are on the machine's own instrument; repeating them here would make
+          reading the clocks free, which is the one thing it should not be. */}
       <div className={`hud-item hud-ind ${snapshot.indicator}`}>
         <span className="hud-label">Richting</span>
         <span className="hud-value small">

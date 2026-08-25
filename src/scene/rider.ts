@@ -11,7 +11,7 @@ import * as THREE from 'three';
 
 const RIDER = {
   frame: '#4a4d55',
-  bodywork: '#3d7cc4',
+  bodywork: '#3c4a5e',
   jacket: '#3a3f4c',
   glove: '#54596a',
   mirrorBack: '#33363d',
@@ -32,6 +32,10 @@ export const MIRROR_POSITION = {
   left: new THREE.Vector3(-0.36, 1.27, -0.72),
   right: new THREE.Vector3(0.36, 1.27, -0.72),
 };
+
+/** Where the instrument binnacle sits, in bike-local metres: ahead and below the eye, so reading
+ * it means dropping your eyes off the road. */
+export const INSTRUMENT_POSITION = new THREE.Vector3(0, 1.15, -0.8);
 
 /** Glass size in metres. Small, like the real thing. */
 export const MIRROR_SIZE = { width: 0.14, height: 0.095 };
@@ -70,8 +74,10 @@ export function createRider(): THREE.Group {
   tank.position.set(0, 0.93, -0.46);
   rider.add(tank);
 
-  const cowl = box(0.24, 0.12, 0.09, RIDER.frame);
-  cowl.position.set(0, 1.15, -0.82);
+  // A bezel for the instrument rather than a blank block; the display itself is added by Stage.
+  const cowl = box(0.28, 0.155, 0.07, RIDER.frame);
+  cowl.position.copy(INSTRUMENT_POSITION);
+  cowl.rotation.x = -0.45;
   rider.add(cowl);
 
   for (const sign of [-1, 1]) {

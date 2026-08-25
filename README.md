@@ -60,6 +60,10 @@ sturen. Je ogen weer op de weg krijgen is jouw werk.
 Onder in beeld staat een strook met de zes controles. Die *rapporteert* — hij vertelt niet wat je
 nu moet doen.
 
+Snelheid en versnelling staan op de teller van de motor zelf, niet in een hoekje van het scherm.
+Hij zit zo'n 21° onder je oogpunt: aflezen is een blik omlaag naar de machine, precies het kleine
+prijskaartje dat het op de weg ook heeft. Boven de limiet kleurt de snelheid rood.
+
 **Kijken en zien zijn niet hetzelfde.** Het gebied rekent je aan dát je je omdraaide; hoe ver je
 draaide bepaalt wat je zág. Te ver doordraaien is net zo blind als niet ver genoeg, en de
 nabespreking zegt welke van de twee het was.
