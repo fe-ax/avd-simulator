@@ -49,6 +49,13 @@ const SEAM = 0.06;
 const HOUSE_PITCH = 9;
 const HOUSE_HEIGHT = 6;
 
+/**
+ * Kerbs stand proud of the carriageway. In plan view this changes nothing, but from the saddle it
+ * is the single strongest cue that a junction is coming: the raised edge running alongside you
+ * stops dead at the mouth of the side road. A flat strip is invisible edge-on.
+ */
+const KERB_HEIGHT = 0.12;
+
 function rect(
   kind: SurfaceKind,
   x1: number,
@@ -176,8 +183,8 @@ export function roadSurfaces(road: RoadLayout, ext: RoadExtent): Surface[] {
   for (const sign of [1, -1] as const) {
     const inner = sign * (halfWidth - SEAM);
     const outer = sign * (kerbTo + SEAM);
-    out.push(rect('kerb', inner, ext.minY, outer, -sideHalfWidth));
-    out.push(rect('kerb', inner, sideHalfWidth, outer, ext.maxY));
+    out.push(rect('kerb', inner, ext.minY, outer, -sideHalfWidth, KERB_HEIGHT));
+    out.push(rect('kerb', inner, sideHalfWidth, outer, ext.maxY, KERB_HEIGHT));
   }
 
   out.push(rect('asphalt', -halfWidth, ext.minY, halfWidth, ext.maxY));

@@ -7,12 +7,14 @@ import { ReplayPlayer } from './sim/replay';
 import { rechtsafFietspad } from './sim/scenario.rechtsaf-fietspad';
 import { scoreRun } from './sim/scoring';
 import type { RunRecord, WorldView } from './sim/types';
+import type { HeadPose } from './scene/Stage';
 import type { SceneOptions } from './render/drawScene';
 import { BriefingModal } from './ui/BriefingModal';
 import { ControlPanel } from './ui/ControlPanel';
 import { Debrief } from './ui/Debrief';
 import { Hud } from './ui/Hud';
 import { MapView } from './ui/MapView';
+import { RideView } from './ui/RideView';
 import { RunHistory } from './ui/RunHistory';
 import { RideSettings } from './ui/RideSettings';
 import { Timeline } from './ui/Timeline';
@@ -136,6 +138,22 @@ export default function App() {
     }
   }, []);
 
+  /** The live world, as both views want it. */
+  const getLiveView = useCallback((): WorldView => {
+    const world = engine.world(false);
+    return {
+      road: world.scenario.road,
+      pose: world.bike.pose,
+      speedFactor: world.bike.speed / (scenario.speedLimitKmh / 3.6),
+      indicator: world.bike.indicator,
+      braking: world.bike.brake,
+      actors: world.actors,
+      gazes: world.gazes,
+    };
+  }, [engine, scenario.speedLimitKmh]);
+
+  const getHead = useCallback((): HeadPose => ({ yaw: 0, pitch: 0 }), []);
+
   const getScene = useCallback((): { world: WorldView; opts: SceneOptions } | null => {
     const player = playerRef.current;
     if (player) {
@@ -151,17 +169,8 @@ export default function App() {
         },
       };
     }
-    const world = engine.world(false);
     return {
-      world: {
-        road: world.scenario.road,
-        pose: world.bike.pose,
-        speedFactor: world.bike.speed / (scenario.speedLimitKmh / 3.6),
-        indicator: world.bike.indicator,
-        braking: world.bike.brake,
-        actors: world.actors,
-        gazes: world.gazes,
-      },
+      world: getLiveView(),
       opts: {
         time: engine.t,
         revealAll: false,
@@ -170,7 +179,7 @@ export default function App() {
         conflictPoint,
       },
     };
-  }, [conflictPoint, debug, engine, scenario.speedLimitKmh]);
+  }, [conflictPoint, debug, engine, getLiveView]);
 
   // -------------------------------------------------------------------------
 
@@ -178,7 +187,11 @@ export default function App() {
     <div className="app">
       <div className="stage">
         <div className="map-wrap">
-          <MapView getScene={getScene} resetKey={resetKey} onFrame={onFrame} />
+          {record === null ? (
+            <RideView scenario={scenario} getView={getLiveView} getHead={getHead} />
+          ) : (
+            <MapView getScene={getScene} resetKey={resetKey} onFrame={onFrame} />
+          )}
           {riding && <Hud snapshot={snapshot} speedLimitKmh={scenario.speedLimitKmh} />}
           {record === null && snapshot.phase !== 'riding' && (
             <BriefingModal

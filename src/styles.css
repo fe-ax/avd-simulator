@@ -62,7 +62,8 @@ kbd {
   background: #0d0f13;
 }
 
-.map-canvas {
+.map-canvas,
+.ride-canvas {
   display: block;
   width: 100%;
   height: 100%;

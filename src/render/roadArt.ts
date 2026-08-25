@@ -7,19 +7,9 @@ import type { Camera } from './camera';
 import { fillWorldPoly } from './paint';
 import { roadSurfaces, type RoadExtent, type SurfaceKind } from '../sim/roadSurfaces';
 import type { RoadLayout } from '../sim/types';
+import { PALETTE } from '../palette';
 
-export const PALETTE = {
-  grass: '#7d9c66',
-  asphalt: '#4c4d51',
-  fietspad: '#a04a3f',
-  fietspadEdge: '#b3564a',
-  kerb: '#b7b3a9',
-  paint: '#eceae3',
-  house: '#c3ab93',
-  houseAlt: '#b09a86',
-  roof: '#7d5a4a',
-  hedge: '#5f7f4d',
-};
+export { PALETTE };
 
 const COLOURS: Record<SurfaceKind, string> = {
   hedge: PALETTE.hedge,
