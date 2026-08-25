@@ -7,7 +7,7 @@ import { ReplayPlayer } from './sim/replay';
 import { rechtsafFietspad } from './sim/scenario.rechtsaf-fietspad';
 import { scoreRun } from './sim/scoring';
 import type { RunRecord, WorldView } from './sim/types';
-import type { HeadPose } from './scene/Stage';
+import { HeadController } from './scene/head';
 import type { SceneOptions } from './render/drawScene';
 import { BriefingModal } from './ui/BriefingModal';
 import { ControlPanel } from './ui/ControlPanel';
@@ -38,6 +38,10 @@ export default function App() {
   const [resetKey, setResetKey] = useState(0);
 
   const playerRef = useRef<ReplayPlayer | null>(null);
+  const headRef = useRef<HeadController | null>(null);
+  if (headRef.current === null) headRef.current = new HeadController();
+  const head = headRef.current;
+  const [looking, setLooking] = useState(false);
   const lastPlayheadPush = useRef(0);
 
   const conflictPoint = useMemo(
@@ -56,6 +60,7 @@ export default function App() {
     setPlaying(false);
     playerRef.current = null;
     setResetKey((k) => k + 1);
+    head.reset();
     engine.debugEnabled = debug;
     engine.timeScale = timeScale;
     engine.autoSteer = autoSteer;
@@ -68,7 +73,7 @@ export default function App() {
       setRecord(full);
       setRuns(saveRun(full));
     });
-  }, [autoSteer, debug, engine, replayRate, scenario, start, timeScale]);
+  }, [autoSteer, debug, engine, head, replayRate, scenario, start, timeScale]);
 
   const handleNewRun = useCallback(() => {
     playerRef.current = null;
@@ -152,8 +157,6 @@ export default function App() {
     };
   }, [engine, scenario.speedLimitKmh]);
 
-  const getHead = useCallback((): HeadPose => ({ yaw: 0, pitch: 0 }), []);
-
   const getScene = useCallback((): { world: WorldView; opts: SceneOptions } | null => {
     const player = playerRef.current;
     if (player) {
@@ -188,11 +191,22 @@ export default function App() {
       <div className="stage">
         <div className="map-wrap">
           {record === null ? (
-            <RideView scenario={scenario} getView={getLiveView} getHead={getHead} />
+            <RideView
+              scenario={scenario}
+              getView={getLiveView}
+              head={head}
+              onLockChange={setLooking}
+            />
           ) : (
             <MapView getScene={getScene} resetKey={resetKey} onFrame={onFrame} />
           )}
           {riding && <Hud snapshot={snapshot} speedLimitKmh={scenario.speedLimitKmh} />}
+          {riding && !looking && (
+            <div className="look-prompt">
+              <strong>Klik om rond te kijken</strong>
+              <span>Beweeg de muis om je hoofd te draaien · Esc laat weer los</span>
+            </div>
+          )}
           {record === null && snapshot.phase !== 'riding' && (
             <BriefingModal
               scenario={scenario}

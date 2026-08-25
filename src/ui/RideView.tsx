@@ -4,31 +4,34 @@
  * React learns anything about pixels.
  */
 import { useEffect, useRef } from 'react';
-import { Stage, type HeadPose } from '../scene/Stage';
+import { Stage } from '../scene/Stage';
+import type { HeadController } from '../scene/head';
 import type { Scenario, WorldView } from '../sim/types';
 
 interface Props {
   scenario: Scenario;
   getView: () => WorldView | null;
-  getHead: () => HeadPose;
+  head: HeadController;
+  onLockChange?: (locked: boolean) => void;
   /** Called once per frame with elapsed seconds, before the scene is synced. */
   onFrame?: (dt: number) => void;
 }
 
-export function RideView({ scenario, getView, getHead, onFrame }: Props) {
+export function RideView({ scenario, getView, head, onLockChange, onFrame }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const getViewRef = useRef(getView);
-  const getHeadRef = useRef(getHead);
   const onFrameRef = useRef(onFrame);
+  const onLockRef = useRef(onLockChange);
   getViewRef.current = getView;
-  getHeadRef.current = getHead;
   onFrameRef.current = onFrame;
+  onLockRef.current = onLockChange;
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const stage = new Stage(canvas, scenario);
+    const detachHead = head.attach(canvas, (locked) => onLockRef.current?.(locked));
     let raf = 0;
     let last = performance.now();
 
@@ -42,15 +45,17 @@ export function RideView({ scenario, getView, getHead, onFrame }: Props) {
 
     const renderFrame = (dt: number) => {
       onFrameRef.current?.(dt);
+      head.update(dt);
       const view = getViewRef.current();
       if (!view) return;
-      stage.sync(view, getHeadRef.current());
+      stage.sync(view, head.pose);
       stage.render();
     };
 
     if (import.meta.env.DEV) {
       Object.assign(window, {
         __stage: stage,
+        __head: head,
         __frames3d: (n = 30, dt = 1 / 60) => {
           for (let i = 0; i < n; i++) renderFrame(dt);
         },
@@ -69,9 +74,10 @@ export function RideView({ scenario, getView, getHead, onFrame }: Props) {
     return () => {
       cancelAnimationFrame(raf);
       observer.disconnect();
+      detachHead();
       stage.dispose();
     };
-  }, [scenario]);
+  }, [head, scenario]);
 
   return <canvas ref={canvasRef} className="ride-canvas" />;
 }

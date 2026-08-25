@@ -10,22 +10,25 @@ import * as THREE from 'three';
 import { buildWorld, disposeWorld } from './buildWorld';
 import { createSnorfiets, placeActor } from './actors3d';
 import { headingToYaw } from './coords';
+import { createRider } from './rider';
 import { PALETTE } from '../palette';
+import type { HeadPose } from './head';
 import type { Scenario, WorldView } from '../sim/types';
+
+export type { HeadPose };
 
 /** Metres above the road. A rider's eyes sit a little over the roof of a hatchback. */
 export const EYE_HEIGHT = 1.45;
 
-/** Vertical field of view. Wide enough not to feel like a tunnel, tight enough that a junction
- * forty metres off is still worth looking at. */
-const FOV = 50;
+/**
+ * Vertical field of view. Wide enough that both mirrors fall inside the frame while looking
+ * ahead — without that the whole mirror mechanic has nothing to hang on — and no wider, because
+ * every extra degree shrinks a junction forty metres off.
+ */
+const FOV = 55;
 
-export interface HeadPose {
-  /** Radians relative to the machine. Positive is left, matching the simulation's bearings. */
-  yaw: number;
-  /** Radians. Positive is up. */
-  pitch: number;
-}
+/** The mirrors sit about 27° off-axis; keep at least this much horizontal half-angle for them. */
+const MIN_HORIZONTAL_HALF_FOV = (30 * Math.PI) / 180;
 
 export class Stage {
   readonly scene = new THREE.Scene();
@@ -56,21 +59,33 @@ export class Stage {
     const sun = new THREE.DirectionalLight(0xfff3e0, 2.2);
     sun.position.set(-40, 60, 30);
     this.scene.add(sun);
+    // A little fill so surfaces facing the rider — the back of the mirrors, their own arms — are
+    // shaded rather than silhouetted.
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 
     this.world = buildWorld(scenario);
     this.scene.add(this.world);
 
-    this.camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 400);
+    // A near plane of 5 cm so the rider's own shoulders and tank do not clip away when looked at.
+    this.camera = new THREE.PerspectiveCamera(FOV, 1, 0.05, 400);
     this.head.position.y = EYE_HEIGHT;
     this.head.add(this.camera);
     this.bike.add(this.head);
+    // The machine hangs off the bike, not the head: turning to look leaves the bars where they
+    // are, which is most of what makes a schouderblik feel like turning round.
+    this.bike.add(createRider());
     this.scene.add(this.bike);
   }
 
   resize(cssWidth: number, cssHeight: number) {
     this.width = cssWidth;
     this.renderer.setSize(cssWidth, cssHeight, false);
-    this.camera.aspect = cssWidth / Math.max(1, cssHeight);
+    const aspect = cssWidth / Math.max(1, cssHeight);
+    this.camera.aspect = aspect;
+    // Widen the vertical field of view on a narrow window rather than let the mirrors fall off
+    // the sides. Losing them would take the whole mirror mechanic with them.
+    const neededVertical = 2 * Math.atan(Math.tan(MIN_HORIZONTAL_HALF_FOV) / aspect);
+    this.camera.fov = Math.max(FOV, (neededVertical * 180) / Math.PI);
     this.camera.updateProjectionMatrix();
   }
 
