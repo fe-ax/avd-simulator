@@ -35,7 +35,14 @@ export const MIRROR_POSITION = {
 
 /** Where the instrument binnacle sits, in bike-local metres: ahead and below the eye, so reading
  * it means dropping your eyes off the road. */
-export const INSTRUMENT_POSITION = new THREE.Vector3(0, 1.15, -0.8);
+export const INSTRUMENT_POSITION = new THREE.Vector3(0, 1.2, -0.8);
+
+/**
+ * Eye height above the road, in metres. Lives here with the rest of the riding position rather
+ * than with the renderer, because the mirrors are aimed off it: where the eye is decides what a
+ * flat piece of glass in front of it reflects.
+ */
+export const EYE_HEIGHT = 1.55;
 
 /** Glass size in metres. Small, like the real thing. */
 export const MIRROR_SIZE = { width: 0.14, height: 0.095 };

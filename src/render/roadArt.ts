@@ -20,6 +20,7 @@ const COLOURS: Record<SurfaceKind, string> = {
   fietspad: PALETTE.fietspad,
   fietspadEdge: PALETTE.fietspadEdge,
   paint: PALETTE.paint,
+  lamp: PALETTE.lamp,
 };
 
 export function drawRoad(ctx: CanvasRenderingContext2D, cam: Camera, road: RoadLayout) {

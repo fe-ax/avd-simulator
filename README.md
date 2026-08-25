@@ -60,9 +60,11 @@ sturen. Je ogen weer op de weg krijgen is jouw werk.
 Onder in beeld staat een strook met de zes controles. Die *rapporteert* — hij vertelt niet wat je
 nu moet doen.
 
-Snelheid en versnelling staan op de teller van de motor zelf, niet in een hoekje van het scherm.
-Hij zit zo'n 21° onder je oogpunt: aflezen is een blik omlaag naar de machine, precies het kleine
-prijskaartje dat het op de weg ook heeft. Boven de limiet kleurt de snelheid rood.
+Snelheid, versnelling en je richtingaanwijzers staan op de teller van de motor zelf, niet in een
+hoekje van het scherm. Hij zit zo'n 24° onder je oogpunt: aflezen is een blik omlaag naar de
+machine, precies het kleine prijskaartje dat het op de weg ook heeft. Boven de limiet kleurt de
+snelheid rood. De pijlen zijn de enige manier om te zien dát je richting aangeeft — vanuit het
+zadel zie je je eigen knipperlichten niet.
 
 **Kijken en zien zijn niet hetzelfde.** Het gebied rekent je aan dát je je omdraaide; hoe ver je
 draaide bepaalt wat je zág. Te ver doordraaien is net zo blind als niet ver genoeg, en de
@@ -119,6 +121,12 @@ De hele leerboog volgt uit het beeld, zonder dat iets hem uitspreekt:
 
 En een schouderblik over de verkéérde schouder onthult niets, omdat links kijken je niets vertelt
 over wat rechts van je gebeurt. Dat staat nergens als regel.
+
+Diezelfde meetkoppeling geldt voor de spiegels. Hoe schuin het glas staat is geen gekozen getal
+meer maar een berekening uit de plek van je oog: verhoog de zithouding tien centimeter en hetzelfde
+stukje glas kijkt zes graden verder omlaag, naar het asfalt in plaats van naar het verkeer erop.
+Nu volgt de stand van het glas het oog, en een controle in de renderer klaagt als de gerenderde
+richting alsnog van `MIRROR_VIEW` afdrijft — in richting, in breedte én in hoogte.
 
 ## Instellingen
 
@@ -210,6 +218,9 @@ __frames3d(30);                   // teken frames zonder op de browser te wachte
   nemen hem nooit. Slepen werkt daar wel, en werkt altijd.
 - **De bundel is groot** (~700 kB) doordat three.js er in zijn geheel in zit. Voor een lokale
   oefenomgeving prima; voor uitlevering zou je hem willen opsplitsen.
-- **Op grote afstand is het kruispunt zwak leesbaar.** Vlak asfalt op veertig meter geeft weinig
-  prijs. Stoepranden staan al omhoog en dat helpt; verdere aankleding is nog te doen.
+- **Op grote afstand is het kruispunt matig leesbaar.** Vlak asfalt op veertig meter geeft weinig
+  prijs. Wat er staat helpt wel: stoepranden staan omhoog en houden op bij de zijweg, op elke hoek
+  staat een lantaarnpaal, en het rood van het fietspad stopt bij de oversteek en gaat over in
+  blokmarkering — precies het teken dat je een fietspad kruist in plaats van erlangs rijdt. Verdere
+  aankleding is nog te doen.
 - **Touchbediening is buiten scope.** Kijken vraagt een muis.

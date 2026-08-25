@@ -49,8 +49,11 @@ export const FORWARD_VIEW = {
  * hoek. No line of code names it.
  */
 export const MIRROR_VIEW = {
-  aimOutOfAsternDeg: 26,
+  aimOutOfAsternDeg: 25,
   halfAngleDeg: 28,
+  /** How far below level the glass looks. Not used to judge anything — it is here so the
+   * renderer's drift guard can check the mirror is still pointed at traffic and not at tarmac. */
+  pitchDeg: -3.3,
   minDist: 2,
   maxDist: 90,
 };

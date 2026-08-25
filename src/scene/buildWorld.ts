@@ -39,6 +39,7 @@ const LAYER: Record<SurfaceKind, number> = {
   roof: 0, // drawn only in plan view; the extruded footprint says it better here
   hedge: 0,
   house: 0,
+  lamp: 0,
 };
 
 /**
@@ -132,6 +133,49 @@ function extrudedGeometry(surface: Surface): THREE.BufferGeometry {
   });
   geometry.rotateX(-Math.PI / 2);
   return geometry;
+}
+
+/**
+ * A street light, from the small square footprint that stands for it.
+ *
+ * The footprint carries only where the post is and how tall; the arm and the head are built here
+ * because a bent tube is not a polygon anyone wants in the shared road data. The arm reaches
+ * toward the junction centre, which is where a real one reaches: out over the road it lights.
+ */
+function lampGeometry(surface: Surface): THREE.BufferGeometry[] {
+  const xs = surface.points.map((p) => p.x);
+  const ys = surface.points.map((p) => p.y);
+  const x = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const y = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const radius = (Math.max(...xs) - Math.min(...xs)) / 2;
+  const top = surface.height;
+
+  // Toward the junction, whichever corner this is.
+  const len = Math.hypot(x, y) || 1;
+  const dx = -x / len;
+  const dz = y / len; // world +y is scene −z, so the sign flips once here and nowhere else
+  const reach = 1.7;
+
+  const post = new THREE.CylinderGeometry(radius * 0.8, radius, top, 8);
+  post.translate(x, top / 2, -y);
+
+  // One segment from the top of the post out to the head, lifted as it goes. Built along +y and
+  // swung onto the arm direction, rather than composed out of two Euler angles that have to be
+  // reasoned about.
+  const rise = 0.35;
+  const along = new THREE.Vector3(dx * reach, rise, dz * reach);
+  const armLength = along.length();
+  const arm = new THREE.CylinderGeometry(radius * 0.55, radius * 0.7, armLength, 6);
+  arm.applyQuaternion(
+    new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), along.clone().normalize()),
+  );
+  arm.translate(x + along.x / 2, top + along.y / 2, -y + along.z / 2);
+
+  const head = new THREE.BoxGeometry(0.52, 0.14, 0.26);
+  head.rotateY(Math.atan2(-dz, dx));
+  head.translate(x + along.x, top + along.y, -y + along.z);
+
+  return [post, arm, head];
 }
 
 function mergedMesh(
@@ -333,9 +377,13 @@ export function buildWorld(scenario: Scenario): THREE.Group {
     const group =
       surface.kind === 'house' && (surface.variant ?? 0) % 2 !== 0 ? 'houseAlt' : surface.kind;
     const list = byKind.get(group) ?? [];
-    list.push(
-      surface.height > 0 ? extrudedGeometry(surface) : flatGeometry(surface, LAYER[surface.kind]),
-    );
+    if (surface.kind === 'lamp') {
+      list.push(...lampGeometry(surface));
+    } else {
+      list.push(
+        surface.height > 0 ? extrudedGeometry(surface) : flatGeometry(surface, LAYER[surface.kind]),
+      );
+    }
     byKind.set(group, list);
 
     for (const { colour, geometry } of frontage(surface)) {
@@ -360,13 +408,15 @@ export function buildWorld(scenario: Scenario): THREE.Group {
     hedge: PALETTE.hedge,
     house: PALETTE.house,
     houseAlt: PALETTE.houseAlt,
+    lamp: PALETTE.lamp,
   };
 
   for (const [group, geometries] of byKind) {
     const mesh = mergedMesh(geometries, material(group, colours[group] ?? PALETTE.asphalt), group);
     if (!mesh) continue;
     // Only what stands up casts; the ground it stands on receives.
-    mesh.castShadow = group.startsWith('house') || group === 'hedge' || group === 'kerb';
+    mesh.castShadow =
+      group.startsWith('house') || group === 'hedge' || group === 'kerb' || group === 'lamp';
     mesh.receiveShadow = !mesh.castShadow;
     world.add(mesh);
   }

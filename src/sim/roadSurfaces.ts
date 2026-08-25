@@ -20,7 +20,8 @@ export type SurfaceKind =
   | 'asphalt'
   | 'fietspad'
   | 'fietspadEdge'
-  | 'paint';
+  | 'paint'
+  | 'lamp';
 
 /** Which way a building fronts. Only the 3D scene uses it, to hang a door and windows there. */
 export type Facing = 'north' | 'south' | 'east' | 'west';
@@ -75,6 +76,26 @@ const HEDGE_GAP = 4.5;
  */
 const KERB_JUNCTION_GAP = 8.5;
 
+/**
+ * Blokmarkering: the two rows of white blocks that mark a fietsoversteek.
+ *
+ * Where a fietspad crosses a side road the red surfacing stops and the crossing is marked out
+ * instead, which is what a Dutch junction actually looks like and — more usefully here — what
+ * tells a rider from the saddle that they are about to cross a bike path rather than ride along
+ * one. An unbroken red carpet reads as *your* lane continuing.
+ */
+const BLOCK = { length: 0.5, gap: 0.5, width: 0.35 };
+
+/** A street light, and how far its arm reaches out over the road. */
+const LAMP = { height: 6, radius: 0.09, armReach: 1.7 };
+
+/**
+ * The corners a lamp post stands on: outside the fietspad, outside the side road, in the verge.
+ * Vertical things at the corners are what give a junction a shape from a distance — until these
+ * went in the mouth of the Kerkstraat was a gap in a hedge and very little else.
+ */
+const LAMP_CORNER = { x: 7.8, y: 4.8 };
+
 function rect(
   kind: SurfaceKind,
   x1: number,
@@ -97,6 +118,20 @@ function rect(
       { x: x1, y: y2 },
     ],
   };
+}
+
+/** One row of blokmarkering blocks running along y, at a fixed x. */
+function blocksAlongY(out: Surface[], x1: number, x2: number, fromY: number, toY: number) {
+  const step = BLOCK.length + BLOCK.gap;
+  const span = toY - fromY;
+  const count = Math.max(1, Math.round((span + BLOCK.gap) / step));
+  // Centre the run in the gap so it starts and ends with a block rather than half of one.
+  const used = count * step - BLOCK.gap;
+  const start = fromY + (span - used) / 2;
+  for (let i = 0; i < count; i++) {
+    const y = start + i * step;
+    out.push(rect('paint', x1, y, x2, y + BLOCK.length));
+  }
 }
 
 function dashedAlongY(
@@ -228,14 +263,23 @@ export function roadSurfaces(road: RoadLayout, ext: RoadExtent): Surface[] {
   out.push(rect('asphalt', -halfWidth, ext.minY, halfWidth, ext.maxY));
   out.push(rect('asphalt', ext.minX, -sideHalfWidth, ext.maxX, sideHalfWidth));
 
-  // The fietspaden run continuously across the mouth of the side road: that is the Dutch way of
-  // showing the bike path keeps its priority, and it is the whole point of this exercise.
+  // The red stops at the mouth of the side road and blokmarkering takes over, which is how a
+  // Dutch fietsoversteek is laid out. The bike path still has priority — the haaientanden below
+  // say so — but the surfacing no longer pretends the crossing is not a crossing.
+  const cross = sideHalfWidth;
   for (const sign of [1, -1] as const) {
     const from = sign > 0 ? fietspadFrom : -fietspadTo;
     const to = sign > 0 ? fietspadTo : -fietspadFrom;
-    out.push(rect('fietspad', from, ext.minY, to, ext.maxY));
-    out.push(rect('fietspadEdge', from, ext.minY, from + 0.12, ext.maxY));
-    out.push(rect('fietspadEdge', to - 0.12, ext.minY, to, ext.maxY));
+    for (const [a, b] of [
+      [ext.minY, -cross],
+      [cross, ext.maxY],
+    ] as const) {
+      out.push(rect('fietspad', from, a, to, b));
+      out.push(rect('fietspadEdge', from, a, from + 0.12, b));
+      out.push(rect('fietspadEdge', to - 0.12, a, to, b));
+    }
+    blocksAlongY(out, from, from + BLOCK.width, -cross, cross);
+    blocksAlongY(out, to - BLOCK.width, to, -cross, cross);
   }
 
   // Centre line of the Dorpsstraat, interrupted across the junction.
@@ -260,6 +304,14 @@ export function roadSurfaces(road: RoadLayout, ext: RoadExtent): Surface[] {
 
   sharkTeeth(out, fietspadTo + 0.5, 0.25, sideHalfWidth - 0.1, 1);
   sharkTeeth(out, -fietspadTo - 0.5, -sideHalfWidth + 0.1, -0.25, -1);
+
+  for (const sx of [1, -1] as const) {
+    for (const sy of [1, -1] as const) {
+      const x = sx * LAMP_CORNER.x;
+      const y = sy * LAMP_CORNER.y;
+      out.push(rect('lamp', x - LAMP.radius, y - LAMP.radius, x + LAMP.radius, y + LAMP.radius, LAMP.height));
+    }
+  }
 
   return out;
 }

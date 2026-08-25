@@ -20,7 +20,7 @@
  * withholds what it is until the look is made. A blur would be prettier; haze is unambiguous.
  */
 import * as THREE from 'three';
-import { MIRROR_POSITION, MIRROR_SIZE } from './rider';
+import { EYE_HEIGHT, MIRROR_POSITION, MIRROR_SIZE } from './rider';
 import { MIRROR_VIEW } from '../sim/perception';
 
 const TEXTURE_WIDTH = 320;
@@ -48,7 +48,39 @@ const MIRROR_FOV = 40;
  * it is simply where this reflection stops reaching.
  */
 const SPLAY = 0;
-const DOWNWARD = 0.09;
+
+/**
+ * How far below level a mirror looks, in degrees. Small: a mirror aimed level shows half sky, and
+ * one aimed much further down shows the road immediately behind you rather than the traffic on it.
+ */
+const MIRROR_PITCH_DEG = -3.3;
+
+/**
+ * The tilt of the glass needed to produce that aim, from where the eye actually is.
+ *
+ * This used to be a constant, and it was a constant that silently depended on eye height: raise
+ * the rider ten centimetres and the same piece of glass points six degrees further down, at the
+ * tarmac. Since the whole premise here is that what perception credits is what the glass really
+ * shows, the tilt has to follow the eye rather than be re-guessed whenever the riding position
+ * moves.
+ *
+ * Working in the vertical plane through the mirror — legitimate because the glass is square
+ * across the machine, so the normal has no sideways component and the reflection leaves the
+ * lateral part of the ray alone. There a reflection is just an angle: a ray arriving at angle a
+ * leaves at 2t + 180° − a for glass tilted by t. Solve that for the tilt that lands the outgoing
+ * ray at MIRROR_PITCH_DEG and you get the number below.
+ */
+function glassTilt(side: MirrorSide): number {
+  const at = MIRROR_POSITION[side];
+  // Incident ray, eye to glass, as a unit vector; then its part in the vertical plane.
+  const incident = at.clone().sub(new THREE.Vector3(0, EYE_HEIGHT, 0)).normalize();
+  const vertical = Math.hypot(incident.y, incident.z);
+  const arriving = Math.atan2(incident.y, incident.z);
+  // The outgoing ray keeps the lateral component, so the vertical plane has to supply all of the
+  // wanted rise on its own — hence dividing by how much of the ray lives in that plane.
+  const wanted = Math.asin(Math.sin((MIRROR_PITCH_DEG * Math.PI) / 180) / vertical);
+  return (wanted + Math.PI + arriving) / 2;
+}
 
 const HOUSING_COLOUR = '#33363d';
 const HAZE_COLOUR = new THREE.Color('#c2d0dd');
@@ -103,7 +135,7 @@ export class Mirrors {
     const head = new THREE.Group();
     head.name = `mirror-${side}`;
     head.position.copy(at);
-    head.rotation.set(-DOWNWARD, sign * SPLAY, 0);
+    head.rotation.set(-glassTilt(side), sign * SPLAY, 0);
     parent.add(head);
 
     const housing = new THREE.Mesh(
@@ -193,13 +225,19 @@ export class Mirrors {
     const half =
       (Math.atan(Math.tan((camera.fov * Math.PI) / 360) * camera.aspect) * 180) / Math.PI;
 
+    // Pitch too. Perception does not model elevation, so a mirror quietly aimed at the tarmac
+    // would credit the rider with seeing traffic that is not in the glass at all.
+    const pitch = (Math.asin(dir.y) * 180) / Math.PI;
+
     const aimOff = Math.abs(aim - MIRROR_VIEW.aimOutOfAsternDeg);
     const halfOff = Math.abs(half - MIRROR_VIEW.halfAngleDeg);
-    if (aimOff <= 2 && halfOff <= 2) return;
+    const pitchOff = Math.abs(pitch - MIRROR_VIEW.pitchDeg);
+    if (aimOff <= 2 && halfOff <= 2 && pitchOff <= 2) return;
     console.warn(
       `[mirrors] rendered geometry has drifted from the perception model: aim ${aim.toFixed(1)}° ` +
         `vs ${MIRROR_VIEW.aimOutOfAsternDeg}°, half-field ${half.toFixed(1)}° vs ` +
-        `${MIRROR_VIEW.halfAngleDeg}°. Update MIRROR_VIEW in sim/perception.ts.`,
+        `${MIRROR_VIEW.halfAngleDeg}°, pitch ${pitch.toFixed(1)}° vs ${MIRROR_VIEW.pitchDeg}°. ` +
+        `Update MIRROR_VIEW in sim/perception.ts.`,
     );
   }
 

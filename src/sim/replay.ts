@@ -141,6 +141,7 @@ export class ReplayPlayer {
       .filter((a): a is ActorState => a !== null);
     return {
       road: this.scenario.road,
+      time: this.t,
       pose: { x: bike.x, y: bike.y, heading: bike.heading },
       speedFactor: bike.speed / Math.max(1, this.scenario.speedLimitKmh / 3.6),
       speedKmh: bike.speed * 3.6,

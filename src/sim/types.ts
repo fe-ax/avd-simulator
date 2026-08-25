@@ -353,6 +353,8 @@ export interface Scenario {
  */
 export interface WorldView {
   road: RoadLayout;
+  /** Simulated seconds. Drives anything that blinks, so a replay blinks in step with the run. */
+  time: number;
   pose: PoseOnRoute;
   /** 0 at standstill, 1 at the road's speed limit. Drives how far the camera looks ahead. */
   speedFactor: number;

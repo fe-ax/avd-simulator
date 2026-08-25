@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { buildWorld, disposeWorld } from './buildWorld';
 import { createSnorfiets, placeActor } from './actors3d';
 import { headingToYaw } from './coords';
-import { createRider, INSTRUMENT_POSITION } from './rider';
+import { createRider, EYE_HEIGHT, INSTRUMENT_POSITION } from './rider';
 import { Instrument } from './instrument';
 import { Mirrors } from './mirrors';
 import { PALETTE } from '../palette';
@@ -20,7 +20,7 @@ import type { Scenario, WorldView } from '../sim/types';
 export type { HeadPose };
 
 /** Metres above the road. A rider's eyes sit a little over the roof of a hatchback. */
-export const EYE_HEIGHT = 1.45;
+export { EYE_HEIGHT };
 
 /**
  * Vertical field of view. Wide enough that both mirrors fall inside the frame while looking
@@ -126,7 +126,7 @@ export class Stage {
     this.bike.rotation.y = headingToYaw(view.pose.heading);
     this.head.rotation.y = head.yaw;
     this.camera.rotation.x = head.pitch;
-    this.instrument.update(view.speedKmh, view.gear);
+    this.instrument.update(view.speedKmh, view.gear, view.indicator, view.time);
 
     for (const actor of view.actors) {
       let mesh = this.actors.get(actor.spec.id);

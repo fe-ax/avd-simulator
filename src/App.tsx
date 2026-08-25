@@ -155,6 +155,7 @@ export default function App() {
     const world = engine.world(false);
     return {
       road: world.scenario.road,
+      time: engine.t,
       pose: world.bike.pose,
       speedFactor: world.bike.speed / (scenario.speedLimitKmh / 3.6),
       speedKmh: world.bike.speed * 3.6,

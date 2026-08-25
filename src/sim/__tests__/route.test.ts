@@ -105,6 +105,28 @@ describe('er staat niets in de weg', () => {
     expect(blocked).toEqual([]);
   });
 
+  test('de lantaarnpalen staan op de vier hoeken, niet op de weg', () => {
+    const lamps = roadSurfaces(scenario.road, { minX: -85, maxX: 95, minY: -150, maxY: 65 }).filter(
+      (s) => s.kind === 'lamp',
+    );
+    expect(lamps).toHaveLength(4);
+    const corners = lamps
+      .map((l) => {
+        const x = l.points.reduce((a, p) => a + p.x, 0) / l.points.length;
+        const y = l.points.reduce((a, p) => a + p.y, 0) / l.points.length;
+        return `${Math.sign(x)},${Math.sign(y)}`;
+      })
+      .sort();
+    // One per quadrant: a pole that drifted would double up here instead of showing four.
+    expect(corners).toEqual(['-1,-1', '-1,1', '1,-1', '1,1']);
+    for (const lamp of lamps) {
+      for (const p of lamp.points) {
+        expect(Math.abs(p.x)).toBeGreaterThan(scenario.road.fietspadTo);
+        expect(Math.abs(p.y)).toBeGreaterThan(scenario.road.sideHalfWidth);
+      }
+    }
+  });
+
   test('de hoek is open: de heg houdt op bij de zijweg', () => {
     const hedges = roadSurfaces(scenario.road, { minX: -85, maxX: 95, minY: -150, maxY: 65 }).filter(
       (s) => s.kind === 'hedge',
@@ -115,6 +137,45 @@ describe('er staat niets in de weg', () => {
       const ys = hedge.points.map((p) => p.y);
       const spansJunction = Math.min(...ys) < 0 && Math.max(...ys) > 0;
       expect(spansJunction).toBe(false);
+    }
+  });
+});
+
+describe('de fietsoversteek', () => {
+  const { fietspadFrom, fietspadTo, sideHalfWidth } = scenario.road;
+  const all = roadSurfaces(scenario.road, { minX: -85, maxX: 95, minY: -150, maxY: 65 });
+  const overlapsCrossing = (s: { points: { x: number; y: number }[] }, xa: number, xb: number) => {
+    const xs = s.points.map((p) => p.x);
+    const ys = s.points.map((p) => p.y);
+    return (
+      Math.max(...xs) > xa &&
+      Math.min(...xs) < xb &&
+      Math.max(...ys) > -sideHalfWidth &&
+      Math.min(...ys) < sideHalfWidth
+    );
+  };
+
+  test('het rood houdt op bij de zijweg in plaats van er dwars overheen te lopen', () => {
+    const red = all.filter((s) => s.kind === 'fietspad' || s.kind === 'fietspadEdge');
+    expect(red.length).toBeGreaterThan(0);
+    for (const s of red) {
+      expect(overlapsCrossing(s, fietspadFrom, fietspadTo)).toBe(false);
+      expect(overlapsCrossing(s, -fietspadTo, -fietspadFrom)).toBe(false);
+    }
+  });
+
+  test('en blokmarkering neemt het over, aan weerszijden van elke oversteek', () => {
+    const blocks = all.filter((s) => s.kind === 'paint');
+    for (const [xa, xb] of [
+      [fietspadFrom, fietspadTo],
+      [-fietspadTo, -fietspadFrom],
+    ]) {
+      const here = blocks.filter((s) => overlapsCrossing(s, xa, xb));
+      // Two rows, and the same number of blocks in each: a lopsided crossing reads as damage.
+      const west = here.filter((s) => Math.min(...s.points.map((p) => p.x)) < (xa + xb) / 2);
+      const east = here.filter((s) => Math.min(...s.points.map((p) => p.x)) > (xa + xb) / 2);
+      expect(west.length).toBeGreaterThan(2);
+      expect(east.length).toBe(west.length);
     }
   });
 });

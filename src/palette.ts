@@ -9,6 +9,7 @@ export const PALETTE = {
   fietspad: '#a04a3f',
   fietspadEdge: '#b3564a',
   kerb: '#b7b3a9',
+  lamp: '#5b6068',
   paint: '#eceae3',
   house: '#c3ab93',
   houseAlt: '#b09a86',
