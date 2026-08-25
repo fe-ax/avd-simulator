@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SimEngine } from '../sim/engine';
 import type { ControlId } from '../sim/types';
+import { CheckStrip, type CheckState } from './CheckStrip';
 import { CONTROLS, GROUP_LABELS, GROUP_ROWS, type ControlDef } from './controls';
 
 interface Props {
@@ -15,11 +16,12 @@ interface Props {
   indicator: 'left' | 'right' | 'off';
   /** The sturen group is inert while the bike takes the turn itself. */
   autoSteer: boolean;
+  checks: readonly CheckState[];
 }
 
 const FLASH_MS = 260;
 
-export function ControlPanel({ engine, enabled, activeGazes, indicator, autoSteer }: Props) {
+export function ControlPanel({ engine, enabled, activeGazes, indicator, autoSteer, checks }: Props) {
   const [flashing, setFlashing] = useState<Record<string, number>>({});
   // Hold state is tracked from the input device rather than read off the engine snapshot: that
   // snapshot is throttled to keep React off the 120 Hz path, and a rem lamp that lights 70 ms
@@ -93,6 +95,7 @@ export function ControlPanel({ engine, enabled, activeGazes, indicator, autoStee
     <div className={`control-panel${enabled ? '' : ' disabled'}`}>
       {GROUP_ROWS.map((row, i) => (
         <div key={i} className="control-row">
+          {i === 0 && <CheckStrip states={checks} />}
           {row.map((group) => {
             const defs = CONTROLS.filter((c) => c.group === group);
             const inert = autoSteer && group === 'sturen';

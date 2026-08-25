@@ -15,6 +15,7 @@ import { Debrief } from './ui/Debrief';
 import { Hud } from './ui/Hud';
 import { MapView } from './ui/MapView';
 import { RideView } from './ui/RideView';
+import type { CheckState } from './ui/CheckStrip';
 import { RunHistory } from './ui/RunHistory';
 import { RideSettings } from './ui/RideSettings';
 import { Timeline } from './ui/Timeline';
@@ -35,6 +36,7 @@ export default function App() {
   const [timeScale, setTimeScale] = useState(1);
   const [autoSteer, setAutoSteer] = useState(true);
   const [replayRate, setReplayRate] = useState(1);
+  const [replayView, setReplayView] = useState<'top' | 'first'>('top');
   const [resetKey, setResetKey] = useState(0);
 
   const playerRef = useRef<ReplayPlayer | null>(null);
@@ -45,6 +47,7 @@ export default function App() {
   // without anything having to push it in every frame.
   engine.headPose = head.pose;
   const [looking, setLooking] = useState(false);
+  const [checks, setChecks] = useState<CheckState[]>([]);
   const lastPlayheadPush = useRef(0);
 
   const conflictPoint = useMemo(
@@ -62,6 +65,7 @@ export default function App() {
     setReplayTime(0);
     setPlaying(false);
     playerRef.current = null;
+    setReplayView('top');
     setResetKey((k) => k + 1);
     head.reset();
     engine.debugEnabled = debug;
@@ -199,7 +203,14 @@ export default function App() {
               getView={getLiveView}
               head={head}
               onLook={(control) => engine.dispatch(control, 'press', 'gaze')}
+              onChecks={setChecks}
               onLockChange={setLooking}
+            />
+          ) : replayView === 'first' ? (
+            <RideView
+              scenario={scenario}
+              getView={() => playerRef.current?.scene() ?? null}
+              onFrame={onFrame}
             />
           ) : (
             <MapView getScene={getScene} resetKey={resetKey} onFrame={onFrame} />
@@ -251,7 +262,28 @@ export default function App() {
                   </button>
                 ))}
               </span>
-              <span className="replay-note">Herhaling toont ook wat je niet gezien hebt</span>
+              <span className="replay-views">
+                {(
+                  [
+                    ['top', 'Bovenaanzicht'],
+                    ['first', 'Vanuit het zadel'],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={`replay-btn tiny${replayView === id ? ' active' : ''}`}
+                    onClick={() => setReplayView(id)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </span>
+              <span className="replay-note">
+                {replayView === 'top'
+                  ? 'Herhaling toont ook wat je niet gezien hebt'
+                  : 'Het kruisje staat waar je werkelijk keek'}
+              </span>
             </div>
           )}
         </div>
@@ -271,6 +303,7 @@ export default function App() {
             activeGazes={snapshot.activeGazes}
             indicator={snapshot.indicator}
             autoSteer={autoSteer}
+            checks={checks}
           />
         )}
       </div>

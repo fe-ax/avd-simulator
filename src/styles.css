@@ -428,6 +428,47 @@ kbd {
   color: var(--accent);
 }
 
+/* ---------------------------------------------------------- check strip */
+
+.check-strip { flex-grow: 6; }
+.check-strip .control-buttons { gap: 5px; }
+
+.check-pill {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 6px 7px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  --dwell: 0;
+  --fresh: 0;
+}
+.check-pill.under { border-color: #4d5566; }
+
+.check-dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid
+    rgb(calc(140 - var(--fresh) * 85) calc(148 + var(--fresh) * 65) calc(160 - var(--fresh) * 50));
+  background: rgba(255, 255, 255, calc(var(--dwell) * .5 + var(--fresh) * .25));
+  opacity: calc(.45 + var(--dwell) * .35 + var(--fresh) * .55);
+}
+
+.check-label {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgb(calc(150 + var(--fresh) * 60) calc(156 + var(--fresh) * 70) calc(171 + var(--fresh) * 40));
+}
+
 /* ------------------------------------------------------------ replay bar */
 
 .replay-bar {
@@ -458,7 +499,7 @@ kbd {
 .replay-btn:hover { border-color: var(--muted); }
 .replay-btn.primary { background: var(--accent); color: #07101f; border-color: transparent; font-weight: 700; }
 .replay-time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
-.replay-rates { display: flex; gap: 4px; }
+.replay-rates, .replay-views { display: flex; gap: 4px; }
 .replay-btn.tiny { padding: 4px 7px; font-size: 11px; font-variant-numeric: tabular-nums; }
 .replay-btn.tiny.active { background: #2c3d57; border-color: var(--accent); color: #cfe2ff; }
 .replay-note { margin-left: auto; color: var(--warn); font-size: 12px; }

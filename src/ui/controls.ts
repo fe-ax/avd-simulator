@@ -68,10 +68,10 @@ export const GROUP_ORDER: ControlGroup[] = [
 ];
 
 /**
- * How the panel is laid out: eight buttons per row keeps every control one click away without
- * the strip growing tall enough to squeeze the map.
+ * How the panel is laid out. Kijken is absent: looks are made by looking, and the check strip
+ * reports them instead.
  */
 export const GROUP_ROWS: ControlGroup[][] = [
-  ['kijken', 'richting'],
+  ['richting'],
   ['snelheid', 'aandrijving', 'sturen'],
 ];

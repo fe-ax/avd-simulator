@@ -22,7 +22,7 @@ export class GazeOverlay {
   private readonly root: HTMLDivElement;
   private readonly dots = new Map<LookControl, HTMLDivElement>();
 
-  constructor(parent: HTMLElement) {
+  constructor(parent: HTMLElement, private readonly showDots = true) {
     this.root = document.createElement('div');
     this.root.className = 'gaze-overlay';
 
@@ -34,6 +34,7 @@ export class GazeOverlay {
   }
 
   update(states: readonly GazeTargetState[]) {
+    if (!this.showDots) return;
     for (const state of states) {
       let dot = this.dots.get(state.control);
       if (!dot) {

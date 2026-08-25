@@ -8,25 +8,40 @@ import { Stage } from '../scene/Stage';
 import { GazeOverlay } from '../scene/gazeOverlay';
 import { GazeTargets } from '../scene/gazeTargets';
 import { MIRROR_SIDES } from '../scene/mirrors';
+import { mirrorInFocus } from '../sim/perception';
 import type { HeadController } from '../scene/head';
 import type { LookControl, Scenario, WorldView } from '../sim/types';
+import type { CheckState } from './CheckStrip';
+
+/** How often the dot states are pushed into React. Enough to read, far short of every frame. */
+const CHECK_INTERVAL_MS = 90;
 
 interface Props {
   scenario: Scenario;
   getView: () => WorldView | null;
-  head: HeadController;
+  /**
+   * Present while riding, absent while replaying. Where the head *points* always comes from the
+   * view itself, so a recorded run drives the camera through exactly the same path as a live one;
+   * this only decides whether the mouse gets to move it.
+   */
+  head?: HeadController;
   /** Called when a dwell completes. The only way a look enters the simulation. */
-  onLook: (control: LookControl) => void;
+  onLook?: (control: LookControl) => void;
+  /** Throttled report of the dots, for the check strip. */
+  onChecks?: (states: CheckState[]) => void;
   onLockChange?: (locked: boolean) => void;
   /** Called once per frame with elapsed seconds, before the scene is synced. */
   onFrame?: (dt: number) => void;
 }
 
-export function RideView({ scenario, getView, head, onLook, onLockChange, onFrame }: Props) {
+export function RideView({ scenario, getView, head, onLook, onChecks, onLockChange, onFrame }: Props) {
+  const interactive = head !== undefined;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const onLookRef = useRef(onLook);
+  const onChecksRef = useRef(onChecks);
   onLookRef.current = onLook;
+  onChecksRef.current = onChecks;
   const getViewRef = useRef(getView);
   const onFrameRef = useRef(onFrame);
   const onLockChangeRef = useRef(onLockChange);
@@ -40,10 +55,11 @@ export function RideView({ scenario, getView, head, onLook, onLockChange, onFram
 
     const stage = new Stage(canvas, scenario);
     const gaze = new GazeTargets(stage.bike);
-    const overlay = new GazeOverlay(wrapRef.current!);
-    const detachHead = head.attach(canvas, (locked) => onLockChangeRef.current?.(locked));
+    const overlay = new GazeOverlay(wrapRef.current!, interactive);
+    const detachHead = head?.attach(canvas, (locked) => onLockChangeRef.current?.(locked));
     let raf = 0;
     let last = performance.now();
+    let lastChecks = 0;
 
     let viewport = { width: 1, height: 1 };
     const resize = () => {
@@ -57,19 +73,43 @@ export function RideView({ scenario, getView, head, onLook, onLockChange, onFram
 
     const renderFrame = (dt: number) => {
       onFrameRef.current?.(dt);
-      head.update(dt);
+      head?.update(dt);
       const view = getViewRef.current();
       if (!view) return;
-      stage.sync(view, head.pose);
+      stage.sync(view, view.head);
 
       // The camera has to be where it will be rendered from before the dots are measured against
       // it, so this runs after sync and before the draw.
       stage.camera.updateMatrixWorld(true);
-      gaze.update(dt, stage.camera, viewport, (control) => onLookRef.current(control));
-      for (const side of MIRROR_SIDES) {
-        stage.mirrors.setFocus(side, gaze.focusFor(side, stage.mirrors.getFocus(side), dt));
+
+      if (interactive) {
+        gaze.update(dt, stage.camera, viewport, (control) => onLookRef.current?.(control));
+        for (const side of MIRROR_SIDES) {
+          stage.mirrors.setFocus(side, gaze.focusFor(side, stage.mirrors.getFocus(side), dt));
+        }
+        overlay.update(gaze.states());
+      } else {
+        // Replaying: the mirrors clear exactly when the recorded head was pointed at them, and
+        // the reticle at the centre of the frame is literally where the rider was looking.
+        for (const side of MIRROR_SIDES) {
+          const wanted = mirrorInFocus(view.head, side) ? 1 : 0;
+          const current = stage.mirrors.getFocus(side);
+          stage.mirrors.setFocus(side, current + (wanted - current) * (1 - Math.exp(-dt * 9)));
+        }
       }
-      overlay.update(gaze.states());
+
+      const now = performance.now();
+      if (interactive && now - lastChecks > CHECK_INTERVAL_MS) {
+        lastChecks = now;
+        onChecksRef.current?.(
+          gaze.states().map((s) => ({
+            control: s.control,
+            under: s.under,
+            dwell: s.dwell,
+            freshness: s.freshness,
+          })),
+        );
+      }
 
       stage.render();
     };
@@ -97,11 +137,11 @@ export function RideView({ scenario, getView, head, onLook, onLockChange, onFram
     return () => {
       cancelAnimationFrame(raf);
       observer.disconnect();
-      detachHead();
+      detachHead?.();
       overlay.dispose();
       stage.dispose();
     };
-  }, [head, scenario]);
+  }, [head, interactive, scenario]);
 
   return (
     <div className="ride-wrap" ref={wrapRef}>
