@@ -389,8 +389,12 @@ export type ScenarioWorld =
   | {
       kind: 'motorway';
       road: MotorwayRoad;
-      /** The oprit: an arc of `radius` sweeping `sweepDeg` onto north, then the invoegstrook. */
-      ramp: { startY: number; radius: number; sweepDeg: number; strookStartY: number };
+      /**
+       * The oprit: an arc of `radius` sweeping `sweepDeg` round onto north, ending where the
+       * invoegstrook begins. Those three fix the arc completely, so there is no start point to
+       * supply and no way to supply one that disagrees.
+       */
+      ramp: { radius: number; sweepDeg: number; strookStartY: number };
       /**
        * y at which the invoegstrook runs out. The hard deadline, and the anchor every window is
        * measured back from — the motorway's answer to the fietspad centreline.
@@ -521,8 +525,11 @@ export interface RunRecord {
   /** The bike took the turn by itself; the sturen controls were inactive. */
   autoSteer: boolean;
   branch: RouteBranch;
-  /** Seconds at which the turn was completed, or null when the rider carried straight on. */
-  turnCompletedAt: number | null;
+  /**
+   * Seconds at which the manoeuvre this scenario is about was completed — the turn, or the lane
+   * change — or null when the rider never made it.
+   */
+  manoeuvreCompletedAt: number | null;
   /** Sampled at RECORD_HZ. */
   samples: BikeSample[];
   actorTracks: Record<string, ActorSample[]>;

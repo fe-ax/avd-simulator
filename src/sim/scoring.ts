@@ -9,10 +9,13 @@
 import { isLookControl } from './perception';
 import type {
   ActionResult,
+  ActorSample,
   BikeSample,
   ControlEvent,
   ControlId,
   ExpectedAction,
+  ExpectedKind,
+  HeadwayBand,
   Outcome,
   RunRecord,
   Scenario,
@@ -96,6 +99,7 @@ function base(expected: ExpectedAction) {
 function scoreExpected(
   expected: ExpectedAction,
   record: RunRecord,
+  scenario: Scenario,
   events: ControlEvent[],
   samples: BikeSample[],
   /** Presses already credited to an earlier expectation; see `scoreRun`. */
@@ -138,10 +142,7 @@ function scoreExpected(
       };
     }
     case 'headway':
-      // Needs the lane-change mechanic to know when the rider is in the target lane at all.
-      throw new Error(
-        `Verwachte handeling "${expected.id}": de volgafstandsregel is nog niet aangesloten.`,
-      );
+      return scoreHeadway(expected, kind, record, scenario, samples, windowT, windowD);
     case 'control': {
       const presses = pressesOf(events, kind.control).filter((e) => !consumed.has(e));
       const w = expected.window!;
@@ -259,8 +260,8 @@ function scoreExpected(
 
     case 'afterTurn': {
       // Only meaningful when the turn was actually made.
-      if (record.turnCompletedAt === null) return null;
-      const turnedAt = record.turnCompletedAt;
+      if (record.manoeuvreCompletedAt === null) return null;
+      const turnedAt = record.manoeuvreCompletedAt;
       const done = events.find(
         (e) =>
           e.control === kind.control &&
@@ -442,6 +443,131 @@ function reportLookDiscipline(audit: LookAudit, scenario: Scenario): ActionResul
   };
 }
 
+/**
+ * Seconds of clear road between two vehicles, from whoever is behind.
+ *
+ * Bumper to bumper, not centre to centre. The old gap measure assumed a snorfiets at both ends;
+ * a trekker-oplegger is seven metres longer than that, which is about a third of a second at
+ * motorway speed — enough on its own to move a verdict a whole band.
+ */
+function headwaySeconds(
+  bike: BikeSample,
+  actor: ActorSample,
+  actorLength: number,
+): { seconds: number; side: 'ahead' | 'behind' } {
+  const along = (actor.y - bike.y) * Math.sin(bike.heading) + (actor.x - bike.x) * Math.cos(bike.heading);
+  const riderAhead = along < 0;
+  const clear = Math.abs(along) - actorLength / 2 - BIKE_LENGTH / 2;
+  // Whoever is behind is the one who needs the room, so it is their speed that turns metres
+  // into seconds.
+  const follower = riderAhead ? actor.speed : bike.speed;
+  return {
+    seconds: clear <= 0 ? 0 : clear / Math.max(follower, 0.1),
+    side: riderAhead ? 'ahead' : 'behind',
+  };
+}
+
+const BIKE_LENGTH = 2.3;
+
+/** Seconds a headway has to persist before it counts as a distance the rider was holding. */
+const HELD_FOR_S = 0.5;
+
+/**
+ * The lowest headway the rider actually *held*, as opposed to touched.
+ *
+ * A single sample proves nothing — at 20 Hz and 100 km/h one sample is 1.4 m — so this takes the
+ * best value inside each half-second and then the worst of those. A momentary dip is forgiven; a
+ * dip you sat in is not. Sampling one instant instead (say, the moment the lane change finished)
+ * would have been gameable in the obvious direction: drop in three seconds clear, bank the
+ * credit, then close right up and never be measured again.
+ */
+function heldMinimum(series: { t: number; seconds: number }[]): number | null {
+  if (series.length === 0) return null;
+  let worst = Infinity;
+  for (let i = 0; i < series.length; i++) {
+    let best = -Infinity;
+    let j = i;
+    for (; j < series.length && series[j].t - series[i].t <= HELD_FOR_S; j++) {
+      best = Math.max(best, series[j].seconds);
+    }
+    // Only score full half-seconds, or the tail of the run scores itself on one sample.
+    if (j >= series.length && series[series.length - 1].t - series[i].t < HELD_FOR_S) break;
+    worst = Math.min(worst, best);
+  }
+  return Number.isFinite(worst) ? worst : null;
+}
+
+function scoreHeadway(
+  expected: ExpectedAction,
+  kind: Extract<ExpectedKind, { type: 'headway' }>,
+  record: RunRecord,
+  scenario: Scenario,
+  samples: BikeSample[],
+  windowT: [number, number] | null,
+  windowD: [number, number] | null,
+): ActionResult | null {
+  const w = expected.window!;
+  const track = record.actorTracks[kind.actorId] ?? [];
+  const actorLength = scenario.actors.find((a) => a.id === kind.actorId)?.length ?? 1.8;
+  const byT = new Map(track.map((a) => [Math.round(a.t * 20), a]));
+
+  // Only once the rider is actually in the lane: before that the gap is not a following distance,
+  // it is just two vehicles on different bits of road.
+  const from = record.manoeuvreCompletedAt;
+  const series: { t: number; seconds: number }[] = [];
+  let side: 'ahead' | 'behind' = 'behind';
+  if (from !== null) {
+    for (const s of samples) {
+      if (s.t < from || s.d > w.from || s.d < w.to) continue;
+      const actor = byT.get(Math.round(s.t * 20));
+      if (!actor) continue;
+      const h = headwaySeconds(s, actor, actorLength);
+      side = h.side;
+      series.push({ t: s.t, seconds: h.seconds });
+    }
+  }
+
+  const held = heldMinimum(series);
+  if (held === null) {
+    return {
+      expectedId: expected.id,
+      label: expected.label,
+      group: expected.group,
+      status: 'gemist',
+      severity: expected.missed.severity,
+      explanation: expected.missed.explanation,
+      windowT,
+      windowD,
+      actualT: null,
+      actualD: null,
+    };
+  }
+
+  // Bands are ordered generous-first in the scenario data; the first one that fits, wins.
+  const band = kind.bands.find(
+    (b: HeadwayBand) => held >= b.atLeastSeconds && (b.side === undefined || b.side === side),
+  );
+  const outcome = band?.outcome;
+  const praise = outcome && 'praise' in outcome ? outcome.praise : null;
+  const fault: Outcome | null = outcome && !('praise' in outcome) ? outcome : null;
+  const rounded = held.toFixed(1).replace('.', ',');
+  const where = side === 'ahead' ? 'vóór' : 'achter';
+  return {
+    expectedId: expected.id,
+    label: expected.label,
+    group: expected.group,
+    status: praise ? 'goed' : 'ongewenst',
+    severity: praise ? null : (fault?.severity ?? expected.missed.severity),
+    explanation:
+      (praise ?? fault?.explanation ?? expected.missed.explanation) +
+      ` Je kortste volgafstand ${where} de vrachtwagen was ${rounded} seconde.`,
+    windowT,
+    windowD,
+    actualT: series[0]?.t ?? null,
+    actualD: null,
+  };
+}
+
 function scoreIncidents(
   record: RunRecord,
   scenario: Scenario,
@@ -505,7 +631,7 @@ export function scoreRun(record: RunRecord, scenario: Scenario): ScoredRun {
   const consumed = new Set<ControlEvent>();
   for (const expected of scenario.expected) {
     if (expected.onlyWhenManualSteering && record.autoSteer) continue;
-    const result = scoreExpected(expected, record, credited, samples, consumed);
+    const result = scoreExpected(expected, record, scenario, credited, samples, consumed);
     if (result) results.push(result);
   }
 

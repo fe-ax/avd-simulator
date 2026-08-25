@@ -7,12 +7,25 @@ import type { RunRecord } from './types';
 const KEY = 'avd-simulator.runs.v1';
 const MAX_STORED = 20;
 
+/**
+ * Runs saved before a field was renamed are still perfectly good runs.
+ *
+ * Bumping the storage key would have been one character and would have thrown the student's
+ * practice history away for a change that cost nothing to absorb here.
+ */
+function migrate(run: RunRecord & { turnCompletedAt?: number | null }): RunRecord {
+  if (run.manoeuvreCompletedAt === undefined && run.turnCompletedAt !== undefined) {
+    return { ...run, manoeuvreCompletedAt: run.turnCompletedAt };
+  }
+  return run;
+}
+
 export function listRuns(): RunRecord[] {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as RunRecord[];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.map(migrate) : [];
   } catch {
     return [];
   }

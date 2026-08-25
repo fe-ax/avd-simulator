@@ -19,7 +19,7 @@ describe('een correct gereden rit', () => {
 
   test('slaat daadwerkelijk rechtsaf', () => {
     expect(record.branch).toBe('turn');
-    expect(record.turnCompletedAt).not.toBeNull();
+    expect(record.manoeuvreCompletedAt).not.toBeNull();
   });
 
   test('dwingt de snorfiets niet tot remmen', () => {

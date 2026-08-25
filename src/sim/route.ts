@@ -192,9 +192,12 @@ function buildMotorwayRoutes(world: Extract<ScenarioWorld, { kind: 'motorway' }>
       kind: 'arc',
       center,
       radius: ramp.radius,
+      // Clockwise: theta runs down from pi+sweep to pi, where the tangent (sin, -cos) is due
+      // north. Anticlockwise would take the long way round the same circle — 342 degrees of arc
+      // instead of 18, which is not a wrong-looking ramp so much as a roundabout.
       startAngle: Math.PI + sweep,
       endAngle: Math.PI,
-      cw: false,
+      cw: true,
     },
     {
       kind: 'line',
