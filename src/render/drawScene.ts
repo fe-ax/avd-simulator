@@ -9,7 +9,7 @@
  */
 import { FORWARD_VIEW, MIRROR_VIEW, mirrorInFocus } from '../sim/perception';
 import type { ActorKind, ActorState, HeadPose, PoseOnRoute, WorldView } from '../sim/types';
-import type { Camera } from './camera';
+import type { ViewCamera } from './camera';
 import { fillWorldPoly, type WorldPoint } from './paint';
 import { drawRoad, PALETTE } from './roadArt';
 
@@ -26,7 +26,7 @@ export interface SceneOptions {
   conflictPoint?: { x: number; y: number };
 }
 
-export function drawScene(ctx: Ctx, cam: Camera, world: WorldView, opts: SceneOptions) {
+export function drawScene(ctx: Ctx, cam: ViewCamera, world: WorldView, opts: SceneOptions) {
   drawRoad(ctx, cam, world.world);
 
   if (opts.showConflictMarker && opts.conflictPoint) {
@@ -57,7 +57,7 @@ export function drawScene(ctx: Ctx, cam: Camera, world: WorldView, opts: SceneOp
 
 const EDGE_INSET = 20;
 
-function onScreen(cam: Camera, actor: ActorState): boolean {
+function onScreen(cam: ViewCamera, actor: ActorState): boolean {
   const p = cam.project(actor.x, actor.y);
   if (p.q <= 0) return false;
   const margin = cam.scale * p.q * 1.5;
@@ -73,7 +73,7 @@ function onScreen(cam: Camera, actor: ActorState): boolean {
  */
 function drawEdgeMarker(
   ctx: Ctx,
-  cam: Camera,
+  cam: ViewCamera,
   actor: ActorState,
   riderPose: PoseOnRoute,
   opts: SceneOptions,
@@ -156,7 +156,7 @@ function viewPolygon(
  * being read — which is exactly what perception is computed from, so the picture cannot lie about
  * what was seen.
  */
-function drawView(ctx: Ctx, cam: Camera, pose: PoseOnRoute, head: HeadPose) {
+function drawView(ctx: Ctx, cam: ViewCamera, pose: PoseOnRoute, head: HeadPose) {
   const yawDeg = (head.yaw * 180) / Math.PI;
   fillWorldPoly(
     ctx,
@@ -186,7 +186,7 @@ function drawView(ctx: Ctx, cam: Camera, pose: PoseOnRoute, head: HeadPose) {
  */
 function withPose(
   ctx: Ctx,
-  cam: Camera,
+  cam: ViewCamera,
   pose: PoseOnRoute,
   draw: () => void,
 ): { x: number; y: number; q: number } | null {
@@ -216,7 +216,7 @@ function box(ctx: Ctx, x: number, y: number, w: number, h: number, r: number, co
 
 function drawMotorcycle(
   ctx: Ctx,
-  cam: Camera,
+  cam: ViewCamera,
   pose: PoseOnRoute,
   indicator: 'left' | 'right' | 'off',
   braking: boolean,
@@ -347,7 +347,7 @@ const MARKER_RADIUS: Partial<Record<ActorKind, number>> = { vrachtwagen: 2.4, au
 
 function drawActor(
   ctx: Ctx,
-  cam: Camera,
+  cam: ViewCamera,
   actor: ActorState,
   opts: SceneOptions,
   neverSeen: boolean,

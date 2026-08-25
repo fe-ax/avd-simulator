@@ -282,11 +282,20 @@ export interface MergePlan {
   /** Ease off once settled in the lane, which is what the road asks of you behind a truck. */
   matchSpeedAfterMerge?: boolean;
   /**
+   * Ease off when closing on whoever is in front, which is what a rider does and what the
+   * driver did not. Without it a keen model rider accelerates straight into the back of the gap
+   * it is merging into, and then the scenario gets blamed for it.
+   */
+  keepDistance?: boolean;
+  /**
    * Merge with plenty of room and then close right up. The whole reason the rule is a held
    * minimum rather than a reading taken at the moment of merging: this ride must not score well.
    */
   chaseAfterMerge?: boolean;
 }
+
+/** How far off the rider's line another vehicle has to be before it is somebody else's problem. */
+const SAME_LANE_M = 2;
 
 const MERGE_DEFAULTS: Required<MergePlan> = {
   throttlePresses: 5,
@@ -301,6 +310,7 @@ const MERGE_DEFAULTS: Required<MergePlan> = {
   indicatorOff: true,
   matchSpeedAfterMerge: false,
   chaseAfterMerge: false,
+  keepDistance: true,
 };
 
 export function driveMerge(scenario: Scenario, plan: MergePlan = {}): RunRecord {
@@ -332,6 +342,8 @@ export function driveMerge(scenario: Scenario, plan: MergePlan = {}): RunRecord 
     engine.dispatch(control, 'press', isLookControl(control) ? 'gaze' : 'keyboard');
   };
 
+  let easedAt = -99;
+
   for (let frame = 0; frame < MAX_FRAMES && record === null; frame++) {
     engine.advance(DT);
     if (engine.phase !== 'riding') continue;
@@ -345,6 +357,33 @@ export function driveMerge(scenario: Scenario, plan: MergePlan = {}): RunRecord 
     }
 
     const d = engine.distanceToConflict();
+
+    // Whoever is in front *in this lane*, in seconds.
+    //
+    // Both components, not just the one along the heading: on the oprit the car is ten metres
+    // to the left and a metre ahead, and measuring only forward distance calls that tailgating.
+    // The model rider then brakes for traffic on a different road and never gets up to speed.
+    if (p.keepDistance && !p.chaseAfterMerge) {
+      const bike = engine.world(false).bike;
+      const cos = Math.cos(bike.pose.heading);
+      const sin = Math.sin(bike.pose.heading);
+      let closest = Infinity;
+      for (const actor of engine.actors) {
+        const dx = actor.x - bike.pose.x;
+        const dy = actor.y - bike.pose.y;
+        const along = dx * cos + dy * sin;
+        const across = -dx * sin + dy * cos;
+        if (along <= 0 || Math.abs(across) > SAME_LANE_M) continue;
+        const clear = along - (actor.spec.length ?? 1.8) / 2 - 1.15;
+        closest = Math.min(closest, clear / Math.max(bike.speed, 0.1));
+      }
+      // Ease off below two and a half, so the two-second rule is met with something in hand
+      // rather than hit exactly. Rate-limited, or one frame of closing costs the whole throttle.
+      if (closest < 2.5 && engine.t - easedAt > 0.4) {
+        easedAt = engine.t;
+        dispatch('THROTTLE_DOWN');
+      }
+    }
 
     if (pressed < p.throttlePresses && d <= nextPressD) {
       dispatch('THROTTLE_UP');

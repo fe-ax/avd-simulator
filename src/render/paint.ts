@@ -6,7 +6,7 @@
  * care is the region behind the eye, where the projection inverts — polygons are clipped
  * against that plane in camera space before any of them reach the canvas.
  */
-import type { Camera, CameraSpace } from './camera';
+import type { CameraSpace, ViewCamera } from './camera';
 
 export interface WorldPoint {
   x: number;
@@ -32,7 +32,7 @@ function clipToFrustum(poly: CameraSpace[], minU: number): CameraSpace[] {
 
 export function pathWorldPoly(
   ctx: CanvasRenderingContext2D,
-  cam: Camera,
+  cam: ViewCamera,
   points: WorldPoint[],
 ): boolean {
   const clipped = clipToFrustum(
@@ -53,7 +53,7 @@ export function pathWorldPoly(
 
 export function fillWorldPoly(
   ctx: CanvasRenderingContext2D,
-  cam: Camera,
+  cam: ViewCamera,
   points: WorldPoint[],
   color: string,
 ) {
@@ -65,7 +65,7 @@ export function fillWorldPoly(
 /** Axis-aligned world rectangle. Corners are ordered so the trapezoid never self-intersects. */
 export function fillWorldRect(
   ctx: CanvasRenderingContext2D,
-  cam: Camera,
+  cam: ViewCamera,
   x1: number,
   y1: number,
   x2: number,
