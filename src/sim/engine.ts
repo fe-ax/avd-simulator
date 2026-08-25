@@ -6,15 +6,10 @@
  * Every mutation enters through `dispatch()`. Clicking a button and pressing its key both go
  * through that one door, which is what makes the recording complete and the replay faithful.
  */
-import {
-  applyPerception,
-  GAZE_DURATION_S,
-  isLookControl,
-  type ActiveGaze,
-  type LookControl,
-} from './perception';
+import { applyPerception, GAZE_DURATION_S, isLookControl } from './perception';
 import { buildRoutes, poseAt, type Route, type ScenarioRoutes } from './route';
 import type {
+  ActiveGaze,
   ActorIncident,
   ActorSample,
   ActorSpec,
@@ -23,6 +18,8 @@ import type {
   ControlEvent,
   ControlId,
   ControlPhase,
+  HeadPose,
+  LookControl,
   PoseOnRoute,
   RouteBranch,
   RunRecord,
@@ -123,7 +120,7 @@ export interface World {
   routes: ScenarioRoutes;
   bike: BikeState;
   actors: ActorState[];
-  gazes: ActiveGaze[];
+  head: HeadPose;
   /** God view during replay/debrief, perception view while riding. */
   revealAll: boolean;
 }
@@ -166,6 +163,12 @@ export class SimEngine {
    * aankondigen en voorrang. Switch it off to practise the decision as well.
    */
   autoSteer = true;
+  /**
+   * Where the rider is looking. Held by reference to whatever is driving the head, so the engine
+   * always sees the current pose without anything having to push it in every frame. Perception is
+   * computed from this and nothing else: look away and you genuinely stop seeing.
+   */
+  headPose: HeadPose = { yaw: 0, pitch: 0 };
 
   bike: BikeState;
   actors: ActorState[];
@@ -394,7 +397,7 @@ export class SimEngine {
     for (const gaze of this.gazes) gaze.remaining -= dt;
     this.gazes = this.gazes.filter((g) => g.remaining > 0);
 
-    applyPerception(this.bike.pose, this.actors, this.gazes, this.t);
+    applyPerception(this.bike.pose, this.headPose, this.actors, this.t);
     this.recordSample();
     this.checkFinished();
   }
@@ -565,6 +568,8 @@ export class SimEngine {
       brake: b.brake,
       indicator: b.indicator,
       branch: b.branch,
+      headYaw: round3(this.headPose.yaw),
+      headPitch: round3(this.headPose.pitch),
     });
     for (const actor of this.actors) {
       this.actorTracks[actor.spec.id].push({
@@ -646,7 +651,7 @@ export class SimEngine {
       routes: this.routes,
       bike: this.bike,
       actors: this.actors,
-      gazes: this.gazes,
+      head: this.headPose,
       revealAll,
     };
   }

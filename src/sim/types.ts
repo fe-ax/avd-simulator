@@ -55,6 +55,14 @@ export interface ActiveGaze {
   remaining: number;
 }
 
+/** Where the rider is looking, relative to the machine. */
+export interface HeadPose {
+  /** Radians. Positive is left, matching the bearings used everywhere else. */
+  yaw: number;
+  /** Radians. Positive is up. */
+  pitch: number;
+}
+
 /** `press` = momentary. `down`/`up` = the two hold-to-act controls (rem, koppeling). */
 export type ControlPhase = 'press' | 'down' | 'up';
 
@@ -351,7 +359,8 @@ export interface WorldView {
   indicator: 'left' | 'right' | 'off';
   braking: boolean;
   actors: ActorState[];
-  gazes: ActiveGaze[];
+  /** Where the rider is looking. The plan view draws it as the cone it is. */
+  head: HeadPose;
 }
 
 // ---------------------------------------------------------------------------
@@ -372,6 +381,9 @@ export interface BikeSample {
   brake: boolean;
   indicator: 'left' | 'right' | 'off';
   branch: RouteBranch;
+  /** Where the rider was looking, radians relative to the machine. */
+  headYaw: number;
+  headPitch: number;
 }
 
 export interface ActorSample {

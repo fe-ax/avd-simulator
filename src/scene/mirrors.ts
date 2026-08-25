@@ -21,6 +21,7 @@
  */
 import * as THREE from 'three';
 import { MIRROR_POSITION, MIRROR_SIZE } from './rider';
+import { MIRROR_VIEW } from '../sim/perception';
 
 const TEXTURE_WIDTH = 320;
 const TEXTURE_HEIGHT = 216;
@@ -77,6 +78,7 @@ const scratch = {
 export class Mirrors {
   private readonly parts: Record<MirrorSide, MirrorParts>;
   private readonly focus: Record<MirrorSide, number> = { left: 0, right: 0 };
+  private checked = false;
 
   constructor(parent: THREE.Object3D) {
     this.parts = {
@@ -170,8 +172,35 @@ export class Mirrors {
     }
 
     renderer.setRenderTarget(null);
+    if (import.meta.env.DEV && !this.checked) {
+      this.checked = true;
+      this.warnIfModelDrifted();
+    }
 
     for (const side of MIRROR_SIDES) this.parts[side].head.visible = true;
+  }
+
+  /**
+   * Perception is computed in the simulation from `MIRROR_VIEW`, which is a description of *this*
+   * geometry. Nothing enforces that at compile time, so say so loudly if the two ever part company
+   * — a mirror that shows more than perception credits would quietly make the dode hoek a lie.
+   */
+  private warnIfModelDrifted() {
+    const camera = this.parts.right.camera;
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    const aim = Math.abs((Math.atan2(dir.x, dir.z) * 180) / Math.PI);
+    const half =
+      (Math.atan(Math.tan((camera.fov * Math.PI) / 360) * camera.aspect) * 180) / Math.PI;
+
+    const aimOff = Math.abs(aim - MIRROR_VIEW.aimOutOfAsternDeg);
+    const halfOff = Math.abs(half - MIRROR_VIEW.halfAngleDeg);
+    if (aimOff <= 2 && halfOff <= 2) return;
+    console.warn(
+      `[mirrors] rendered geometry has drifted from the perception model: aim ${aim.toFixed(1)}° ` +
+        `vs ${MIRROR_VIEW.aimOutOfAsternDeg}°, half-field ${half.toFixed(1)}° vs ` +
+        `${MIRROR_VIEW.halfAngleDeg}°. Update MIRROR_VIEW in sim/perception.ts.`,
+    );
   }
 
   /** `amount` is 0 when the rider is looking elsewhere and 1 while the mirror is being read. */

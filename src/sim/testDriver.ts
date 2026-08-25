@@ -4,6 +4,7 @@
  * perception and scoring rather than a mock of them.
  */
 import { SimEngine } from './engine';
+import { GAZE_DURATION_S, isLookControl, LOOK_DIRECTIONS } from './perception';
 import { scoreRun } from './scoring';
 import type { RunRecord, Scenario } from './types';
 
@@ -26,6 +27,8 @@ export interface RidePlan {
   firstLookAtD?: number;
   /** Hammer the look controls, to exercise the kijkgedrag rules. */
   scanConstantly?: boolean;
+  /** Check over the wrong shoulder, which should reveal nothing. */
+  shoulderWrongSide?: boolean;
   /** Stop and let the snorfiets pass. */
   yieldToActor?: boolean;
   gear?: boolean;
@@ -64,6 +67,7 @@ const DEFAULTS: Required<Omit<RidePlan, 'onSample'>> = {
   shoulder: true,
   signalBeforeLooking: false,
   swapLookOrder: false,
+  shoulderWrongSide: false,
   rushSequenceAtStart: false,
   firstLookAtD: 0,
   scanConstantly: false,
@@ -125,19 +129,41 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
   const done = new Set<string>();
   let lastScan = -99;
   let scanIndex = 0;
+  // Headless stand-in for the gaze system: a look turns the head, and perception follows from
+  // where the head is pointing exactly as it does in the renderer. Without this a driven ride
+  // would see nothing at all, and every perception test would pass for the wrong reason.
+  let headHold = 0;
   const once = (key: string, fn: () => void) => {
     if (done.has(key)) return;
     done.add(key);
     fn();
   };
-  const dispatch = (control: Parameters<SimEngine['dispatch']>[0], phase: 'press' | 'down' | 'up' = 'press') =>
-    engine.dispatch(control, phase, 'keyboard');
+  const dispatch = (
+    control: Parameters<SimEngine['dispatch']>[0],
+    phase: 'press' | 'down' | 'up' = 'press',
+  ) => {
+    if (isLookControl(control) && phase === 'press') {
+      const aim = LOOK_DIRECTIONS[control];
+      engine.headPose.yaw = (aim.yaw * Math.PI) / 180;
+      engine.headPose.pitch = (aim.pitch * Math.PI) / 180;
+      headHold = GAZE_DURATION_S;
+    }
+    engine.dispatch(control, phase, isLookControl(control) ? 'gaze' : 'keyboard');
+  };
 
   let braking = false;
 
   for (let frame = 0; frame < MAX_FRAMES && record === null; frame++) {
     engine.advance(DT);
     if (engine.phase !== 'riding') continue;
+
+    if (headHold > 0) {
+      headHold -= DT;
+      if (headHold <= 0) {
+        engine.headPose.yaw = 0;
+        engine.headPose.pitch = 0;
+      }
+    }
 
     const d = engine.distanceToConflict();
     const actor = engine.actors[0];
@@ -191,6 +217,7 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
       });
     }
     if (p.eyes && d <= 24) once('eyeLFinal', () => dispatch('EYE_LEFT'));
+    if (p.shoulderWrongSide && d <= 14) once('wrongShoulder', () => dispatch('SHOULDER_LEFT'));
     if (p.shoulder && d <= 14) once('shoulder', () => dispatch('SHOULDER_RIGHT'));
     if (p.steer && d <= 11) once('steer', () => dispatch('STEER_RIGHT'));
 

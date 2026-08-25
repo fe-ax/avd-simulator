@@ -35,6 +35,47 @@ describe('een correct gereden rit', () => {
   });
 });
 
+describe('perceptie volgt uit de meetkunde', () => {
+  const firstSeen = (record: RunRecord): number | null =>
+    record.actorTracks.snorfiets.find((s) => s.perceived)?.t ?? null;
+
+  test('de rechterspiegel laat hem zien terwijl hij nog achter je rijdt', () => {
+    const record = driveRun(scenario);
+    const seen = firstSeen(record);
+    expect(seen).not.toBeNull();
+    // Around the moment step 4 checks the right mirror, long before the turn.
+    expect(seen!).toBeLessThan(find(record, 'schouderblik-rechts').actualT!);
+  });
+
+  test('zonder spiegels vindt alleen de schouderblik hem', () => {
+    const record = driveRun(scenario, { mirrors: false });
+    const seen = firstSeen(record)!;
+    const shoulder = find(record, 'schouderblik-rechts').actualT!;
+    // Not before the decisive schouderblik, and not appreciably after it either.
+    expect(seen).toBeGreaterThanOrEqual(shoulder - 0.1);
+    expect(seen).toBeLessThan(shoulder + 1);
+  });
+
+  test('wie helemaal niet kijkt ziet hem pas als hij al voorbij is', () => {
+    const noLooks = driveRun(scenario, {
+      mirrors: false, eyes: false, shoulderPrep: false, shoulder: false,
+    });
+    const withShoulder = driveRun(scenario, { mirrors: false });
+    expect(firstSeen(noLooks)!).toBeGreaterThan(firstSeen(withShoulder)! + 1);
+  });
+
+  test('een schouderblik naar de verkeerde kant onthult niets', () => {
+    const record = driveRun(scenario, {
+      mirrors: false, eyes: false, shoulderPrep: false, shoulder: false, shoulderWrongSide: true,
+    });
+    const wrong = driveRun(scenario, {
+      mirrors: false, eyes: false, shoulderPrep: false, shoulder: false,
+    });
+    // Looking left tells you nothing about what is on your right.
+    expect(firstSeen(record)).toBe(firstSeen(wrong));
+  });
+});
+
 describe('dode hoek', () => {
   test('geen schouderblik is een kritieke fout', () => {
     const record = driveRun(scenario, { shoulder: false });

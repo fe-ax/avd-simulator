@@ -7,9 +7,8 @@
  * the depth ratio for its own distance, so a motorcycle twenty metres up the road sits on the
  * tarmac rather than floating above it.
  */
-import { FORWARD_CONE, GAZE_CONES, type ActiveGaze, type GazeCone } from '../sim/perception';
-import type { ActorState } from '../sim/types';
-import type { PoseOnRoute, WorldView } from '../sim/types';
+import { FORWARD_VIEW, MIRROR_VIEW, mirrorInFocus } from '../sim/perception';
+import type { ActorState, HeadPose, PoseOnRoute, WorldView } from '../sim/types';
 import type { Camera } from './camera';
 import { fillWorldPoly, type WorldPoint } from './paint';
 import { drawRoad, PALETTE } from './roadArt';
@@ -40,7 +39,7 @@ export function drawScene(ctx: Ctx, cam: Camera, world: WorldView, opts: SceneOp
     }
   }
 
-  drawGazes(ctx, cam, world.pose, world.gazes);
+  drawView(ctx, cam, world.pose, world.head);
 
   // Far actors first, so a nearer one overlaps the one behind it rather than the other way up.
   const visible = world.actors
@@ -129,33 +128,52 @@ function drawEdgeMarker(
   ctx.textBaseline = 'alphabetic';
 }
 
-/** A gaze cone as a world-space polygon, so the perspective bends it along with the ground. */
-function conePolygon(pose: PoseOnRoute, cone: GazeCone): WorldPoint[] {
-  const a0 = pose.heading + (cone.fromDeg * Math.PI) / 180;
-  const a1 = pose.heading + (cone.toDeg * Math.PI) / 180;
+/** A wedge of view as a world-space polygon, so the perspective bends it along with the ground. */
+function viewPolygon(
+  pose: PoseOnRoute,
+  centreDeg: number,
+  halfAngleDeg: number,
+  minDist: number,
+  maxDist: number,
+): WorldPoint[] {
+  const a0 = pose.heading + ((centreDeg - halfAngleDeg) * Math.PI) / 180;
+  const a1 = pose.heading + ((centreDeg + halfAngleDeg) * Math.PI) / 180;
   const steps = 18;
   const points: WorldPoint[] = [];
   for (let i = 0; i <= steps; i++) {
     const a = a0 + ((a1 - a0) * i) / steps;
-    points.push({ x: pose.x + Math.cos(a) * cone.maxDist, y: pose.y + Math.sin(a) * cone.maxDist });
+    points.push({ x: pose.x + Math.cos(a) * maxDist, y: pose.y + Math.sin(a) * maxDist });
   }
   for (let i = steps; i >= 0; i--) {
     const a = a0 + ((a1 - a0) * i) / steps;
-    points.push({ x: pose.x + Math.cos(a) * cone.minDist, y: pose.y + Math.sin(a) * cone.minDist });
+    points.push({ x: pose.x + Math.cos(a) * minDist, y: pose.y + Math.sin(a) * minDist });
   }
   return points;
 }
 
-function drawGazes(ctx: Ctx, cam: Camera, pose: PoseOnRoute, gazes: ActiveGaze[]) {
-  // What you get for free: the road straight ahead.
-  fillWorldPoly(ctx, cam, conePolygon(pose, FORWARD_CONE), 'rgba(255,255,240,0.05)');
+/**
+ * Where the rider was looking, drawn from above. One cone for the head and one wedge per mirror
+ * being read — which is exactly what perception is computed from, so the picture cannot lie about
+ * what was seen.
+ */
+function drawView(ctx: Ctx, cam: Camera, pose: PoseOnRoute, head: HeadPose) {
+  const yawDeg = (head.yaw * 180) / Math.PI;
+  fillWorldPoly(
+    ctx,
+    cam,
+    viewPolygon(pose, yawDeg, FORWARD_VIEW.halfAngleDeg, 0, 60),
+    'rgba(255,255,240,0.09)',
+  );
 
-  for (const gaze of gazes) {
-    const strength = Math.min(1, gaze.remaining / 0.35);
-    const fill = `rgba(255,231,146,${0.13 + 0.17 * strength})`;
-    for (const cone of GAZE_CONES[gaze.control]) {
-      fillWorldPoly(ctx, cam, conePolygon(pose, cone), fill);
-    }
+  for (const side of ['left', 'right'] as const) {
+    if (!mirrorInFocus(head, side)) continue;
+    const axis = (side === 'left' ? 1 : -1) * (180 - MIRROR_VIEW.aimOutOfAsternDeg);
+    fillWorldPoly(
+      ctx,
+      cam,
+      viewPolygon(pose, axis, MIRROR_VIEW.halfAngleDeg, MIRROR_VIEW.minDist, 55),
+      'rgba(255,231,146,0.2)',
+    );
   }
 }
 

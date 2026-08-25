@@ -41,6 +41,9 @@ export default function App() {
   const headRef = useRef<HeadController | null>(null);
   if (headRef.current === null) headRef.current = new HeadController();
   const head = headRef.current;
+  // The engine reads the pose by reference, so perception always sees where the rider is looking
+  // without anything having to push it in every frame.
+  engine.headPose = head.pose;
   const [looking, setLooking] = useState(false);
   const lastPlayheadPush = useRef(0);
 
@@ -153,7 +156,7 @@ export default function App() {
       indicator: world.bike.indicator,
       braking: world.bike.brake,
       actors: world.actors,
-      gazes: world.gazes,
+      head: world.head,
     };
   }, [engine, scenario.speedLimitKmh]);
 

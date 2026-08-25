@@ -13,6 +13,7 @@
  */
 import * as THREE from 'three';
 import { MIRROR_POSITION } from './rider';
+import { LOOK_DIRECTIONS, SHOULDER_TARGET_DISTANCE } from '../sim/perception';
 import type { LookControl } from '../sim/types';
 
 /**
@@ -59,11 +60,21 @@ export function gazeTargetSpecs(): GazeTargetSpec[] {
   return [
     { control: 'MIRROR_LEFT', anchor: 'bike', position: MIRROR_POSITION.left.clone() },
     { control: 'MIRROR_RIGHT', anchor: 'bike', position: MIRROR_POSITION.right.clone() },
-    { control: 'SHOULDER_LEFT', anchor: 'bike', position: new THREE.Vector3(-4, 1, 2) },
-    { control: 'SHOULDER_RIGHT', anchor: 'bike', position: new THREE.Vector3(4, 1, 2) },
+    { control: 'SHOULDER_LEFT', anchor: 'bike', position: shoulderTarget('SHOULDER_LEFT') },
+    { control: 'SHOULDER_RIGHT', anchor: 'bike', position: shoulderTarget('SHOULDER_RIGHT') },
     { control: 'EYE_LEFT', anchor: 'world', position: new THREE.Vector3(-25, 1.2, 0) },
     { control: 'EYE_RIGHT', anchor: 'world', position: new THREE.Vector3(25, 1.2, 0) },
   ];
+}
+
+/**
+ * Placed from the canonical aim rather than by hand, so the direction a rider turns to and the
+ * direction perception credits can never drift apart.
+ */
+function shoulderTarget(control: 'SHOULDER_LEFT' | 'SHOULDER_RIGHT'): THREE.Vector3 {
+  const bearing = (LOOK_DIRECTIONS[control].yaw * Math.PI) / 180;
+  const r = SHOULDER_TARGET_DISTANCE;
+  return new THREE.Vector3(-r * Math.sin(bearing), 1, -r * Math.cos(bearing));
 }
 
 export interface GazeTargetState {

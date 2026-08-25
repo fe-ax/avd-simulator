@@ -3,7 +3,7 @@
  * what happened — no determinism traps — and so a run loaded from localStorage replays without
  * an engine. This is also the data path the future record-and-edit feature will hook into.
  */
-import { GAZE_DURATION_S, isLookControl, type ActiveGaze } from './perception';
+
 import type {
   ActorSample,
   ActorSpec,
@@ -105,6 +105,8 @@ export class ReplayPlayer {
       y: lerp(a.y, b.y, u),
       heading: lerpAngle(a.heading, b.heading, u),
       speed: lerp(a.speed, b.speed, u),
+      headYaw: lerpAngle(a.headYaw, b.headYaw, u),
+      headPitch: lerp(a.headPitch, b.headPitch, u),
     };
   }
 
@@ -132,19 +134,6 @@ export class ReplayPlayer {
     };
   }
 
-  /** Gazes are reconstructed from the event log, not stored per frame. */
-  private gazesAt(t: number): ActiveGaze[] {
-    const out: ActiveGaze[] = [];
-    for (const e of this.record.events) {
-      if (e.phase !== 'press' || !isLookControl(e.control)) continue;
-      const elapsed = t - e.t;
-      if (elapsed >= 0 && elapsed < GAZE_DURATION_S) {
-        out.push({ control: e.control, remaining: GAZE_DURATION_S - elapsed });
-      }
-    }
-    return out;
-  }
-
   scene(): WorldView {
     const bike = this.bikeAt(this.t);
     const actors = Object.keys(this.record.actorTracks)
@@ -157,7 +146,7 @@ export class ReplayPlayer {
       indicator: bike.indicator,
       braking: bike.brake,
       actors,
-      gazes: this.gazesAt(this.t),
+      head: { yaw: bike.headYaw, pitch: bike.headPitch },
     };
   }
 }
