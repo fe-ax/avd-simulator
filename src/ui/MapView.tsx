@@ -5,10 +5,11 @@
  */
 import { useEffect, useRef } from 'react';
 import { Camera } from '../render/camera';
-import { drawScene, type SceneOptions, type SceneWorld } from '../render/drawScene';
+import { drawScene, type SceneOptions } from '../render/drawScene';
+import type { WorldView } from '../sim/types';
 
 interface Props {
-  getScene: () => { world: SceneWorld; opts: SceneOptions } | null;
+  getScene: () => { world: WorldView; opts: SceneOptions } | null;
   /** Change this to snap the camera instead of easing it — e.g. when a new run starts. */
   resetKey: string | number;
   /** Called once per frame with the elapsed seconds, so a replay can advance its clock. */

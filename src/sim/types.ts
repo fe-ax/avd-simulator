@@ -40,6 +40,21 @@ export type ControlId =
 
 export type ControlGroup = 'kijken' | 'richting' | 'snelheid' | 'aandrijving' | 'sturen';
 
+/** The subset of controls that are a deliberate look rather than an operation of the machine. */
+export type LookControl =
+  | 'MIRROR_LEFT'
+  | 'MIRROR_RIGHT'
+  | 'EYE_LEFT'
+  | 'EYE_RIGHT'
+  | 'SHOULDER_LEFT'
+  | 'SHOULDER_RIGHT';
+
+export interface ActiveGaze {
+  control: LookControl;
+  /** Seconds remaining before the gaze closes. */
+  remaining: number;
+}
+
 /** `press` = momentary. `down`/`up` = the two hold-to-act controls (rem, koppeling). */
 export type ControlPhase = 'press' | 'down' | 'up';
 
@@ -316,6 +331,26 @@ export interface Scenario {
   controlPrerequisites: ControlPrerequisite[];
   unwanted: UnwantedRule[];
   verdictRule: { faultLimit: number };
+}
+
+// ---------------------------------------------------------------------------
+// What a renderer is given
+// ---------------------------------------------------------------------------
+
+/**
+ * The observable state of the world at one instant — everything a renderer needs and nothing
+ * about how it will be shown. Produced both by the live engine and by replaying a recording, so
+ * the two paths are indistinguishable to whatever is drawing.
+ */
+export interface WorldView {
+  road: RoadLayout;
+  pose: PoseOnRoute;
+  /** 0 at standstill, 1 at the road's speed limit. Drives how far the camera looks ahead. */
+  speedFactor: number;
+  indicator: 'left' | 'right' | 'off';
+  braking: boolean;
+  actors: ActorState[];
+  gazes: ActiveGaze[];
 }
 
 // ---------------------------------------------------------------------------

@@ -11,8 +11,8 @@ import type {
   BikeSample,
   RunRecord,
   Scenario,
+  WorldView,
 } from './types';
-import type { SceneWorld } from '../render/drawScene';
 
 function lerp(a: number, b: number, u: number): number {
   return a + (b - a) * u;
@@ -145,7 +145,7 @@ export class ReplayPlayer {
     return out;
   }
 
-  scene(): SceneWorld {
+  scene(): WorldView {
     const bike = this.bikeAt(this.t);
     const actors = Object.keys(this.record.actorTracks)
       .map((id) => this.actorAt(id, this.t))

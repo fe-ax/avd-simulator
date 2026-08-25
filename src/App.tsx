@@ -6,8 +6,8 @@ import { listRuns, saveRun } from './sim/recorder';
 import { ReplayPlayer } from './sim/replay';
 import { rechtsafFietspad } from './sim/scenario.rechtsaf-fietspad';
 import { scoreRun } from './sim/scoring';
-import type { RunRecord } from './sim/types';
-import type { SceneOptions, SceneWorld } from './render/drawScene';
+import type { RunRecord, WorldView } from './sim/types';
+import type { SceneOptions } from './render/drawScene';
 import { BriefingModal } from './ui/BriefingModal';
 import { ControlPanel } from './ui/ControlPanel';
 import { Debrief } from './ui/Debrief';
@@ -136,7 +136,7 @@ export default function App() {
     }
   }, []);
 
-  const getScene = useCallback((): { world: SceneWorld; opts: SceneOptions } | null => {
+  const getScene = useCallback((): { world: WorldView; opts: SceneOptions } | null => {
     const player = playerRef.current;
     if (player) {
       return {

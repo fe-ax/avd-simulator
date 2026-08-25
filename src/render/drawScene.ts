@@ -8,7 +8,8 @@
  * tarmac rather than floating above it.
  */
 import { FORWARD_CONE, GAZE_CONES, type ActiveGaze, type GazeCone } from '../sim/perception';
-import type { ActorState, PoseOnRoute, RoadLayout } from '../sim/types';
+import type { ActorState } from '../sim/types';
+import type { PoseOnRoute, WorldView } from '../sim/types';
 import type { Camera } from './camera';
 import { fillWorldPoly, type WorldPoint } from './paint';
 import { drawRoad, PALETTE } from './roadArt';
@@ -26,18 +27,7 @@ export interface SceneOptions {
   conflictPoint?: { x: number; y: number };
 }
 
-export interface SceneWorld {
-  road: RoadLayout;
-  pose: PoseOnRoute;
-  /** 0 at standstill, 1 at the road's speed limit. Drives how far the camera looks ahead. */
-  speedFactor: number;
-  indicator: 'left' | 'right' | 'off';
-  braking: boolean;
-  actors: ActorState[];
-  gazes: ActiveGaze[];
-}
-
-export function drawScene(ctx: Ctx, cam: Camera, world: SceneWorld, opts: SceneOptions) {
+export function drawScene(ctx: Ctx, cam: Camera, world: WorldView, opts: SceneOptions) {
   drawRoad(ctx, cam, world.road);
 
   if (opts.showConflictMarker && opts.conflictPoint) {

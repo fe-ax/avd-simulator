@@ -12,7 +12,9 @@
  * metres back sits at around -128°, which no mirror shows. Only the schouderblik reaches it.
  * That gap *is* the dode hoek.
  */
-import type { ActorState, ControlId, PoseOnRoute } from './types';
+import type { ActiveGaze, ActorState, ControlId, LookControl, PoseOnRoute } from './types';
+
+export type { ActiveGaze, LookControl };
 
 export const GAZE_DURATION_S = 0.7;
 
@@ -23,14 +25,6 @@ export interface GazeCone {
   minDist: number;
   maxDist: number;
 }
-
-export type LookControl =
-  | 'MIRROR_LEFT'
-  | 'MIRROR_RIGHT'
-  | 'EYE_LEFT'
-  | 'EYE_RIGHT'
-  | 'SHOULDER_LEFT'
-  | 'SHOULDER_RIGHT';
 
 export const LOOK_CONTROLS: LookControl[] = [
   'MIRROR_LEFT',
@@ -80,12 +74,6 @@ export function inCone(cone: GazeCone, bearingDeg: number, dist: number): boolea
     bearingDeg >= cone.fromDeg &&
     bearingDeg <= cone.toDeg
   );
-}
-
-export interface ActiveGaze {
-  control: LookControl;
-  /** Seconds remaining before the gaze closes. */
-  remaining: number;
 }
 
 /**
