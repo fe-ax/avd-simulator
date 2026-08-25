@@ -219,7 +219,7 @@ export default function App() {
           {riding && !looking && (
             <div className="look-prompt">
               <strong>Klik om rond te kijken</strong>
-              <span>Beweeg de muis om je hoofd te draaien · Esc laat weer los</span>
+              <span>Daarna draait de muis je hoofd · Esc laat weer los · slepen werkt ook</span>
             </div>
           )}
           {record === null && snapshot.phase !== 'riding' && (

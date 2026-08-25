@@ -5,6 +5,12 @@
  * 135° of turn: anything that runs out of screen or needs repeated strokes fails at exactly the
  * moment there is least time.
  *
+ * Dragging still works whenever the pointer is not locked, and that is not a nicety. Some contexts
+ * grant the lock request and never actually take it — an embedded frame, a window without focus —
+ * and there the rider would otherwise be left unable to look at all, which is the one thing this
+ * whole simulator is about. Holding the button and dragging costs several strokes for a shoulder
+ * check, but it always works.
+ *
  * The head returns to the road when the mouse goes idle. Without it a full shoulder check costs
  * about a metre of mouse travel each way, and the head can be parked sideways indefinitely. The
  * idle delay is comfortably longer than the dwell needed to register a look, so the natural
@@ -36,6 +42,7 @@ export class HeadController {
   returnsToRoad = true;
 
   private idleFor = 0;
+  private dragging = false;
   private onLockChange: (() => void) | null = null;
 
   attach(canvas: HTMLCanvasElement, onLockChange?: (locked: boolean) => void): () => void {
@@ -44,7 +51,7 @@ export class HeadController {
     };
 
     const move = (e: MouseEvent) => {
-      if (!this.locked) return;
+      if (!this.locked && !this.dragging) return;
       this.pose.yaw = clamp(this.pose.yaw - e.movementX * RADIANS_PER_PIXEL, YAW_LIMIT);
       this.pose.pitch = clamp(this.pose.pitch - e.movementY * RADIANS_PER_PIXEL, PITCH_LIMIT);
       this.idleFor = 0;
@@ -55,13 +62,24 @@ export class HeadController {
       onLockChange?.(this.locked);
     };
 
+    const dragStart = (e: MouseEvent) => {
+      if (e.button === 0 && !this.locked) this.dragging = true;
+    };
+    const dragEnd = () => {
+      this.dragging = false;
+    };
+
     this.onLockChange = lockChange;
     canvas.addEventListener('click', requestLock);
+    canvas.addEventListener('mousedown', dragStart);
+    document.addEventListener('mouseup', dragEnd);
     document.addEventListener('mousemove', move);
     document.addEventListener('pointerlockchange', lockChange);
 
     return () => {
       canvas.removeEventListener('click', requestLock);
+      canvas.removeEventListener('mousedown', dragStart);
+      document.removeEventListener('mouseup', dragEnd);
       document.removeEventListener('mousemove', move);
       document.removeEventListener('pointerlockchange', lockChange);
       this.onLockChange = null;
@@ -81,6 +99,7 @@ export class HeadController {
     this.pose.yaw = 0;
     this.pose.pitch = 0;
     this.idleFor = 0;
+    this.dragging = false;
   }
 
   release() {

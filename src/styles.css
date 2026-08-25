@@ -301,7 +301,13 @@ kbd {
 .briefing-control-row { display: flex; gap: 7px; align-items: center; font-size: 11.5px; color: var(--muted); margin-bottom: 1px; }
 .briefing-control-row kbd { min-width: 30px; text-align: center; }
 
-.countdown-overlay { background: rgba(9, 11, 15, .55); flex-direction: column; }
+.countdown-overlay {
+  background: rgba(9, 11, 15, .55);
+  flex-direction: column;
+  /* Nothing here is clickable, and letting the click through means the rider can take hold of
+     the view during the count-in rather than fumbling for it once the bike is already moving. */
+  pointer-events: none;
+}
 .countdown { font-size: 120px; font-weight: 800; line-height: 1; color: var(--accent); }
 .countdown-hint { color: var(--text); font-size: 18px; margin-top: 10px; }
 
