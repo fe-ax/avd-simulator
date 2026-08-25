@@ -32,8 +32,6 @@ const KMH = 1 / 3.6;
 const ACCEL = 2.2; // m/s^2 when below target speed
 const COAST_DECEL = 1.2; // m/s^2 when above target speed and not braking
 const BRAKE_DECEL = 4.5; // m/s^2 while the rem is held
-const THROTTLE_STEP = 5 * KMH;
-const MAX_SPEED = 60 * KMH;
 const MAX_GEAR = 6;
 
 const ACTOR_ACCEL = 1.5;
@@ -60,7 +58,6 @@ const RECORD_HZ = 20;
 const MAX_RUN_S = 90;
 /** How far past the junction the run continues before it ends — long enough that "na de bocht"
  * expectations such as richting uitzetten and weer optrekken have room to be scored. */
-const RUN_OUT_M = 42;
 
 export type Phase = 'briefing' | 'countdown' | 'riding' | 'finished';
 
@@ -79,6 +76,8 @@ export interface BikeState {
   indicator: 'left' | 'right' | 'off';
   branch: RouteBranch;
   steerArmed: boolean;
+  /** Metres left of the route spine: which rijstrook the machine is actually in. */
+  laneOffset: number;
   pose: PoseOnRoute;
 }
 
@@ -198,8 +197,20 @@ export class SimEngine {
   private onFinish: ((record: RunRecord) => void) | null = null;
   private onFrame: (() => void) | null = null;
 
+  /**
+   * The machine's ceiling and throttle granularity, from the scenario.
+   *
+   * These were constants — 60 km/h and 5 km/h steps — which read as facts about motorcycles and
+   * were really facts about a 30-zone. Left alone, the ceiling makes a motorway literally
+   * unrideable and nothing says why.
+   */
+  private readonly maxSpeed: number;
+  private readonly throttleStep: number;
+
   constructor(scenario: Scenario) {
     this.scenario = scenario;
+    this.maxSpeed = scenario.maxSpeedKmh * KMH;
+    this.throttleStep = scenario.throttleStepKmh * KMH;
     this.routes = buildRoutes(scenario);
     this.bike = this.freshBike();
     this.actors = scenario.actors.map(makeActorState);
@@ -217,6 +228,7 @@ export class SimEngine {
       indicator: 'off',
       branch: 'approach',
       steerArmed: false,
+      laneOffset: 0,
       pose: poseAt(this.routes.turn, 0),
     };
   }
@@ -354,10 +366,10 @@ export class SimEngine {
         bike.clutch = phase !== 'up';
         break;
       case 'THROTTLE_UP':
-        bike.targetSpeed = Math.min(MAX_SPEED, bike.targetSpeed + THROTTLE_STEP);
+        bike.targetSpeed = Math.min(this.maxSpeed, bike.targetSpeed + this.throttleStep);
         break;
       case 'THROTTLE_DOWN':
-        bike.targetSpeed = Math.max(0, bike.targetSpeed - THROTTLE_STEP);
+        bike.targetSpeed = Math.max(0, bike.targetSpeed - this.throttleStep);
         break;
       case 'GEAR_UP':
         bike.gear = Math.min(MAX_GEAR, bike.gear + 1);
@@ -523,6 +535,10 @@ export class SimEngine {
   /** True when the rider is taking (or about to take) this actor's right of way. */
   private actorConflicts(actor: ActorState): boolean {
     const bike = this.bike;
+    // A crossing conflict is a rider cutting across a strip an actor is travelling down. The
+    // motorway's conflict is a different shape entirely — same lane, longitudinal — and gets its
+    // own predicate; until that lands nothing on a motorway conflicts.
+    if (this.routes.kind !== 'urbanCrossing') return false;
     if (bike.branch !== 'turn') return false;
 
     const { crossEntryS, crossExitS, crossYSpan } = this.routes;
@@ -546,11 +562,13 @@ export class SimEngine {
   }
 
   private checkFinished() {
-    const endS =
-      this.bike.branch === 'straight'
-        ? this.routes.decisionS + RUN_OUT_M
-        : this.routes.crossExitS + RUN_OUT_M;
-    if (this.bike.s >= endS || this.t >= MAX_RUN_S) this.finish();
+    const past =
+      this.routes.kind === 'urbanCrossing' && this.bike.branch !== 'straight'
+        ? this.routes.crossExitS
+        : this.bike.branch === 'straight'
+          ? this.routes.decisionS
+          : this.routes.conflictS;
+    if (this.bike.s >= past + this.routes.runOutM || this.t >= MAX_RUN_S) this.finish();
   }
 
   private finish() {
@@ -584,6 +602,7 @@ export class SimEngine {
       branch: b.branch,
       headYaw: round3(this.headPose.yaw),
       headPitch: round3(this.headPose.pitch),
+      laneOffset: round3(this.bike.laneOffset),
     });
     for (const actor of this.actors) {
       this.actorTracks[actor.spec.id].push({
@@ -635,7 +654,9 @@ export class SimEngine {
 
   actorDistanceToConflict(actor: ActorState): number {
     // Actors travel a straight line, so distance-to-conflict is measured along their own path
-    // toward the strip the rider sweeps through.
+    // toward the strip the rider sweeps through. On a motorway nobody crosses anybody's path;
+    // the gap that matters there is longitudinal and lives in `longitudinalGap`.
+    if (this.routes.kind !== 'urbanCrossing') return Infinity;
     return this.routes.crossYSpan[0] - actor.y;
   }
 

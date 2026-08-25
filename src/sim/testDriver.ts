@@ -225,7 +225,8 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
     if (p.shoulder && d <= 14) once('shoulder', () => dispatch('SHOULDER_RIGHT'));
     if (p.steer && d <= 11) once('steer', () => dispatch('STEER_RIGHT'));
 
-    const actorPast = actor.y > engine.routes.crossYSpan[1] + 1.5;
+    const actorPast =
+      engine.routes.kind === 'urbanCrossing' && actor.y > engine.routes.crossYSpan[1] + 1.5;
     const wantStop = p.yieldToActor && d <= 12 && !actorPast;
     if (wantStop !== braking) {
       braking = wantStop;

@@ -117,6 +117,31 @@ function scoreExpected(
     : null;
 
   switch (kind.type) {
+    case 'speedAtLeast': {
+      // The mirror image of speedAtMost: you have to have *got up to* speed by the end of the
+      // window, and the first sample that does it is what the timeline points at.
+      const w = expected.window!;
+      const reached = samples.find(
+        (s) => s.d <= w.from && s.d >= w.to && s.speed * 3.6 >= kind.minKmh,
+      );
+      return {
+        expectedId: expected.id,
+        label: expected.label,
+        group: expected.group,
+        status: reached ? 'goed' : 'gemist',
+        severity: reached ? null : expected.missed.severity,
+        explanation: (reached ? expected.praise : expected.missed.explanation) ?? '',
+        windowT,
+        windowD,
+        actualT: reached?.t ?? null,
+        actualD: reached?.d ?? null,
+      };
+    }
+    case 'headway':
+      // Needs the lane-change mechanic to know when the rider is in the target lane at all.
+      throw new Error(
+        `Verwachte handeling "${expected.id}": de volgafstandsregel is nog niet aangesloten.`,
+      );
     case 'control': {
       const presses = pressesOf(events, kind.control).filter((e) => !consumed.has(e));
       const w = expected.window!;

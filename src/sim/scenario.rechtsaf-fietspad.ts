@@ -74,30 +74,36 @@ export const rechtsafFietspad: Scenario = {
   // weg voorgaan. Het vrijliggende fietspad hoort bij de Dorpsstraat, dus de snorfiets die
   // rechtdoor gaat heeft voorrang op de motorrijder die rechtsaf slaat. De haaientanden in de
   // tekening gaan over iets anders — verkeer dat de Kerkstraat uit komt — en zijn hier decor.
-  road: {
-    halfWidth: 3,
-    laneCenterX: 1.5,
-    kerbTo: 4.5,
-    fietspadFrom: 4.5,
-    fietspadTo: 6.5,
-    vergeTo: 11,
-    sideHalfWidth: 3,
-    sideLaneCenterY: -1.5,
-  },
+  world: {
+    kind: 'urbanCrossing',
+    road: {
+      halfWidth: 3,
+      laneCenterX: 1.5,
+      kerbTo: 4.5,
+      fietspadFrom: 4.5,
+      fietspadTo: 6.5,
+      vergeTo: 11,
+      sideHalfWidth: 3,
+      sideLaneCenterY: -1.5,
+    },
 
-  // 120 m of straight approach, then a 6 m radius right-hander onto y = -1.5. The approach is
-  // long because the look sequence below is six actions deep: the first 45 m are settling time,
-  // the junction only comes into view around 85 m out, and the sequence starts after that.
-  // turnInY + turnRadius must equal sideLaneCenterY or buildRoutes() throws.
-  approach: { startY: -127.5, turnInY: -7.5, turnRadius: 6, exitX: 55 },
+    // 120 m of straight approach, then a 6 m radius right-hander onto y = -1.5. The approach is
+    // long because the look sequence below is six actions deep: the first 45 m are settling time,
+    // the junction only comes into view around 85 m out, and the sequence starts after that.
+    // turnInY + turnRadius must equal sideLaneCenterY or buildRoutes() throws.
+    approach: { startY: -127.5, turnInY: -7.5, turnRadius: 6, exitX: 55 },
+
+    // Fietspad centreline. The route crosses it at s = 97.39 m; that is the conflict point every
+    // window below is measured back from.
+    conflictX: 5.5,
+  },
 
   speedLimitKmh: 30,
   startSpeedKmh: 30,
   startGear: 3,
-
-  // Fietspad centreline. The route crosses it at s = 97.39 m; that is the conflict point every
-  // window below is measured back from.
-  conflictX: 5.5,
+  maxSpeedKmh: 60,
+  throttleStepKmh: 5,
+  steering: 'branch',
 
   actors: [
     {

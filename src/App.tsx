@@ -154,7 +154,7 @@ export default function App() {
   const getLiveView = useCallback((): WorldView => {
     const world = engine.world(false);
     return {
-      road: world.scenario.road,
+      world: world.scenario.world,
       time: engine.t,
       pose: world.bike.pose,
       speedFactor: world.bike.speed / (scenario.speedLimitKmh / 3.6),

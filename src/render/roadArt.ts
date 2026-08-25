@@ -6,7 +6,7 @@
 import type { Camera } from './camera';
 import { fillWorldPoly } from './paint';
 import { roadSurfaces, type RoadExtent, type SurfaceKind } from '../sim/roadSurfaces';
-import type { RoadLayout } from '../sim/types';
+import type { ScenarioWorld } from '../sim/types';
 import { PALETTE } from '../palette';
 
 export { PALETTE };
@@ -21,9 +21,12 @@ const COLOURS: Record<SurfaceKind, string> = {
   fietspadEdge: PALETTE.fietspadEdge,
   paint: PALETTE.paint,
   lamp: PALETTE.lamp,
+  guardrail: PALETTE.guardrail,
+  hectometerPost: PALETTE.hectometerPost,
+  tree: PALETTE.tree,
 };
 
-export function drawRoad(ctx: CanvasRenderingContext2D, cam: Camera, road: RoadLayout) {
+export function drawRoad(ctx: CanvasRenderingContext2D, cam: Camera, world: ScenarioWorld) {
   const b = cam.worldBounds();
   const extent: RoadExtent = {
     minX: b.minX - 5,
@@ -37,7 +40,7 @@ export function drawRoad(ctx: CanvasRenderingContext2D, cam: Camera, road: RoadL
   ctx.fillStyle = PALETTE.grass;
   ctx.fillRect(0, 0, cam.width, cam.height);
 
-  for (const surface of roadSurfaces(road, extent)) {
+  for (const surface of roadSurfaces(world, extent)) {
     const colour =
       surface.kind === 'house' && surface.variant !== undefined && surface.variant % 2 !== 0
         ? PALETTE.houseAlt

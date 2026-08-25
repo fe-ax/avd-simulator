@@ -122,7 +122,7 @@ export interface PoseOnRoute {
 // Actors
 // ---------------------------------------------------------------------------
 
-export type ActorKind = 'snorfiets' | 'auto' | 'fietser' | 'voetganger';
+export type ActorKind = 'snorfiets' | 'auto' | 'fietser' | 'voetganger' | 'vrachtwagen';
 
 export interface ActorSpec {
   id: string;
@@ -133,6 +133,12 @@ export interface ActorSpec {
   to: Vec2;
   /** Cruising speed in m/s. */
   speed: number;
+  /**
+   * Metres, nose to tail. Following distance is measured between bumpers, not between centres,
+   * and a trekker-oplegger is seven metres longer than the snorfiets this used to assume — about
+   * a third of a second at motorway speed, which is enough to move a verdict a whole band.
+   */
+  length?: number;
   /**
    * Why this road user has priority over the rider, in the student's own terms. Appended to the
    * debrief when the rider takes it, because "you took their priority" only teaches something if
@@ -208,8 +214,28 @@ export type ExpectedKind =
   | { type: 'speedAtMost'; maxKmh: number }
   /** Gear must be at or below `maxGear` by the end of the window. */
   | { type: 'gearAtMost'; maxGear: number }
-  /** A control must be pressed within `withinSeconds` of the turn being completed. */
-  | { type: 'afterTurn'; control: ControlId; withinSeconds: number };
+  /** A control must be pressed within `withinSeconds` of the manoeuvre being completed. */
+  | { type: 'afterTurn'; control: ControlId; withinSeconds: number }
+  /** Speed must be at or above `minKmh` by the end of the window. */
+  | { type: 'speedAtLeast'; minKmh: number }
+  /**
+   * Following distance to another road user, in seconds, held across the window rather than
+   * sampled once. A distance you hold is the thing being taught; an instant is gameable —
+   * drop in three seconds clear, bank the credit, then close right up.
+   */
+  | { type: 'headway'; actorId: string; bands: HeadwayBand[] };
+
+/**
+ * One rung of the following-distance rule. Bands live in scenario data because the thresholds are
+ * a teaching choice, not a fact: two seconds normally, three behind something you cannot see past.
+ */
+export interface HeadwayBand {
+  /** Applies when the held headway is at or above this many seconds. */
+  atLeastSeconds: number;
+  /** Restrict to one side, when the rule differs in front and behind. */
+  side?: 'ahead' | 'behind';
+  outcome: Outcome | { praise: string };
+}
 
 export interface ExpectedAction {
   id: string;
@@ -303,7 +329,11 @@ export type Verdict = 'geslaagd' | 'gezakt';
 // Scenario
 // ---------------------------------------------------------------------------
 
-export interface RoadLayout {
+/**
+ * The street plan of an urban crossing: a carriageway with a vrijliggend fietspad beside it and a
+ * side road across it.
+ */
+export interface UrbanRoad {
   /** Half width of the carriageway; the road runs from -halfWidth to +halfWidth. */
   halfWidth: number;
   laneCenterX: number;
@@ -316,6 +346,60 @@ export interface RoadLayout {
   sideLaneCenterY: number;
 }
 
+/**
+ * One carriageway of a motorway, with an invoegstrook on its right.
+ *
+ * Everything is given as widths rather than as x boundaries so the two cannot disagree; the
+ * boundaries are derived in one place by `motorwayLanes()`. Lanes are numbered the Dutch way —
+ * rijstrook 1 is the rightmost — and the other carriageway is not modelled at all.
+ */
+export interface MotorwayRoad {
+  laneCount: number;
+  laneWidth: number;
+  /** x of the left edge of the leftmost lane. The geleiderail stands just outside it. */
+  leftEdgeX: number;
+  mergeLaneWidth: number;
+  /** The band of blokmarkering between the invoegstrook and rijstrook 1. */
+  blockBandWidth: number;
+  /** How far the berm reaches beyond the right-hand kantstreep. */
+  bermWidth: number;
+}
+
+export type RoadLayout = UrbanRoad | MotorwayRoad;
+
+/**
+ * Where a scenario takes place, and the anchors its route is built from.
+ *
+ * Tagged as one piece rather than tagging only the road, because the route anchors are just as
+ * road-shaped as the road is: an urban crossing needs a turn-in point and a conflict crossing,
+ * a motorway needs a ramp and the end of the invoegstrook. Tagging only the road would let a
+ * scenario pair a motorway with an urban `approach`, and nothing would complain until
+ * `buildRoutes` threw inside the engine constructor — pure data that lies, which is exactly what
+ * the future scenario editor must not be able to produce.
+ */
+export type ScenarioWorld =
+  | {
+      kind: 'urbanCrossing';
+      road: UrbanRoad;
+      /** Where the straight approach begins and where it turns in, in world y. */
+      approach: { startY: number; turnInY: number; turnRadius: number; exitX: number };
+      /** x of the fietspad centreline the route crosses; defines the conflict point. */
+      conflictX: number;
+    }
+  | {
+      kind: 'motorway';
+      road: MotorwayRoad;
+      /** The oprit: an arc of `radius` sweeping `sweepDeg` onto north, then the invoegstrook. */
+      ramp: { startY: number; radius: number; sweepDeg: number; strookStartY: number };
+      /**
+       * y at which the invoegstrook runs out. The hard deadline, and the anchor every window is
+       * measured back from — the motorway's answer to the fietspad centreline.
+       */
+      mergeEndY: number;
+      /** How far past the deadline the ride continues, so a held following distance can be judged. */
+      runOutM: number;
+    };
+
 export interface Scenario {
   id: string;
   title: string;
@@ -324,15 +408,24 @@ export interface Scenario {
     assignment: string;
     hints: string[];
   };
-  road: RoadLayout;
-  /** Where the straight approach begins and where it turns in, in world y. */
-  approach: { startY: number; turnInY: number; turnRadius: number; exitX: number };
+  world: ScenarioWorld;
   /** Speed limit in km/h, and the speed the rider starts at. */
   speedLimitKmh: number;
   startSpeedKmh: number;
   startGear: number;
-  /** x of the fietspad centreline the route crosses; defines the conflict point. */
-  conflictX: number;
+  /**
+   * The fastest the machine will go and how much one throttle press adds. Scenario data because
+   * they are not facts about motorcycles: 60 km/h was a fact about a 30-zone, and left as a
+   * constant it silently makes a motorway unrideable.
+   */
+  maxSpeedKmh: number;
+  throttleStepKmh: number;
+  /**
+   * What the sturen controls mean here. `branch` arms a choice between two fixed routes;
+   * `lane` moves the machine one rijstrook sideways, and auto-sturen does not apply because
+   * timing that move is the exercise.
+   */
+  steering: 'branch' | 'lane';
   actors: ActorSpec[];
   expected: ExpectedAction[];
   sequence: SequenceRule;
@@ -352,7 +445,7 @@ export interface Scenario {
  * the two paths are indistinguishable to whatever is drawing.
  */
 export interface WorldView {
-  road: RoadLayout;
+  world: ScenarioWorld;
   /** Simulated seconds. Drives anything that blinks, so a replay blinks in step with the run. */
   time: number;
   pose: PoseOnRoute;
@@ -389,6 +482,11 @@ export interface BikeSample {
   /** Where the rider was looking, radians relative to the machine. */
   headYaw: number;
   headPitch: number;
+  /**
+   * Metres left of the route spine. The spine is where the road goes; this is which rijstrook the
+   * machine is actually in, so a replay reproduces the lane change rather than the intention.
+   */
+  laneOffset: number;
 }
 
 export interface ActorSample {

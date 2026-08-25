@@ -40,6 +40,9 @@ const LAYER: Record<SurfaceKind, number> = {
   hedge: 0,
   house: 0,
   lamp: 0,
+  guardrail: 0,
+  hectometerPost: 0,
+  tree: 0,
 };
 
 /**
@@ -370,7 +373,7 @@ export function buildWorld(scenario: Scenario): THREE.Group {
 
   const byKind = new Map<string, THREE.BufferGeometry[]>();
   const byDetail = new Map<string, THREE.BufferGeometry[]>();
-  for (const surface of roadSurfaces(scenario.road, EXTENT)) {
+  for (const surface of roadSurfaces(scenario.world, EXTENT)) {
     if (surface.kind === 'roof') continue;
     // Neighbouring houses alternate render, exactly as they do in plan view. Merging them all
     // into one mesh would throw that away and leave a terrace of identical beige blocks.
