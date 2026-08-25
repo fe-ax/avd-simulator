@@ -6,7 +6,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SimEngine } from '../sim/engine';
 import type { ControlId } from '../sim/types';
 import { CheckStrip, type CheckState } from './CheckStrip';
-import { CONTROLS, GROUP_LABELS, GROUP_ROWS, type ControlDef } from './controls';
+import {
+  CONTROLS,
+  controlLabels,
+  GROUP_ROWS,
+  groupLabel,
+  isSteerControl,
+  steeringIsInert,
+  type ControlDef,
+} from './controls';
 
 interface Props {
   engine: SimEngine;
@@ -14,7 +22,10 @@ interface Props {
   /** Controls whose gaze cone is currently open, for the lit state. */
   activeGazes: ControlId[];
   indicator: 'left' | 'right' | 'off';
-  /** The sturen group is inert while the bike takes the turn itself. */
+  /**
+   * The rider's setting, not the answer: whether it actually renders the sturen group inert
+   * depends on what those controls mean here, which only `steeringIsInert` decides.
+   */
   autoSteer: boolean;
   checks: readonly CheckState[];
 }
@@ -22,6 +33,10 @@ interface Props {
 const FLASH_MS = 260;
 
 export function ControlPanel({ engine, enabled, activeGazes, indicator, autoSteer, checks }: Props) {
+  // Read off the engine rather than taken as a prop: it is the same immutable scenario App holds,
+  // and a second copy of "which scenario is this" is precisely the drift being avoided here.
+  const scenario = engine.scenario;
+  const steerInert = steeringIsInert(scenario, autoSteer);
   const [flashing, setFlashing] = useState<Record<string, number>>({});
   // Hold state is tracked from the input device rather than read off the engine snapshot: that
   // snapshot is throttled to keep React off the 120 Hz path, and a rem lamp that lights 70 ms
@@ -52,6 +67,9 @@ export function ControlPanel({ engine, enabled, activeGazes, indicator, autoStee
     const onKeyDown = (e: KeyboardEvent) => {
       const def = defFor(e.code);
       if (!def || e.repeat) return;
+      // An inert control is dropped before it reaches the engine, so lighting it up here would
+      // report something that did not happen.
+      if (steerInert && isSteerControl(def.id)) return;
       if (def.hold) setHeld((h) => (h.includes(def.id) ? h : [...h, def.id]));
       else flash(def.id);
     };
@@ -69,7 +87,7 @@ export function ControlPanel({ engine, enabled, activeGazes, indicator, autoStee
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
     };
-  }, [enabled, flash]);
+  }, [enabled, flash, steerInert]);
 
   const isLit = (def: ControlDef) => {
     if (def.hold) return held.includes(def.id);
@@ -98,7 +116,10 @@ export function ControlPanel({ engine, enabled, activeGazes, indicator, autoStee
           {i === 0 && <CheckStrip states={checks} />}
           {row.map((group) => {
             const defs = CONTROLS.filter((c) => c.group === group);
-            const inert = autoSteer && group === 'sturen';
+            const inert = group === 'sturen' && steerInert;
+            // Live sturen controls that move a whole rijstrook: say so, because the size of what
+            // one press does is the thing the student has to time.
+            const perLane = group === 'sturen' && scenario.steering === 'lane';
             return (
               <section
                 key={group}
@@ -106,29 +127,33 @@ export function ControlPanel({ engine, enabled, activeGazes, indicator, autoStee
                 style={{ flexGrow: defs.length }}
               >
                 <h3>
-                  {GROUP_LABELS[group]}
+                  {groupLabel(group, scenario)}
                   {inert && <span className="group-note">automatisch</span>}
+                  {perLane && <span className="group-note">1 druk = 1 strook</span>}
                 </h3>
                 <div className="control-buttons">
-                  {defs.map((def) => (
-                    <button
-                      key={def.id}
-                      type="button"
-                      className={`control-btn${isLit(def) ? ' lit' : ''}${def.hold ? ' hold' : ''}`}
-                      disabled={!enabled || inert}
-                      onPointerDown={(e) => {
-                        e.preventDefault();
-                        e.currentTarget.setPointerCapture(e.pointerId);
-                        press(def);
-                      }}
-                      onPointerUp={() => release(def)}
-                      onPointerCancel={() => release(def)}
-                      title={def.label}
-                    >
-                      <span className="control-label">{def.short}</span>
-                      <kbd>{def.keyHint}</kbd>
-                    </button>
-                  ))}
+                  {defs.map((def) => {
+                    const { label, short } = controlLabels(def, scenario);
+                    return (
+                      <button
+                        key={def.id}
+                        type="button"
+                        className={`control-btn${isLit(def) ? ' lit' : ''}${def.hold ? ' hold' : ''}`}
+                        disabled={!enabled || inert}
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          e.currentTarget.setPointerCapture(e.pointerId);
+                          press(def);
+                        }}
+                        onPointerUp={() => release(def)}
+                        onPointerCancel={() => release(def)}
+                        title={label}
+                      >
+                        <span className="control-label">{short}</span>
+                        <kbd>{def.keyHint}</kbd>
+                      </button>
+                    );
+                  })}
                 </div>
               </section>
             );

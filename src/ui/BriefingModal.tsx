@@ -1,9 +1,12 @@
 import type { Scenario } from '../sim/types';
-import { CONTROLS, GROUP_LABELS, GROUP_ORDER } from './controls';
+import { CONTROLS, controlLabels, GROUP_ORDER, groupLabel } from './controls';
 import { formatTempo, RideSettings } from './RideSettings';
 
 interface Props {
   scenario: Scenario;
+  /** Everything on offer, in registry order. One entry is a legitimate state, not a special case. */
+  scenarios: readonly Scenario[];
+  onScenarioChange: (id: string) => void;
   onStart: () => void;
   countdown: number | null;
   timeScale: number;
@@ -14,6 +17,8 @@ interface Props {
 
 export function BriefingModal({
   scenario,
+  scenarios,
+  onScenarioChange,
   onStart,
   countdown,
   timeScale,
@@ -36,7 +41,25 @@ export function BriefingModal({
   return (
     <div className="overlay">
       <div className="briefing">
-        <p className="briefing-eyebrow">AVD · Verkeersdeelneming</p>
+        {/* The briefing is the screen you are on before every ride, so the choice of which ride
+            belongs here rather than in a menu somewhere above it. */}
+        <div className="briefing-top">
+          <p className="briefing-eyebrow">AVD · Verkeersdeelneming</p>
+          <div className="scenario-switch" role="group" aria-label="Scenario kiezen">
+            <span className="scenario-switch-label">Scenario</span>
+            {scenarios.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className={`replay-btn tiny${s.id === scenario.id ? ' active' : ''}`}
+                aria-pressed={s.id === scenario.id}
+                onClick={() => onScenarioChange(s.id)}
+              >
+                {s.title}
+              </button>
+            ))}
+          </div>
+        </div>
         <h1>{scenario.title}</h1>
         <div className="briefing-grid">
           <div>
@@ -70,11 +93,13 @@ export function BriefingModal({
               </div>
               {GROUP_ORDER.map((group) => (
                 <div key={group}>
-                  <h4>{GROUP_LABELS[group]}</h4>
+                  {/* The wording comes from the scenario: sturen means something else on a
+                      snelweg than at a kruispunt, and the briefing is where it is read first. */}
+                  <h4>{groupLabel(group, scenario)}</h4>
                   {CONTROLS.filter((c) => c.group === group).map((c) => (
                     <div key={c.id} className="briefing-control-row">
                       <kbd>{c.keyHint}</kbd>
-                      <span>{c.label}</span>
+                      <span>{controlLabels(c, scenario).label}</span>
                     </div>
                   ))}
                 </div>
@@ -82,6 +107,7 @@ export function BriefingModal({
             </div>
 
             <RideSettings
+              scenario={scenario}
               timeScale={timeScale}
               onTimeScale={onTimeScaleChange}
               autoSteer={autoSteer}

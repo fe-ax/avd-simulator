@@ -313,6 +313,15 @@ kbd {
 .briefing-control-row { display: flex; gap: 7px; align-items: center; font-size: 11.5px; color: var(--muted); margin-bottom: 1px; }
 .briefing-control-row kbd { min-width: 30px; text-align: center; }
 
+/* The scenario segments borrow .replay-btn.tiny wholesale. Choosing which exercise to ride is
+   the same kind of act as choosing a replay speed, and giving it a look of its own would say it
+   is a bigger decision than it is: it sits beside the eyebrow, not above the title. */
+.briefing-top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.scenario-switch { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.scenario-switch-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-right: 2px; }
+.scenario-switch .replay-btn { padding: 5px 10px; font-size: 11.5px; font-variant-numeric: normal; }
+.scenario-switch .replay-btn.active { cursor: default; }
+
 .countdown-overlay {
   background: rgba(9, 11, 15, .55);
   flex-direction: column;
@@ -446,6 +455,9 @@ kbd {
   font-size: 9px;
   letter-spacing: .06em;
   color: var(--accent);
+  /* The note is a phrase, not words: "1 druk = 1 strook" beside a two-word group name is close
+     to the width of the narrowest group, and a note that breaks in the middle reads as noise. */
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------- check strip */
@@ -523,6 +535,26 @@ kbd {
 .replay-btn.tiny { padding: 4px 7px; font-size: 11px; font-variant-numeric: tabular-nums; }
 .replay-btn.tiny.active { background: #2c3d57; border-color: var(--accent); color: #cfe2ff; }
 .replay-note { margin-left: auto; color: var(--warn); font-size: 12px; }
+
+/* Shown where the replay would be, for a run whose scenario has been removed from the registry
+   since it was saved. Drawing this run against some other scenario's road is the thing this
+   panel exists to prevent, so it takes the whole pane rather than hiding in a corner of it. */
+.replay-missing {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12%;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.replay-missing strong { color: var(--warn); font-size: 15px; }
+.replay-missing p { margin: 0; max-width: 62ch; }
+.replay-missing em { color: var(--text); font-style: normal; }
+.replay-missing-note { color: #6f7686; }
 
 /* -------------------------------------------------------------- timeline */
 
@@ -728,6 +760,13 @@ kbd {
 }
 .history-action:hover { color: var(--text); border-color: var(--muted); }
 .history-empty { color: var(--muted); font-size: 12px; margin: 0; }
+
+/* The list mixes scenarios now, so the row leads with which one it was and the timestamp drops
+   to a second line under it. */
+.history-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.history-main .history-time { flex: none; font-size: 11px; }
+.history-scenario { color: var(--text); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.history-scenario.unknown { color: var(--warn); }
 
 @media (max-width: 1100px) {
   .app { grid-template-columns: minmax(0, 1fr) 330px; }

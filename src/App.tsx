@@ -4,9 +4,9 @@ import { useEngine } from './hooks/useEngine';
 import { poseAt } from './sim/route';
 import { listRuns, saveRun } from './sim/recorder';
 import { ReplayPlayer } from './sim/replay';
-import { rechtsafFietspad } from './sim/scenario.rechtsaf-fietspad';
+import { ALL_SCENARIOS, DEFAULT_SCENARIO, scenarioById } from './sim/scenarios';
 import { scoreRun } from './sim/scoring';
-import type { RunRecord, WorldView } from './sim/types';
+import type { RunRecord, Scenario, WorldView } from './sim/types';
 import { HeadController } from './scene/head';
 import type { SceneOptions } from './render/drawScene';
 import { BriefingModal } from './ui/BriefingModal';
@@ -23,18 +23,105 @@ import { Timeline } from './ui/Timeline';
 /** How often the replay playhead is pushed into React while playing. */
 const PLAYHEAD_INTERVAL_MS = 50;
 
+/**
+ * A request to open a saved run, handed down to the session that will show it.
+ *
+ * `seq` is what makes opening the same run a second time a new request. Without it, re-opening
+ * the run you just closed would be indistinguishable from the one already open, and nothing
+ * would happen.
+ */
+interface OpenRequest {
+  run: RunRecord;
+  seq: number;
+}
+
+/**
+ * Which scenario is being ridden lives here, and the session below is keyed by it.
+ *
+ * The engine, the head controller and the three.js stage are each built once from the scenario
+ * they belong to, so switching scenario is a remount rather than a reset: an armed countdown, a
+ * half-played replay, a camera still easing toward the old road — none of it can leak across,
+ * because none of it exists afterwards. Only the two settings the student chose are lifted out,
+ * since those say how they want to practise, not which exercise they are practising.
+ */
 export default function App() {
-  const scenario = rechtsafFietspad;
+  const [scenarioId, setScenarioId] = useState(DEFAULT_SCENARIO.id);
+  const [timeScale, setTimeScale] = useState(1);
+  const [autoSteer, setAutoSteer] = useState(true);
+  const [openRequest, setOpenRequest] = useState<OpenRequest | null>(null);
+  const seq = useRef(0);
+
+  // An id that is not in the registry can only come from a stale one; ride something rather
+  // than render nothing.
+  const scenario = scenarioById(scenarioId) ?? DEFAULT_SCENARIO;
+
+  const chooseScenario = useCallback((id: string) => {
+    setScenarioId(id);
+    // Any pending run belongs to the session that is about to be thrown away.
+    setOpenRequest(null);
+  }, []);
+
+  const openRun = useCallback((run: RunRecord) => {
+    // A saved run is replayed against the scenario it was recorded in, so opening one that
+    // belongs elsewhere moves the whole session there. Otherwise "Opnieuw rijden", sitting right
+    // under the debrief, would start a different exercise than the one being discussed.
+    const owner = scenarioById(run.scenarioId);
+    if (owner) setScenarioId(owner.id);
+    seq.current += 1;
+    setOpenRequest({ run, seq: seq.current });
+  }, []);
+
+  return (
+    <Session
+      key={scenario.id}
+      scenario={scenario}
+      onScenarioChange={chooseScenario}
+      openRequest={openRequest}
+      onOpenRun={openRun}
+      timeScale={timeScale}
+      onTimeScaleChange={setTimeScale}
+      autoSteer={autoSteer}
+      onAutoSteerChange={setAutoSteer}
+    />
+  );
+}
+
+interface SessionProps {
+  scenario: Scenario;
+  onScenarioChange: (id: string) => void;
+  openRequest: OpenRequest | null;
+  onOpenRun: (run: RunRecord) => void;
+  timeScale: number;
+  onTimeScaleChange: (value: number) => void;
+  autoSteer: boolean;
+  onAutoSteerChange: (value: boolean) => void;
+}
+
+/** One scenario, from its briefing to the debrief of a run in it. */
+function Session({
+  scenario,
+  onScenarioChange,
+  openRequest,
+  onOpenRun,
+  timeScale,
+  onTimeScaleChange,
+  autoSteer,
+  onAutoSteerChange,
+}: SessionProps) {
   const { engine, snapshot, start, toBriefing } = useEngine(scenario);
 
   const [record, setRecord] = useState<RunRecord | null>(null);
+  /**
+   * The scenario the open record was recorded in, resolved from its id — not the scenario being
+   * ridden. Null when nothing is open, and null for a run whose scenario has since been removed
+   * from the registry, which is a state the screen has to keep showing rather than paper over.
+   */
+  const [replayScenario, setReplayScenario] = useState<Scenario | null>(null);
   const [runs, setRuns] = useState<RunRecord[]>(() => listRuns());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [replayTime, setReplayTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [debug, setDebug] = useState(false);
-  const [timeScale, setTimeScale] = useState(1);
-  const [autoSteer, setAutoSteer] = useState(true);
   const [replayRate, setReplayRate] = useState(1);
   const [replayView, setReplayView] = useState<'top' | 'first'>('top');
   const [resetKey, setResetKey] = useState(0);
@@ -56,11 +143,14 @@ export default function App() {
   );
 
   const riding = record === null && snapshot.phase !== 'briefing';
+  /** An open run whose scenario is gone: everything in the record still reads, the world cannot. */
+  const orphan = record !== null && replayScenario === null ? record : null;
 
   // -------------------------------------------------------------------------
 
   const handleStart = useCallback(() => {
     setRecord(null);
+    setReplayScenario(null);
     setSelectedId(null);
     setReplayTime(0);
     setPlaying(false);
@@ -78,6 +168,7 @@ export default function App() {
       player.rate = replayRate;
       playerRef.current = player;
       setRecord(full);
+      setReplayScenario(scenario);
       setRuns(saveRun(full));
     });
   }, [autoSteer, debug, engine, head, replayRate, scenario, start, timeScale]);
@@ -85,6 +176,7 @@ export default function App() {
   const handleNewRun = useCallback(() => {
     playerRef.current = null;
     setRecord(null);
+    setReplayScenario(null);
     setSelectedId(null);
     setPlaying(false);
     setResetKey((k) => k + 1);
@@ -93,16 +185,33 @@ export default function App() {
 
   const openRun = useCallback(
     (run: RunRecord) => {
-      playerRef.current = new ReplayPlayer(run, scenario);
-      playerRef.current.rate = replayRate;
+      // Resolved from the record, never from the scenario on screen. A ReplayPlayer built on the
+      // wrong scenario draws the wrong road and, because it looks its actor specs up by id,
+      // quietly leaves out every road user the other scenario never defined — which replays as a
+      // clean ride rather than as a broken one.
+      const owner = scenarioById(run.scenarioId);
+      const player = owner ? new ReplayPlayer(run, owner) : null;
+      if (player) player.rate = replayRate;
+      playerRef.current = player;
+      setReplayScenario(owner);
       setRecord(run);
       setReplayTime(0);
       setPlaying(false);
       setSelectedId(null);
+      setReplayView('top');
       setResetKey((k) => k + 1);
     },
-    [replayRate, scenario],
+    [replayRate],
   );
+
+  // Opening is driven from above so that a run from another scenario can remount this session
+  // into its scenario first. Held in a ref because the request is the trigger: re-running this
+  // on a replay-rate change would rewind the replay the student is halfway through.
+  const openRunRef = useRef(openRun);
+  openRunRef.current = openRun;
+  useEffect(() => {
+    if (openRequest) openRunRef.current(openRequest.run);
+  }, [openRequest]);
 
   const seek = useCallback((t: number) => {
     const player = playerRef.current;
@@ -129,12 +238,24 @@ export default function App() {
 
   // Dev handle: lets a scripted run drive the exact same dispatch path the UI uses, which is
   // how the scenario windows get tuned without clicking through a 20-second ride by hand.
+  // `player.scenario` next to `scenario` is what makes "is this run being replayed against its
+  // own world?" answerable from the console.
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     Object.assign(window, {
-      __avd: { engine, scenario, start: handleStart, record, routes: engine.routes },
+      __avd: {
+        engine,
+        scenario,
+        start: handleStart,
+        record,
+        routes: engine.routes,
+        player: playerRef.current,
+        replayScenario,
+        scenarios: ALL_SCENARIOS,
+        scenarioById,
+      },
     });
-  }, [engine, handleStart, record, scenario]);
+  }, [engine, handleStart, record, replayScenario, scenario]);
 
   // -------------------------------------------------------------------------
 
@@ -182,6 +303,9 @@ export default function App() {
         },
       };
     }
+    // A record with no player is a run whose world is gone. Falling through to the live view
+    // would draw this scenario's road under that run's name.
+    if (record !== null) return null;
     return {
       world: getLiveView(),
       opts: {
@@ -192,7 +316,7 @@ export default function App() {
         conflictPoint,
       },
     };
-  }, [conflictPoint, debug, engine, getLiveView]);
+  }, [conflictPoint, debug, engine, getLiveView, record]);
 
   // -------------------------------------------------------------------------
 
@@ -209,9 +333,21 @@ export default function App() {
               onChecks={setChecks}
               onLockChange={setLooking}
             />
-          ) : replayView === 'first' ? (
+          ) : orphan ? (
+            <div className="replay-missing">
+              <strong>Herhaling niet beschikbaar</strong>
+              <p>
+                Deze rit is gereden in <em>{orphan.scenarioTitle}</em> ({orphan.scenarioId}). Dat
+                scenario zit niet meer in deze versie van de simulator, en zonder de weg en de
+                weggebruikers die erbij horen valt er niets te tonen.
+              </p>
+              <p className="replay-missing-note">
+                De nabespreking hiernaast klopt wel: die zit volledig in de opname zelf.
+              </p>
+            </div>
+          ) : replayView === 'first' && replayScenario ? (
             <RideView
-              scenario={scenario}
+              scenario={replayScenario}
               getView={() => playerRef.current?.scene() ?? null}
               onFrame={onFrame}
             />
@@ -236,15 +372,17 @@ export default function App() {
           {record === null && snapshot.phase !== 'riding' && (
             <BriefingModal
               scenario={scenario}
+              scenarios={ALL_SCENARIOS}
+              onScenarioChange={onScenarioChange}
               onStart={handleStart}
               countdown={snapshot.phase === 'countdown' ? snapshot.countdown : null}
               timeScale={timeScale}
-              onTimeScaleChange={setTimeScale}
+              onTimeScaleChange={onTimeScaleChange}
               autoSteer={autoSteer}
-              onAutoSteerChange={setAutoSteer}
+              onAutoSteerChange={onAutoSteerChange}
             />
           )}
-          {record && (
+          {record && !orphan && (
             <div className="replay-bar">
               <button type="button" className="replay-btn" onClick={() => seek(0)} title="Naar begin">
                 ⏮
@@ -321,22 +459,27 @@ export default function App() {
 
       <aside className="sidebar">
         <header className="sidebar-header">
-          <h2>{scenario.title}</h2>
-          <p>{scenario.briefing.assignment}</p>
+          <h2>{orphan ? orphan.scenarioTitle : scenario.title}</h2>
+          <p>
+            {orphan
+              ? 'Dit scenario bestaat niet meer in deze versie van de simulator.'
+              : scenario.briefing.assignment}
+          </p>
         </header>
 
         {record ? (
           <>
             <RideSettings
+              scenario={scenario}
               timeScale={timeScale}
-              onTimeScale={setTimeScale}
+              onTimeScale={onTimeScaleChange}
               autoSteer={autoSteer}
-              onAutoSteer={setAutoSteer}
+              onAutoSteer={onAutoSteerChange}
               compact
             />
             <div className="sidebar-actions">
               <button type="button" className="primary-btn" onClick={handleStart}>
-                Opnieuw rijden
+                {orphan ? `Rijd ${scenario.title}` : 'Opnieuw rijden'}
               </button>
               <button type="button" className="ghost-btn" onClick={handleNewRun}>
                 Terug naar briefing
@@ -364,7 +507,12 @@ export default function App() {
 
         <section className="sidebar-section">
           <h3>Eerdere ritten</h3>
-          <RunHistory runs={runs} currentId={record?.id ?? null} onOpen={openRun} onChange={setRuns} />
+          <RunHistory
+            runs={runs}
+            currentId={record?.id ?? null}
+            onOpen={onOpenRun}
+            onChange={setRuns}
+          />
         </section>
 
         <footer className="sidebar-footer">

@@ -5,7 +5,7 @@
 import { useEffect } from 'react';
 import type { SimEngine } from '../sim/engine';
 import { isLookControl } from '../sim/perception';
-import { CONTROLS, type ControlDef } from '../ui/controls';
+import { CONTROLS, isSteerControl, steeringIsInert, type ControlDef } from '../ui/controls';
 
 const BY_CODE = new Map<string, ControlDef>();
 for (const def of CONTROLS) {
@@ -24,9 +24,10 @@ export function useControls(engine: SimEngine, enabled: boolean, onUse?: () => v
       if (!def) return;
       e.preventDefault();
       if (e.repeat) return;
-      // The engine ignores these under auto-sturen anyway; bailing here keeps the button from
-      // flashing as though something happened.
-      if (engine.autoSteer && (def.id === 'STEER_LEFT' || def.id === 'STEER_RIGHT')) return;
+      // The engine ignores an inert sturen control anyway; bailing here keeps the button from
+      // flashing as though something happened. Whether it *is* inert is one question with one
+      // answer — where a press means a whole rijstrook, these keys are the exercise.
+      if (isSteerControl(def.id) && steeringIsInert(engine.scenario, engine.autoSteer)) return;
       // Looks are made by looking. A key for them would be a way round the entire mechanic.
       if (isLookControl(def.id)) return;
       if (def.hold) {
