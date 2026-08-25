@@ -72,7 +72,8 @@ export interface ControlEvent {
   d: number;
   control: ControlId;
   phase: ControlPhase;
-  source: 'pointer' | 'keyboard';
+  /** `gaze` means the rider looked at the thing rather than pressing anything. */
+  source: 'pointer' | 'keyboard' | 'gaze';
 }
 
 // ---------------------------------------------------------------------------

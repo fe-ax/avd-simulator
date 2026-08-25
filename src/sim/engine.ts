@@ -294,7 +294,7 @@ export class SimEngine {
   // Input
   // -------------------------------------------------------------------------
 
-  dispatch(control: ControlId, phase: ControlPhase, source: 'pointer' | 'keyboard') {
+  dispatch(control: ControlId, phase: ControlPhase, source: ControlEvent['source']) {
     if (this.phase !== 'riding') return;
     // With auto-sturen the controls are inert and nothing is recorded: an inactive button that
     // still fills the log would put phantom rows in the debrief.

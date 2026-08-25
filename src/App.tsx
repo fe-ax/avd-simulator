@@ -195,6 +195,7 @@ export default function App() {
               scenario={scenario}
               getView={getLiveView}
               head={head}
+              onLook={(control) => engine.dispatch(control, 'press', 'gaze')}
               onLockChange={setLooking}
             />
           ) : (

@@ -5,38 +5,50 @@
  */
 import { useEffect, useRef } from 'react';
 import { Stage } from '../scene/Stage';
+import { GazeOverlay } from '../scene/gazeOverlay';
+import { GazeTargets } from '../scene/gazeTargets';
+import { MIRROR_SIDES } from '../scene/mirrors';
 import type { HeadController } from '../scene/head';
-import type { Scenario, WorldView } from '../sim/types';
+import type { LookControl, Scenario, WorldView } from '../sim/types';
 
 interface Props {
   scenario: Scenario;
   getView: () => WorldView | null;
   head: HeadController;
+  /** Called when a dwell completes. The only way a look enters the simulation. */
+  onLook: (control: LookControl) => void;
   onLockChange?: (locked: boolean) => void;
   /** Called once per frame with elapsed seconds, before the scene is synced. */
   onFrame?: (dt: number) => void;
 }
 
-export function RideView({ scenario, getView, head, onLockChange, onFrame }: Props) {
+export function RideView({ scenario, getView, head, onLook, onLockChange, onFrame }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const onLookRef = useRef(onLook);
+  onLookRef.current = onLook;
   const getViewRef = useRef(getView);
   const onFrameRef = useRef(onFrame);
-  const onLockRef = useRef(onLockChange);
+  const onLockChangeRef = useRef(onLockChange);
   getViewRef.current = getView;
   onFrameRef.current = onFrame;
-  onLockRef.current = onLockChange;
+  onLockChangeRef.current = onLockChange;
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const stage = new Stage(canvas, scenario);
-    const detachHead = head.attach(canvas, (locked) => onLockRef.current?.(locked));
+    const gaze = new GazeTargets(stage.bike);
+    const overlay = new GazeOverlay(wrapRef.current!);
+    const detachHead = head.attach(canvas, (locked) => onLockChangeRef.current?.(locked));
     let raf = 0;
     let last = performance.now();
 
+    let viewport = { width: 1, height: 1 };
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
+      viewport = { width: rect.width, height: rect.height };
       stage.resize(rect.width, rect.height);
     };
     const observer = new ResizeObserver(resize);
@@ -49,6 +61,16 @@ export function RideView({ scenario, getView, head, onLockChange, onFrame }: Pro
       const view = getViewRef.current();
       if (!view) return;
       stage.sync(view, head.pose);
+
+      // The camera has to be where it will be rendered from before the dots are measured against
+      // it, so this runs after sync and before the draw.
+      stage.camera.updateMatrixWorld(true);
+      gaze.update(dt, stage.camera, viewport, (control) => onLookRef.current(control));
+      for (const side of MIRROR_SIDES) {
+        stage.mirrors.setFocus(side, gaze.focusFor(side, stage.mirrors.getFocus(side), dt));
+      }
+      overlay.update(gaze.states());
+
       stage.render();
     };
 
@@ -56,6 +78,7 @@ export function RideView({ scenario, getView, head, onLockChange, onFrame }: Pro
       Object.assign(window, {
         __stage: stage,
         __head: head,
+        __gaze: gaze,
         __frames3d: (n = 30, dt = 1 / 60) => {
           for (let i = 0; i < n; i++) renderFrame(dt);
         },
@@ -75,9 +98,14 @@ export function RideView({ scenario, getView, head, onLockChange, onFrame }: Pro
       cancelAnimationFrame(raf);
       observer.disconnect();
       detachHead();
+      overlay.dispose();
       stage.dispose();
     };
   }, [head, scenario]);
 
-  return <canvas ref={canvasRef} className="ride-canvas" />;
+  return (
+    <div className="ride-wrap" ref={wrapRef}>
+      <canvas ref={canvasRef} className="ride-canvas" />
+    </div>
+  );
 }

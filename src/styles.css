@@ -62,6 +62,8 @@ kbd {
   background: #0d0f13;
 }
 
+.ride-wrap { position: relative; width: 100%; height: 100%; }
+
 .map-canvas,
 .ride-canvas {
   display: block;
@@ -180,6 +182,68 @@ kbd {
 }
 .look-prompt strong { font-size: 15px; }
 .look-prompt span { font-size: 12px; color: var(--muted); }
+
+/* ------------------------------------------------------------ gaze dots */
+
+.gaze-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.gaze-reticle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .55);
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .35);
+}
+
+.gaze-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  /* The element's own origin is its centre, so the transform can be a bare translate. */
+  margin: -17px 0 0 -17px;
+  --dwell: 0;
+  --fresh: 0;
+}
+
+.gaze-ring {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  /* Grey at rest, whitening as the dwell fills, green while the check is still fresh. */
+  border: 2px solid
+    rgb(
+      calc(150 - var(--fresh) * 90) calc(155 + var(--fresh) * 60) calc(165 - var(--fresh) * 55)
+    );
+  background: rgba(255, 255, 255, calc(.06 + var(--dwell) * .3));
+  opacity: calc(.5 + var(--dwell) * .5 + var(--fresh) * .45);
+  transform: scale(calc(1 - var(--dwell) * .18 + var(--fresh) * .12));
+}
+
+.gaze-label {
+  font-size: 10px;
+  letter-spacing: .04em;
+  color: rgba(255, 255, 255, .82);
+  white-space: nowrap;
+  /* Opacity, not a transparent colour: a text-shadow still paints when the text itself is clear. */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .8);
+  opacity: 0;
+  transition: opacity .12s;
+}
+.gaze-dot.under .gaze-label { opacity: 1; }
 
 /* -------------------------------------------------------------- briefing */
 
