@@ -56,6 +56,19 @@ describe('wat er misgaat', () => {
     expect(r.results.find((x) => x.expectedId === 'invoegen')?.status).toBe('gemist');
   });
 
+  test('een manoeuvre die nooit afkomt laat geen stille gaten achter', () => {
+    const r = driveMerge(invoegenSnelweg, { ...CLEAN, shoulder: false });
+
+    // `afterTurn` expectations hang off the manoeuvre, so with no manoeuvre there is nothing to
+    // hang off and the row is dropped. That is right — "richtingaanwijzer uit ná het invoegen"
+    // is not a fair thing to mark when there was no invoegen — but it is dropped SILENTLY, so
+    // this pins that the student is still told plainly what did go wrong.
+    expect(r.manoeuvreCompletedAt).toBeNull();
+    expect(r.results.some((x) => x.expectedId === 'richting-uit')).toBe(false);
+    expect(r.faults.some((x) => x.expectedId === 'invoegen')).toBe(true);
+    expect(r.verdict).toBe('gezakt');
+  });
+
   test('de reeks in de verkeerde volgorde wordt apart aangerekend', () => {
     const r = driveMerge(invoegenSnelweg, { ...CLEAN, signalBeforeLooking: true });
     expect(r.faults.some((f) => f.expectedId === 'volgorde')).toBe(true);
