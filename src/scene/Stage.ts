@@ -11,6 +11,7 @@ import { buildWorld, disposeWorld } from './buildWorld';
 import { createSnorfiets, placeActor } from './actors3d';
 import { headingToYaw } from './coords';
 import { createRider } from './rider';
+import { Mirrors } from './mirrors';
 import { PALETTE } from '../palette';
 import type { HeadPose } from './head';
 import type { Scenario, WorldView } from '../sim/types';
@@ -37,6 +38,8 @@ export class Stage {
   readonly bike = new THREE.Group();
   /** Carries where the rider is looking. */
   readonly head = new THREE.Group();
+
+  readonly mirrors: Mirrors;
 
   private readonly renderer: THREE.WebGLRenderer;
   private readonly world: THREE.Group;
@@ -74,6 +77,7 @@ export class Stage {
     // The machine hangs off the bike, not the head: turning to look leaves the bars where they
     // are, which is most of what makes a schouderblik feel like turning round.
     this.bike.add(createRider());
+    this.mirrors = new Mirrors(this.bike);
     this.scene.add(this.bike);
   }
 
@@ -111,6 +115,9 @@ export class Stage {
 
   render() {
     if (this.width === 0) return;
+    // Reflections first: they need the scene as it is this frame, and the mirrors hide
+    // themselves while rendering so they cannot appear inside one another.
+    this.mirrors.render(this.renderer, this.scene, this.camera);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -124,6 +131,7 @@ export class Stage {
       });
     }
     this.actors.clear();
+    this.mirrors.dispose();
     disposeWorld(this.world);
     this.renderer.dispose();
   }

@@ -15,19 +15,22 @@ const RIDER = {
   jacket: '#3a3f4c',
   glove: '#54596a',
   mirrorBack: '#33363d',
-  mirrorGlass: '#9dbfdd',
 };
 
 /**
  * Where each mirror's glass sits, in bike-local metres.
+ *
+ * On a stalk above the bars, not level with them. Placed level, the rider's own forearm runs
+ * straight along the line from the eye to the glass and blocks most of it — which is exactly
+ * why mirror stalks are as tall as they are.
  *
  * Placed so that both mirrors fall just inside the frame while looking straight ahead — about 28°
  * out and 18° down from the eye. That peripheral position is the whole premise: you can see that
  * something is there without being able to read it, which is what makes looking an action.
  */
 export const MIRROR_POSITION = {
-  left: new THREE.Vector3(-0.36, 1.2, -0.72),
-  right: new THREE.Vector3(0.36, 1.2, -0.72),
+  left: new THREE.Vector3(-0.36, 1.27, -0.72),
+  right: new THREE.Vector3(0.36, 1.27, -0.72),
 };
 
 /** Glass size in metres. Small, like the real thing. */
@@ -45,32 +48,12 @@ function mirror(side: 'left' | 'right'): THREE.Group {
   const sign = side === 'left' ? -1 : 1;
   const at = MIRROR_POSITION[side];
 
-  const stalk = box(0.025, 0.2, 0.025, RIDER.frame);
-  stalk.position.set(at.x - sign * 0.03, at.y - 0.13, at.z + 0.02);
+  const stalk = box(0.025, 0.24, 0.025, RIDER.frame);
+  stalk.position.set(at.x - sign * 0.03, at.y - 0.15, at.z + 0.02);
   group.add(stalk);
 
-  const housing = box(MIRROR_SIZE.width + 0.022, MIRROR_SIZE.height + 0.022, 0.025, RIDER.mirrorBack);
-  housing.position.copy(at);
-  group.add(housing);
-
-  // The glass is a separate plane so a mirror camera can render straight onto it. Angled outward
-  // and slightly down, the way a rider actually sets a mirror.
-  // Double-sided so the glass can never be hidden by getting its facing wrong, and unlit,
-  // because in a moment it will be showing a rendered reflection rather than a surface.
-  const glass = new THREE.Mesh(
-    new THREE.PlaneGeometry(MIRROR_SIZE.width, MIRROR_SIZE.height),
-    new THREE.MeshBasicMaterial({
-      color: new THREE.Color(RIDER.mirrorGlass),
-      side: THREE.DoubleSide,
-    }),
-  );
-  glass.name = `mirror-${side}-glass`;
-  glass.position.copy(at);
-  glass.position.z += 0.02;
-  // Angled outward and slightly down, the way a rider actually sets a mirror.
-  glass.rotation.set(-0.12, sign * 0.24, 0);
-  group.add(glass);
-
+  // The mirror head itself — housing, glass and haze — belongs to the mirror module, which needs
+  // them to share one rotation. This is only the stalk that holds it up.
   return group;
 }
 
@@ -80,7 +63,7 @@ export function createRider(): THREE.Group {
 
   // Handlebars and the top of the machine, all ahead and below the eye.
   const bar = box(0.72, 0.032, 0.032, RIDER.frame);
-  bar.position.set(0, 1.11, -0.72);
+  bar.position.set(0, 1.06, -0.72);
   rider.add(bar);
 
   const tank = box(0.32, 0.22, 0.55, RIDER.bodywork);
@@ -93,17 +76,17 @@ export function createRider(): THREE.Group {
 
   for (const sign of [-1, 1]) {
     const glove = box(0.09, 0.07, 0.13, RIDER.glove);
-    glove.position.set(sign * 0.31, 1.11, -0.7);
+    glove.position.set(sign * 0.31, 1.06, -0.7);
     rider.add(glove);
 
     const arm = box(0.1, 0.1, 0.46, RIDER.jacket);
-    arm.position.set(sign * 0.27, 1.17, -0.42);
+    arm.position.set(sign * 0.27, 1.12, -0.42);
     arm.rotation.x = 0.28;
     rider.add(arm);
 
     // Your own shoulder, so a schouderblik has something to look past rather than into a void.
     const shoulder = box(0.17, 0.2, 0.2, RIDER.jacket);
-    shoulder.position.set(sign * 0.24, 1.24, -0.04);
+    shoulder.position.set(sign * 0.24, 1.22, -0.04);
     rider.add(shoulder);
 
     rider.add(mirror(sign < 0 ? 'left' : 'right'));
