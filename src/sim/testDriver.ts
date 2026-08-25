@@ -29,6 +29,8 @@ export interface RidePlan {
   scanConstantly?: boolean;
   /** Check over the wrong shoulder, which should reveal nothing. */
   shoulderWrongSide?: boolean;
+  /** Turn right past the blind spot to the road behind: still a schouderblik, sees nothing. */
+  shoulderTooFarBack?: boolean;
   /** Stop and let the snorfiets pass. */
   yieldToActor?: boolean;
   gear?: boolean;
@@ -68,6 +70,7 @@ const DEFAULTS: Required<Omit<RidePlan, 'onSample'>> = {
   signalBeforeLooking: false,
   swapLookOrder: false,
   shoulderWrongSide: false,
+  shoulderTooFarBack: false,
   rushSequenceAtStart: false,
   firstLookAtD: 0,
   scanConstantly: false,
@@ -144,7 +147,8 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
   ) => {
     if (isLookControl(control) && phase === 'press') {
       const aim = LOOK_DIRECTIONS[control];
-      engine.headPose.yaw = (aim.yaw * Math.PI) / 180;
+      const overshoot = p.shoulderTooFarBack && control === 'SHOULDER_RIGHT';
+      engine.headPose.yaw = ((overshoot ? -138 : aim.yaw) * Math.PI) / 180;
       engine.headPose.pitch = (aim.pitch * Math.PI) / 180;
       headHold = GAZE_DURATION_S;
     }

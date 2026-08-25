@@ -123,6 +123,28 @@ describe('dode hoek', () => {
   });
 });
 
+describe('kijken en zien zijn niet hetzelfde', () => {
+  test('een schouderblik die langs de dode hoek kijkt telt wel, maar wordt benoemd', () => {
+    // The region credits turning round; where you turned to decides what you saw. Being marked
+    // correct for looking and then told you never saw it would read as a contradiction.
+    // Turning too far back misses the blind spot just as surely as not turning far enough.
+    const record = driveRun(scenario, {
+      mirrors: false, eyes: false, shoulderPrep: false, shoulderTooFarBack: true,
+      yieldToActor: false,
+    });
+    expect(find(record, 'schouderblik-rechts').status).toBe('goed');
+    expect(record.incidents[0].wasPerceived).toBe(false);
+    expect(find(record, 'incident-snorfiets').explanation).toMatch(/niet naar de plek waar hij reed/);
+  });
+
+  test('wie helemaal niet keek krijgt de andere uitleg', () => {
+    const record = driveRun(scenario, {
+      mirrors: false, eyes: false, shoulderPrep: false, shoulder: false, yieldToActor: false,
+    });
+    expect(find(record, 'incident-snorfiets').explanation).toMatch(/nog niet eens gezien/);
+  });
+});
+
 describe('opdracht niet uitgevoerd', () => {
   const record = driveRun(scenario, { steer: false });
 

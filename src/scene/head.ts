@@ -11,10 +11,11 @@
  * whole simulator is about. Holding the button and dragging costs several strokes for a shoulder
  * check, but it always works.
  *
- * The head returns to the road when the mouse goes idle. Without it a full shoulder check costs
- * about a metre of mouse travel each way, and the head can be parked sideways indefinitely. The
- * idle delay is comfortably longer than the dwell needed to register a look, so the natural
- * rhythm is: turn, hold long enough to actually see, let go, and the road comes back.
+ * The head stays exactly where it is left. An earlier version sprang back to the road once the
+ * mouse went idle, which sounds helpful and is not: the view moving on its own while you are
+ * still deciding where to look is disorienting, and it makes it impossible to tell your own input
+ * apart from the simulator's. Bringing your eyes back to the road is the rider's job, and
+ * forgetting to is a mistake worth being able to make.
  */
 export interface HeadPose {
   /** Radians relative to the machine. Positive is left, matching the simulation's bearings. */
@@ -28,20 +29,13 @@ export const YAW_LIMIT = (140 * Math.PI) / 180;
 export const PITCH_LIMIT = (45 * Math.PI) / 180;
 
 const RADIANS_PER_PIXEL = 0.0028;
-/** Idle time before the head starts coming back. Longer than the dwell, deliberately. */
-const RETURN_AFTER_S = 0.45;
-/** Exponential rate of the return; about two thirds of the way back in half a second. */
-const RETURN_RATE = 2.2;
 
 const clamp = (n: number, limit: number) => Math.max(-limit, Math.min(limit, n));
 
 export class HeadController {
   readonly pose: HeadPose = { yaw: 0, pitch: 0 };
   locked = false;
-  /** Set false to keep the head wherever the rider left it. */
-  returnsToRoad = true;
 
-  private idleFor = 0;
   private dragging = false;
   private onLockChange: (() => void) | null = null;
 
@@ -54,7 +48,6 @@ export class HeadController {
       if (!this.locked && !this.dragging) return;
       this.pose.yaw = clamp(this.pose.yaw - e.movementX * RADIANS_PER_PIXEL, YAW_LIMIT);
       this.pose.pitch = clamp(this.pose.pitch - e.movementY * RADIANS_PER_PIXEL, PITCH_LIMIT);
-      this.idleFor = 0;
     };
 
     const lockChange = () => {
@@ -87,18 +80,9 @@ export class HeadController {
     };
   }
 
-  update(dt: number) {
-    this.idleFor += dt;
-    if (!this.returnsToRoad || this.idleFor < RETURN_AFTER_S) return;
-    const alpha = 1 - Math.exp(-dt * RETURN_RATE);
-    this.pose.yaw -= this.pose.yaw * alpha;
-    this.pose.pitch -= this.pose.pitch * alpha;
-  }
-
   reset() {
     this.pose.yaw = 0;
     this.pose.pitch = 0;
-    this.idleFor = 0;
     this.dragging = false;
   }
 

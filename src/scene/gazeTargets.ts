@@ -13,21 +13,14 @@
  */
 import * as THREE from 'three';
 import { MIRROR_POSITION } from './rider';
-import { LOOK_DIRECTIONS, SHOULDER_TARGET_DISTANCE } from '../sim/perception';
-import type { LookControl } from '../sim/types';
+import { LOOK_DIRECTIONS, lookRegionFor, SHOULDER_TARGET_DISTANCE } from '../sim/perception';
+import type { HeadPose, LookControl } from '../sim/types';
 
 /**
- * Half-angle within which the reticle counts as being on a dot.
- *
- * Measured across the approach, the closest any two dots ever come is 12.7° — the left mirror and
- * the left side-road dot, at about 60 m out, where they sit at nearly the same yaw and are
- * separated almost entirely by the mirror's downward angle. Ten degrees of registration diameter
- * leaves 2.7° of margin, so no two can ever be under the reticle at once. On screen this is still
- * a target about 65 px across, which is far more forgiving than the ring drawn on it.
+ * A dot marks where its region is centred; the region itself is what registers. Aiming precisely
+ * at a floating point is a pixel-hunting exercise, and it is not what looking over your shoulder
+ * is. `lookRegionFor` in the simulation owns the boundaries.
  */
-const REGISTER_HALF_ANGLE = (5 * Math.PI) / 180;
-/** How much further the reticle must move away before a dot can be registered again. */
-const RELEASE_FACTOR = 1.6;
 /** Seconds the reticle must rest on a dot. Long enough that sweeping past does nothing. */
 const DWELL_S = 0.3;
 /**
@@ -87,7 +80,7 @@ export interface GazeTargetState {
   dwell: number;
   /** 1 immediately after registering, decaying to 0 as the check goes stale. */
   freshness: number;
-  /** True while the reticle is on this dot. */
+  /** True while the rider is looking anywhere in this check's region. */
   under: boolean;
 }
 
@@ -98,9 +91,6 @@ interface Target extends GazeTargetState {
 }
 
 const scratch = {
-  eye: new THREE.Vector3(),
-  forward: new THREE.Vector3(),
-  toTarget: new THREE.Vector3(),
   projected: new THREE.Vector3(),
 };
 
@@ -138,11 +128,11 @@ export class GazeTargets {
   update(
     dt: number,
     camera: THREE.Camera,
+    head: HeadPose,
     viewport: { width: number; height: number },
     register: (control: LookControl) => void,
   ) {
-    camera.getWorldPosition(scratch.eye);
-    camera.getWorldDirection(scratch.forward);
+    const region = lookRegionFor(head);
 
     for (const t of this.targets) {
       if (t.spec.anchor === 'bike') {
@@ -151,13 +141,8 @@ export class GazeTargets {
         t.world.copy(t.spec.position);
       }
 
-      scratch.toTarget.copy(t.world).sub(scratch.eye).normalize();
-      const angle = Math.acos(
-        Math.max(-1, Math.min(1, scratch.forward.dot(scratch.toTarget))),
-      );
-
-      t.under = angle <= REGISTER_HALF_ANGLE;
-      if (!t.armed && angle > REGISTER_HALF_ANGLE * RELEASE_FACTOR) t.armed = true;
+      t.under = region === t.control;
+      if (!t.armed && !t.under) t.armed = true;
 
       if (t.under && t.armed) {
         t.dwell = Math.min(1, t.dwell + dt / DWELL_S);
@@ -184,8 +169,8 @@ export class GazeTargets {
   }
 
   /**
-   * How much a mirror should be in focus, from whether the reticle is on it. Looking clears the
-   * glass immediately; registering the check is what the dwell is for.
+   * How much a mirror should be in focus. Turning that way clears the glass immediately;
+   * registering the check is what the dwell is for.
    */
   focusFor(side: 'left' | 'right', current: number, dt: number): number {
     const control: LookControl = side === 'left' ? 'MIRROR_LEFT' : 'MIRROR_RIGHT';

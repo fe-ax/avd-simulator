@@ -9,7 +9,13 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { PALETTE } from '../palette';
-import { roadSurfaces, type RoadExtent, type Surface, type SurfaceKind } from '../sim/roadSurfaces';
+import {
+  roadSurfaces,
+  type Facing,
+  type RoadExtent,
+  type Surface,
+  type SurfaceKind,
+} from '../sim/roadSurfaces';
 import type { Scenario } from '../sim/types';
 
 /**
@@ -35,13 +41,40 @@ const LAYER: Record<SurfaceKind, number> = {
   house: 0,
 };
 
-const MATERIALS: Partial<Record<SurfaceKind, THREE.Material>> = {};
+/**
+ * The frontage: a door and some windows on the side that faces the road.
+ *
+ * Blank extruded blocks read as scenery you are passing rather than as houses people live in, and
+ * from the saddle the front of a terrace is most of what tells you how fast you are going and
+ * where the built-up stretch ends. Everything sits a couple of centimetres proud of the wall so it
+ * cannot z-fight with it.
+ */
+const FRONTAGE = {
+  proud: 0.03,
+  doorWidth: 0.95,
+  doorHeight: 2.1,
+  windowWidth: 1.25,
+  windowHeight: 1.15,
+  groundSill: 0.95,
+  upperSill: 3.5,
+  colours: { door: '#5b4634', glass: '#2f3b47', frame: '#e6e2d8' },
+};
 
-function material(kind: SurfaceKind, colour: string): THREE.Material {
-  if (!MATERIALS[kind]) {
-    MATERIALS[kind] = new THREE.MeshLambertMaterial({ color: new THREE.Color(colour) });
+const MATERIALS: Record<string, THREE.Material> = {};
+const detailMaterials: Record<string, THREE.MeshLambertMaterial> = {};
+
+function detailMaterial(colour: string): THREE.MeshLambertMaterial {
+  if (!detailMaterials[colour]) {
+    detailMaterials[colour] = new THREE.MeshLambertMaterial({ color: new THREE.Color(colour) });
   }
-  return MATERIALS[kind]!;
+  return detailMaterials[colour];
+}
+
+function material(key: string, colour: string): THREE.Material {
+  if (!MATERIALS[key]) {
+    MATERIALS[key] = new THREE.MeshLambertMaterial({ color: new THREE.Color(colour) });
+  }
+  return MATERIALS[key];
 }
 
 /** A world-space polygon as a three.js shape on the xz plane. */
@@ -93,6 +126,97 @@ function mergedMesh(
   return mesh;
 }
 
+/**
+ * A flat panel on a wall, given in metres along the frontage and up from the ground. `facing` says
+ * which wall, so the same description serves a terrace on either side of either road.
+ */
+function panel(
+  surface: Surface,
+  facing: Facing,
+  along: number,
+  bottom: number,
+  width: number,
+  height: number,
+): THREE.BufferGeometry {
+  const xs = surface.points.map((p) => p.x);
+  const ys = surface.points.map((p) => p.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+
+  const geometry = new THREE.PlaneGeometry(width, height);
+  const out = FRONTAGE.proud;
+
+  if (facing === 'west' || facing === 'east') {
+    const wall = facing === 'west' ? minX - out : maxX + out;
+    geometry.rotateY(facing === 'west' ? -Math.PI / 2 : Math.PI / 2);
+    geometry.translate(wall, bottom + height / 2, -(minY + along));
+  } else {
+    const wall = facing === 'south' ? minY - out : maxY + out;
+    geometry.rotateY(facing === 'south' ? Math.PI : 0);
+    geometry.translate(minX + along, bottom + height / 2, -wall);
+  }
+  return geometry;
+}
+
+/** Frontage width available on the wall a building fronts. */
+function frontageWidth(surface: Surface, facing: Facing): number {
+  const values = surface.points.map((p) => (facing === 'west' || facing === 'east' ? p.y : p.x));
+  return Math.max(...values) - Math.min(...values);
+}
+
+function frontage(surface: Surface): { colour: string; geometry: THREE.BufferGeometry }[] {
+  const facing = surface.facing;
+  if (!facing) return [];
+  const width = frontageWidth(surface, facing);
+  const out: { colour: string; geometry: THREE.BufferGeometry }[] = [];
+
+  const add = (colour: string, along: number, bottom: number, w: number, h: number) => {
+    out.push({ colour, geometry: panel(surface, facing, along, bottom, w, h) });
+  };
+
+  // Door a third of the way along, with a window beside it and two above.
+  const doorAt = width * 0.32;
+  add(FRONTAGE.colours.frame, doorAt, 0, FRONTAGE.doorWidth + 0.14, FRONTAGE.doorHeight + 0.1);
+  add(FRONTAGE.colours.door, doorAt, 0, FRONTAGE.doorWidth, FRONTAGE.doorHeight);
+
+  const groundWindowAt = width * 0.68;
+  add(
+    FRONTAGE.colours.frame,
+    groundWindowAt,
+    FRONTAGE.groundSill - 0.07,
+    FRONTAGE.windowWidth + 0.14,
+    FRONTAGE.windowHeight + 0.14,
+  );
+  add(
+    FRONTAGE.colours.glass,
+    groundWindowAt,
+    FRONTAGE.groundSill,
+    FRONTAGE.windowWidth,
+    FRONTAGE.windowHeight,
+  );
+
+  for (const fraction of [0.3, 0.7]) {
+    add(
+      FRONTAGE.colours.frame,
+      width * fraction,
+      FRONTAGE.upperSill - 0.07,
+      FRONTAGE.windowWidth + 0.14,
+      FRONTAGE.windowHeight + 0.14,
+    );
+    add(
+      FRONTAGE.colours.glass,
+      width * fraction,
+      FRONTAGE.upperSill,
+      FRONTAGE.windowWidth,
+      FRONTAGE.windowHeight,
+    );
+  }
+
+  return out;
+}
+
 export function buildWorld(scenario: Scenario): THREE.Group {
   const world = new THREE.Group();
   world.name = 'world';
@@ -104,16 +228,28 @@ export function buildWorld(scenario: Scenario): THREE.Group {
   );
   ground.rotation.x = -Math.PI / 2;
   ground.name = 'verge';
+  ground.receiveShadow = true;
   world.add(ground);
 
-  const byKind = new Map<SurfaceKind, THREE.BufferGeometry[]>();
+  const byKind = new Map<string, THREE.BufferGeometry[]>();
+  const byDetail = new Map<string, THREE.BufferGeometry[]>();
   for (const surface of roadSurfaces(scenario.road, EXTENT)) {
     if (surface.kind === 'roof') continue;
-    const list = byKind.get(surface.kind) ?? [];
+    // Neighbouring houses alternate render, exactly as they do in plan view. Merging them all
+    // into one mesh would throw that away and leave a terrace of identical beige blocks.
+    const group =
+      surface.kind === 'house' && (surface.variant ?? 0) % 2 !== 0 ? 'houseAlt' : surface.kind;
+    const list = byKind.get(group) ?? [];
     list.push(
       surface.height > 0 ? extrudedGeometry(surface) : flatGeometry(surface, LAYER[surface.kind]),
     );
-    byKind.set(surface.kind, list);
+    byKind.set(group, list);
+
+    for (const { colour, geometry } of frontage(surface)) {
+      const details = byDetail.get(colour) ?? [];
+      details.push(geometry);
+      byDetail.set(colour, details);
+    }
   }
 
   const colours: Record<string, string> = {
@@ -124,10 +260,20 @@ export function buildWorld(scenario: Scenario): THREE.Group {
     paint: PALETTE.paint,
     hedge: PALETTE.hedge,
     house: PALETTE.house,
+    houseAlt: PALETTE.houseAlt,
   };
 
-  for (const [kind, geometries] of byKind) {
-    const mesh = mergedMesh(geometries, material(kind, colours[kind] ?? PALETTE.asphalt), kind);
+  for (const [group, geometries] of byKind) {
+    const mesh = mergedMesh(geometries, material(group, colours[group] ?? PALETTE.asphalt), group);
+    if (!mesh) continue;
+    // Only what stands up casts; the ground it stands on receives.
+    mesh.castShadow = group.startsWith('house') || group === 'hedge' || group === 'kerb';
+    mesh.receiveShadow = !mesh.castShadow;
+    world.add(mesh);
+  }
+
+  for (const [colour, geometries] of byDetail) {
+    const mesh = mergedMesh(geometries, detailMaterial(colour), 'frontage');
     if (mesh) world.add(mesh);
   }
 
@@ -138,8 +284,12 @@ export function disposeWorld(world: THREE.Group) {
   world.traverse((node) => {
     if (node instanceof THREE.Mesh) node.geometry.dispose();
   });
-  for (const key of Object.keys(MATERIALS) as SurfaceKind[]) {
-    MATERIALS[key]?.dispose();
+  for (const key of Object.keys(MATERIALS)) {
+    MATERIALS[key].dispose();
     delete MATERIALS[key];
+  }
+  for (const key of Object.keys(detailMaterials)) {
+    detailMaterials[key].dispose();
+    delete detailMaterials[key];
   }
 }

@@ -22,6 +22,9 @@ export type SurfaceKind =
   | 'fietspadEdge'
   | 'paint';
 
+/** Which way a building fronts. Only the 3D scene uses it, to hang a door and windows there. */
+export type Facing = 'north' | 'south' | 'east' | 'west';
+
 export interface Surface {
   kind: SurfaceKind;
   /** Closed polygon, world metres. */
@@ -30,6 +33,8 @@ export interface Surface {
   height: number;
   /** Index-derived, so neighbouring buildings differ without anything being random. */
   variant?: number;
+  /** For buildings: the side that faces the road, and so carries the front door. */
+  facing?: Facing;
 }
 
 export interface RoadExtent {
@@ -64,11 +69,13 @@ function rect(
   y2: number,
   height = 0,
   variant?: number,
+  facing?: Facing,
 ): Surface {
   return {
     kind,
     height,
     variant,
+    facing,
     points: [
       { x: x1, y: y1 },
       { x: x2, y: y1 },
@@ -134,8 +141,16 @@ function sharkTeeth(
   }
 }
 
-function house(out: Surface[], x1: number, y1: number, x2: number, y2: number, variant: number) {
-  out.push(rect('house', x1, y1, x2, y2, HOUSE_HEIGHT, variant));
+function house(
+  out: Surface[],
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  variant: number,
+  facing: Facing,
+) {
+  out.push(rect('house', x1, y1, x2, y2, HOUSE_HEIGHT, variant, facing));
   // A darker band reads as a roof ridge from above. In three dimensions the extruded footprint
   // says it better, so the scene ignores this kind.
   const mid = (y1 + y2) / 2;
@@ -150,16 +165,16 @@ function buildings(out: Surface[], road: RoadLayout, ext: RoadExtent) {
     const y = i * HOUSE_PITCH;
     if (y + 7 > -sideHalfWidth - 4 && y < sideHalfWidth + 4) continue;
     const depth = 7 + (((i % 3) + 3) % 3);
-    house(out, vergeTo + 1, y, vergeTo + 1 + depth, y + 7, i);
-    house(out, -vergeTo - 1 - depth, y + 2, -vergeTo - 1, y + 9, i + 1);
+    house(out, vergeTo + 1, y, vergeTo + 1 + depth, y + 7, i, 'west');
+    house(out, -vergeTo - 1 - depth, y + 2, -vergeTo - 1, y + 9, i + 1, 'east');
   }
 
   // Terraces along both Kerkstraat arms so the side road does not read as empty space.
   for (let i = Math.floor(ext.minX / HOUSE_PITCH) - 1; i <= Math.ceil(ext.maxX / HOUSE_PITCH) + 1; i++) {
     const x = i * HOUSE_PITCH;
     if (x + 7 > -vergeTo - 1 && x < vergeTo + 1) continue;
-    house(out, x, sideHalfWidth + 3, x + 7, sideHalfWidth + 10, i);
-    house(out, x, -sideHalfWidth - 10, x + 7, -sideHalfWidth - 3, i + 1);
+    house(out, x, sideHalfWidth + 3, x + 7, sideHalfWidth + 10, i, 'south');
+    house(out, x, -sideHalfWidth - 10, x + 7, -sideHalfWidth - 3, i + 1, 'north');
   }
 }
 
@@ -175,8 +190,10 @@ export function roadSurfaces(road: RoadLayout, ext: RoadExtent): Surface[] {
   const out: Surface[] = [];
 
   // Hedges and houses first: everything after them is road, and road wins.
-  out.push(rect('hedge', vergeTo - 0.6, ext.minY, vergeTo, ext.maxY, 1.6));
-  out.push(rect('hedge', -vergeTo, ext.minY, -vergeTo + 0.6, ext.maxY, 1.6));
+  // A metre, not shoulder height. Taller is just as Dutch and walls off the front doors it is
+  // supposed to be standing in front of.
+  out.push(rect('hedge', vergeTo - 0.6, ext.minY, vergeTo, ext.maxY, 1));
+  out.push(rect('hedge', -vergeTo, ext.minY, -vergeTo + 0.6, ext.maxY, 1));
   buildings(out, road, ext);
 
   // Kerb strips between carriageway and fietspad, interrupted where the side road crosses.

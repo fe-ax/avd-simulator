@@ -73,7 +73,6 @@ export function RideView({ scenario, getView, head, onLook, onChecks, onLockChan
 
     const renderFrame = (dt: number) => {
       onFrameRef.current?.(dt);
-      head?.update(dt);
       const view = getViewRef.current();
       if (!view) return;
       stage.sync(view, view.head);
@@ -83,7 +82,7 @@ export function RideView({ scenario, getView, head, onLook, onChecks, onLockChan
       stage.camera.updateMatrixWorld(true);
 
       if (interactive) {
-        gaze.update(dt, stage.camera, viewport, (control) => onLookRef.current?.(control));
+        gaze.update(dt, stage.camera, view.head, viewport, (control) => onLookRef.current?.(control));
         for (const side of MIRROR_SIDES) {
           stage.mirrors.setFocus(side, gaze.focusFor(side, stage.mirrors.getFocus(side), dt));
         }

@@ -49,6 +49,8 @@ export class Stage {
   constructor(canvas: HTMLCanvasElement, scenario: Scenario) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     this.scene.background = new THREE.Color(PALETTE.sky);
     // Fog starts beyond the junction so it never greys out the thing being judged; it exists to
@@ -61,7 +63,25 @@ export class Stage {
     this.scene.add(new THREE.HemisphereLight(0xdceaf6, 0x8a9c74, 2.4));
     const sun = new THREE.DirectionalLight(0xfff3e0, 2.2);
     sun.position.set(-40, 60, 30);
+    sun.castShadow = true;
+    // One orthographic box over the whole built stretch. At this size a 2048 map is about twelve
+    // centimetres per texel, which is plenty for the edge of a terrace.
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -120;
+    sun.shadow.camera.right = 120;
+    sun.shadow.camera.top = 120;
+    sun.shadow.camera.bottom = -120;
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 260;
+    sun.shadow.bias = -0.0015;
+    sun.shadow.normalBias = 0.02;
+    // Everything that casts is static, so the map is drawn once and then frozen. Without this it
+    // would be redrawn three times a frame — once for the view and once per mirror — for a
+    // picture that never changes. The two vehicles keep their painted blob shadows instead.
+    sun.shadow.autoUpdate = false;
+    sun.shadow.needsUpdate = true;
     this.scene.add(sun);
+    this.scene.add(sun.target);
     // A little fill so surfaces facing the rider — the back of the mirrors, their own arms — are
     // shaded rather than silhouetted.
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.55));

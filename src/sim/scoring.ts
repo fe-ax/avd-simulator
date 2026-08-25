@@ -417,9 +417,21 @@ function reportLookDiscipline(audit: LookAudit, scenario: Scenario): ActionResul
   };
 }
 
-function scoreIncidents(record: RunRecord, scenario: Scenario): ActionResult[] {
+function scoreIncidents(
+  record: RunRecord,
+  scenario: Scenario,
+  credited: ControlEvent[],
+): ActionResult[] {
   return record.incidents.map((incident) => {
     const reason = scenario.actors.find((a) => a.id === incident.actorId)?.priorityReason;
+    // A schouderblik is credited for turning round; how far you turned decides what you saw.
+    // Being told "you never saw it" right after being marked correct for looking would read as a
+    // contradiction, so say which of the two happened.
+    const lookedButMissed =
+      !incident.wasPerceived &&
+      credited.some(
+        (e) => e.control === 'SHOULDER_RIGHT' && e.phase === 'press' && e.t <= incident.t,
+      );
     return {
       expectedId: `incident-${incident.actorId}`,
       label: `${incident.actorLabel} moest remmen`,
@@ -432,7 +444,11 @@ function scoreIncidents(record: RunRecord, scenario: Scenario): ActionResult[] {
         '"gevaarzetting" betekent: de situatie werd voor jou opgelost. ' +
         (incident.wasPerceived
           ? 'Je had hem gezien en bent toch doorgereden.'
-          : 'Je had hem op dat moment nog niet eens gezien.'),
+          : lookedButMissed
+            ? 'Je hebt wél over je schouder gekeken, maar niet naar de plek waar hij reed — te ' +
+              'ver door is net zo blind als niet ver genoeg. De blik telt; het zien is waar je ' +
+              'iets aan hebt.'
+            : 'Je had hem op dat moment nog niet eens gezien.'),
       windowT: null,
       windowD: null,
       actualT: incident.t,
@@ -495,7 +511,7 @@ export function scoreRun(record: RunRecord, scenario: Scenario): ScoredRun {
   const clutch = scoreClutchTechnique(record);
   if (clutch) results.push(clutch);
   results.push(...scorePrerequisites(record, scenario));
-  results.push(...scoreIncidents(record, scenario));
+  results.push(...scoreIncidents(record, scenario, credited));
 
   // Deliberately NOT sorted by time. The rows are the prescribed reeks, and the whole point of
   // the timeline is to read down it in that order; sorting by when things actually happened

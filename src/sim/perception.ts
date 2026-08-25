@@ -55,14 +55,25 @@ export const MIRROR_VIEW = {
   maxDist: 90,
 };
 
-/** Where the head has to be pointing for a mirror to be readable, in degrees. */
-export const MIRROR_DIRECTION = {
-  MIRROR_LEFT: { yaw: 26.6, pitch: -12.6 },
-  MIRROR_RIGHT: { yaw: -26.6, pitch: -12.6 },
+/**
+ * Which check a given head direction *is*.
+ *
+ * Looking is a direction you turn in, not a point you have to hit. These bands carve the head's
+ * whole travel into regions, so anywhere over your right shoulder is a schouderblik rechts and
+ * anywhere down-and-right is the right mirror — no aiming, no pixel hunting.
+ *
+ * The shoulder threshold is what makes a schouderblik a schouderblik: the forward view reaches
+ * 31° either side, so a focal point past 60° is somewhere ordinary forward vision never went. You
+ * have genuinely turned to look behind you, which is the thing being taught.
+ */
+export const LOOK_REGIONS = {
+  /** Inside this the rider is simply looking where they are going. */
+  aheadDeg: 15,
+  /** Past this the focal point is well outside anything forward vision covers: a real head turn. */
+  shoulderDeg: 60,
+  /** At or below this pitch, off to one side, the rider is looking down at a mirror. */
+  mirrorPitchDeg: -6,
 };
-
-/** Half-angle within which the reticle counts as resting on something. Matches the gaze targets. */
-export const FOCUS_HALF_ANGLE_DEG = 5;
 
 /**
  * Where the head has to point for each look, in degrees. The renderer places its dots from these
@@ -99,12 +110,27 @@ export function relativeBearingDeg(pose: PoseOnRoute, x: number, y: number): num
   return wrapDeg((Math.atan2(y - pose.y, x - pose.x) - pose.heading) * DEG);
 }
 
-/** Is a mirror readable? Only while the rider is looking straight at it. */
+/**
+ * The one place that decides what a head direction means. Both the dwell that registers a look
+ * and the haze that clears a mirror read it, so what the rider is credited with and what they can
+ * actually see are the same judgement.
+ */
+export function lookRegionFor(head: HeadPose): LookControl | null {
+  const yaw = wrapDeg(head.yaw * DEG);
+  const pitch = head.pitch * DEG;
+  const away = Math.abs(yaw);
+
+  if (away < LOOK_REGIONS.aheadDeg) return null;
+  const left = yaw > 0;
+  if (away >= LOOK_REGIONS.shoulderDeg) return left ? 'SHOULDER_LEFT' : 'SHOULDER_RIGHT';
+  if (pitch <= LOOK_REGIONS.mirrorPitchDeg) return left ? 'MIRROR_LEFT' : 'MIRROR_RIGHT';
+  return left ? 'EYE_LEFT' : 'EYE_RIGHT';
+}
+
+/** Is a mirror readable? Only while the rider is looking down at that side. */
 export function mirrorInFocus(head: HeadPose, side: 'left' | 'right'): boolean {
-  const want = side === 'left' ? MIRROR_DIRECTION.MIRROR_LEFT : MIRROR_DIRECTION.MIRROR_RIGHT;
-  const dYaw = wrapDeg(head.yaw * DEG - want.yaw);
-  const dPitch = head.pitch * DEG - want.pitch;
-  return Math.hypot(dYaw, dPitch) <= FOCUS_HALF_ANGLE_DEG;
+  const region = lookRegionFor(head);
+  return region === (side === 'left' ? 'MIRROR_LEFT' : 'MIRROR_RIGHT');
 }
 
 function inForwardView(head: HeadPose, bearingDeg: number, elevationDeg: number, dist: number) {
