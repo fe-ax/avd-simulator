@@ -51,22 +51,22 @@ export const rechtsafFietspad: Scenario = {
 
   briefing: {
     situation:
-      'Je rijdt in een 30-kilometerzone op de Dorpsstraat. Rechts naast de rijbaan ligt een ' +
-      'vrijliggend fietspad. Je nadert een gelijkwaardig kruispunt.',
+      'Je zit op de motor in een 30-kilometerzone op de Dorpsstraat. Rechts naast de rijbaan ligt ' +
+      'een vrijliggend fietspad. Je nadert een gelijkwaardig kruispunt.',
     assignment: 'Sla bij het eerstvolgende kruispunt rechtsaf, de Kerkstraat in.',
     hints: [
-      'Je ziet alleen wat je zelf controleert. Wat je niet bekijkt, staat niet op de kaart — net als in het echt.',
+      'Klik in beeld en draai je hoofd met de muis. Op elke plek die je moet controleren zweeft ' +
+        'een grijze stip: houd het kruisje er even op tot hij oplicht. Er langs vegen telt niet. ' +
+        'En terwijl je over je schouder kijkt, zie je de weg vóór je niet.',
+      'Je spiegels zijn wazig tot je ernaar kijkt: je ziet dát er iets is, niet wát het is.',
       'Vaste volgorde vóór de bocht: blik links → spiegel links → blik rechts → spiegel rechts → ' +
-        'schouderblik rechts → richting aangeven. Vlak vóór de bocht nog één keer links kijken ' +
-        'of er niets aankomt, en als laatste een schouderblik rechts. De richtingaanwijzer werkt ' +
-        'pas ná de eerste schouderblik.',
-      'Kijken is geen tic. Dezelfde blik elke paar seconden herhalen is prima; onafgebroken ' +
-        'rondkijken telt niet als kijken en valt op.',
-      'Jij slaat af, de snorfiets gaat rechtdoor op dezelfde weg — en dat vrijliggende fietspad ' +
-        'hoort bij de Dorpsstraat. Afslaand verkeer laat rechtdoorgaand verkeer op dezelfde weg ' +
-        'voorgaan, dus de snorfiets gaat vóór jou. De haaientanden op de Kerkstraat gaan hier ' +
-        'niet over: die gelden voor verkeer dat de Kerkstraat uit komt.',
-      'Er wordt niet afgebroken als je iets mist. Je ziet achteraf precies wat wanneer had gemoeten.',
+        'schouderblik rechts → richting aangeven. Vlak vóór de bocht nog één keer links kijken, ' +
+        'en als laatste een schouderblik rechts. De richtingaanwijzer werkt pas ná de eerste ' +
+        'schouderblik.',
+      'Jij slaat af, de snorfiets gaat rechtdoor op dezelfde weg — en dat fietspad hoort bij de ' +
+        'Dorpsstraat. Afslaand verkeer laat rechtdoorgaand verkeer op dezelfde weg voorgaan, dus ' +
+        'hij gaat vóór jou. De haaientanden gelden voor verkeer dat de Kerkstraat uit komt, niet ' +
+        'voor jou.',
     ],
   },
 

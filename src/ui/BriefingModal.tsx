@@ -57,6 +57,17 @@ export function BriefingModal({
           <div className="briefing-controls">
             <h2>Bediening</h2>
             <div className="briefing-control-groups">
+              <div className="briefing-look">
+                <h4>Kijken</h4>
+                <div className="briefing-control-row">
+                  <kbd>muis</kbd>
+                  <span>hoofd draaien</span>
+                </div>
+                <div className="briefing-control-row">
+                  <kbd>stip</kbd>
+                  <span>kruisje erop houden</span>
+                </div>
+              </div>
               {GROUP_ORDER.map((group) => (
                 <div key={group}>
                   <h4>{GROUP_LABELS[group]}</h4>

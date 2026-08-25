@@ -342,10 +342,11 @@ export default function App() {
           <div className="sidebar-idle">
             <p>
               Zodra je de rit start rijdt de motor vanzelf verder. Jij bepaalt wanneer je kijkt,
-              richting aangeeft, remt, schakelt en instuurt.
+              richting aangeeft, remt en schakelt.
             </p>
             <p className="sidebar-warn">
-              Op de kaart staat alleen wat jij hebt waargenomen. Wie niet kijkt, ziet niets.
+              Kijken doe je met de muis, niet met een knop. Wat je niet bekijkt, heb je niet
+              gezien — en dat rekent de nabespreking je aan.
             </p>
           </div>
         )}

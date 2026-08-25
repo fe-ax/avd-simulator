@@ -26,19 +26,10 @@ export const GROUP_LABELS: Record<ControlGroup, string> = {
 };
 
 /**
- * The kijken cluster is laid out so that left-hand actions sit on the left key of each pair and
- * right-hand actions on the right: Q/E for a glance, A/D for a mirror, Z/C for a schouderblik.
- * Getting left and right the wrong way round under time pressure is exactly the mistake this
- * exercise is meant to expose, so the keys must not add any confusion of their own.
+ * Only the machine's controls live here. Looking is done by looking — see the gaze targets — so
+ * there is no key for it, and the briefing must not offer one.
  */
 export const CONTROLS: ControlDef[] = [
-  { id: 'EYE_LEFT', label: 'Blik links', short: 'Blik L', group: 'kijken', code: 'KeyQ', keyHint: 'Q' },
-  { id: 'EYE_RIGHT', label: 'Blik rechts', short: 'Blik R', group: 'kijken', code: 'KeyE', keyHint: 'E' },
-  { id: 'MIRROR_LEFT', label: 'Spiegel links', short: 'Spiegel L', group: 'kijken', code: 'KeyA', keyHint: 'A' },
-  { id: 'MIRROR_RIGHT', label: 'Spiegel rechts', short: 'Spiegel R', group: 'kijken', code: 'KeyD', keyHint: 'D' },
-  { id: 'SHOULDER_LEFT', label: 'Schouderblik links', short: 'Schoud. L', group: 'kijken', code: 'KeyZ', keyHint: 'Z' },
-  { id: 'SHOULDER_RIGHT', label: 'Schouderblik rechts', short: 'Schoud. R', group: 'kijken', code: 'KeyC', keyHint: 'C' },
-
   { id: 'INDICATOR_LEFT', label: 'Richting links', short: 'Richting L', group: 'richting', code: 'Digit1', keyHint: '1' },
   { id: 'INDICATOR_OFF', label: 'Richting uit', short: 'Uit', group: 'richting', code: 'Digit2', keyHint: '2' },
   { id: 'INDICATOR_RIGHT', label: 'Richting rechts', short: 'Richting R', group: 'richting', code: 'Digit3', keyHint: '3' },
@@ -60,7 +51,6 @@ export const CONTROL_BY_ID: Record<ControlId, ControlDef> = Object.fromEntries(
 ) as Record<ControlId, ControlDef>;
 
 export const GROUP_ORDER: ControlGroup[] = [
-  'kijken',
   'richting',
   'snelheid',
   'aandrijving',
