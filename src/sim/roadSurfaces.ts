@@ -61,6 +61,20 @@ const HOUSE_HEIGHT = 5.2;
  */
 const KERB_HEIGHT = 0.12;
 
+const HEDGE_HEIGHT = 1;
+/** How far back from the side road's centreline a hedge stops, leaving an open corner. */
+const HEDGE_GAP = 4.5;
+
+/**
+ * How far back from the side road's centreline the raised kerb stops.
+ *
+ * Wider than the road itself, because a real junction curves its kerb into the side road over
+ * several metres rather than stopping square at the corner. Stopping it square left the raised
+ * edge standing across the line a rider actually turns through: the turn cuts the corner well
+ * before the mouth, as any turn does.
+ */
+const KERB_JUNCTION_GAP = 8.5;
+
 function rect(
   kind: SurfaceKind,
   x1: number,
@@ -190,18 +204,25 @@ export function roadSurfaces(road: RoadLayout, ext: RoadExtent): Surface[] {
   const out: Surface[] = [];
 
   // Hedges and houses first: everything after them is road, and road wins.
-  // A metre, not shoulder height. Taller is just as Dutch and walls off the front doors it is
-  // supposed to be standing in front of.
-  out.push(rect('hedge', vergeTo - 0.6, ext.minY, vergeTo, ext.maxY, 1));
-  out.push(rect('hedge', -vergeTo, ext.minY, -vergeTo + 0.6, ext.maxY, 1));
+  //
+  // A metre tall, not shoulder height: taller is just as Dutch and walls off the front doors it is
+  // supposed to stand in front of. And interrupted at the junction, like the kerb — a plan view
+  // hides an uninterrupted hedge under the side road it paints on top, but standing in the street
+  // it is a green wall across the road you are turning into.
+  for (const sign of [1, -1] as const) {
+    const inner = sign * (vergeTo - 0.6);
+    const outer = sign * vergeTo;
+    out.push(rect('hedge', inner, ext.minY, outer, -HEDGE_GAP, HEDGE_HEIGHT));
+    out.push(rect('hedge', inner, HEDGE_GAP, outer, ext.maxY, HEDGE_HEIGHT));
+  }
   buildings(out, road, ext);
 
   // Kerb strips between carriageway and fietspad, interrupted where the side road crosses.
   for (const sign of [1, -1] as const) {
     const inner = sign * (halfWidth - SEAM);
     const outer = sign * (kerbTo + SEAM);
-    out.push(rect('kerb', inner, ext.minY, outer, -sideHalfWidth, KERB_HEIGHT));
-    out.push(rect('kerb', inner, sideHalfWidth, outer, ext.maxY, KERB_HEIGHT));
+    out.push(rect('kerb', inner, ext.minY, outer, -KERB_JUNCTION_GAP, KERB_HEIGHT));
+    out.push(rect('kerb', inner, KERB_JUNCTION_GAP, outer, ext.maxY, KERB_HEIGHT));
   }
 
   out.push(rect('asphalt', -halfWidth, ext.minY, halfWidth, ext.maxY));
