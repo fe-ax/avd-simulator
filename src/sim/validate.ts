@@ -19,6 +19,9 @@ export interface Obstruction {
   at: Vec2;
 }
 
+/** Surfaces you can ride on. Anything else under the wheels means the road ran out. */
+const DRIVEABLE: ReadonlySet<string> = new Set(['asphalt', 'fietspad', 'fietspadEdge', 'paint']);
+
 /** Ray casting. Points exactly on an edge are not worth agonising over at half-metre steps. */
 export function pointInPolygon(poly: Vec2[], x: number, y: number): boolean {
   let hit = false;
@@ -65,6 +68,34 @@ export function findObstructions(
         seen.add(key);
         out.push({ kind: surface.kind, s, at: { x: point.x, y: point.y } });
       }
+    }
+  }
+  return out;
+}
+
+/**
+ * Anywhere the route runs off the end of the road.
+ *
+ * This exists because it happened. The motorway's oprit was described in `buildRoutes` and not in
+ * `motorwaySurfaces`, so the first forty metres of scenario 2 were ridden across the verge — the
+ * carriageway visible off to the left, trees going past, and no tarmac under the wheels at all.
+ * Every test passed, because nothing had ever thought to ask whether there was road there.
+ *
+ * The route is the one thing guaranteed to be ridden, so "is there road under all of it" is the
+ * cheapest possible statement of the thing that went wrong.
+ */
+export function findOffRoad(
+  world: ScenarioWorld,
+  routes: ScenarioRoutes,
+  extent: RoadExtent,
+  step = 2,
+): Vec2[] {
+  const driveable = roadSurfaces(world, extent).filter((s) => s.height === 0 && DRIVEABLE.has(s.kind));
+  const out: Vec2[] = [];
+  for (let s = 0; s <= routes.turn.total; s += step) {
+    const pose = poseAt(routes.turn, s);
+    if (!driveable.some((surface) => pointInPolygon(surface.points, pose.x, pose.y))) {
+      out.push({ x: Math.round(pose.x * 10) / 10, y: Math.round(pose.y * 10) / 10 });
     }
   }
   return out;

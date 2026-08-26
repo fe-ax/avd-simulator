@@ -7,6 +7,7 @@
  * Here it is a red panel that appears while you are still holding the thing you moved.
  */
 import type { Obstruction } from '../../sim/validate';
+import type { Vec2 } from '../../sim/types';
 import type { Reveal } from '../../sim/referenceRide';
 import type { RunRecord } from '../../sim/types';
 
@@ -14,6 +15,8 @@ export interface Validation {
   record: RunRecord | null;
   error: string | null;
   obstructions: Obstruction[];
+  /** Points along the route with no road under them. */
+  offRoad: Vec2[];
   reveals: Reveal[];
 }
 
@@ -21,7 +24,7 @@ function seconds(v: number | null): string {
   return v === null ? '—' : `${v.toFixed(1).replace('.', ',')}s`;
 }
 
-export function ValidationPanel({ record, error, obstructions, reveals }: Validation) {
+export function ValidationPanel({ record, error, obstructions, offRoad, reveals }: Validation) {
   if (error) {
     return (
       <section className="builder-panel builder-panel-bad">
@@ -69,6 +72,19 @@ export function ValidationPanel({ record, error, obstructions, reveals }: Valida
           <p>Nog niet gereden.</p>
         )}
       </section>
+
+      {offRoad.length > 0 && (
+        <section className="builder-panel builder-panel-bad">
+          <h3>De weg houdt op</h3>
+          <p>
+            Over {offRoad.length === 1 ? 'één punt' : `${offRoad.length} punten`} van de route ligt
+            geen asfalt. Daar rijd je door de berm.
+          </p>
+          <p className="builder-note">
+            Vanaf ({offRoad[0].x.toFixed(1)}, {offRoad[0].y.toFixed(1)}).
+          </p>
+        </section>
+      )}
 
       {obstructions.length > 0 && (
         <section className="builder-panel builder-panel-bad">

@@ -67,7 +67,7 @@ export interface RoadExtent {
  */
 export function roadSurfaces(world: ScenarioWorld, ext: RoadExtent): Surface[] {
   return world.kind === 'motorway'
-    ? motorwaySurfaces(world.road, ext)
+    ? motorwaySurfaces(world, ext)
     : urbanCrossingSurfaces(world.road, ext);
 }
 

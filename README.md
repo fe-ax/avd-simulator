@@ -132,6 +132,13 @@ stukje glas kijkt zes graden verder omlaag, naar het asfalt in plaats van naar h
 Nu volgt de stand van het glas het oog, en een controle in de renderer klaagt als de gerenderde
 richting alsnog van `MIRROR_VIEW` afdrijft — in richting, in breedte én in hoogte.
 
+## Snelheid zetten
+
+Naast gas meer en gas minder staat **Zet op … km/u**. Dat is een cruise control: de motor loopt
+lineair naar die snelheid in vier seconden, hoe groot de sprong ook is. Bedoeld voor de
+invoegstrook, waar het niet om het bedienen van een gashendel gaat maar om aankomen met de
+snelheid van het verkeer. Rem of gas laat hem weer los.
+
 ## Instellingen
 
 **Auto-sturen** staat standaard aan: vergeten te sturen is geen fout die echte rijders maken.

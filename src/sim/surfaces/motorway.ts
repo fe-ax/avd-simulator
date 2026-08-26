@@ -8,7 +8,9 @@
  * Pure geometry; see `../roadSurfaces.ts` for the vocabulary.
  */
 import { dashedAlongY, rect, SEAM, type RoadExtent, type Surface } from '../roadSurfaces';
-import type { MotorwayRoad } from '../types';
+import type { MotorwayRoad, ScenarioWorld } from '../types';
+
+type MotorwayWorld = Extract<ScenarioWorld, { kind: 'motorway' }>;
 
 /**
  * Every line on this road is 0.15 m wide, broken or not; the width is not what distinguishes them.
@@ -70,6 +72,15 @@ const MIDDENBERM_TREES = { from: -24, to: -6 };
 const BERM_TREES = { clearance: 2, depth: 10 };
 
 /**
+ * A few degrees of extra arc behind where the route starts, so the rider does not begin on the
+ * raw cut end of the tarmac with grass in the mirrors.
+ */
+const RAMP_LEAD_DEG = 7;
+
+/** How finely the arc is chopped into quads. Half a degree is under a metre at these radii. */
+const RAMP_STEP_DEG = 0.5;
+
+/**
  * Where every lane boundary sits, derived once from the widths so nothing can disagree about it.
  *
  * Lanes are numbered the Dutch way: rijstrook 1 is the rightmost, and the invoegstrook sits to
@@ -128,7 +139,15 @@ function hash01(i: number, salt: number): number {
  * world through — which is the one thing this treeline exists to prevent. `seed` gives each wood
  * its own run of salts, otherwise the two would come out twins and the symmetry would show.
  */
-function treeline(out: Surface[], ext: RoadExtent, fromX: number, toX: number, seed: number) {
+function treeline(
+  out: Surface[],
+  ext: RoadExtent,
+  fromX: number,
+  toX: number,
+  seed: number,
+  /** Leave this stretch of y bare — where the oprit runs there is road, not wood. */
+  skipY?: [number, number],
+) {
   const columns = Math.max(1, Math.round((toX - fromX) / TREE_PITCH.acrossX));
   const cellWidth = (toX - fromX) / columns;
   const radius = TREE.footprint / 2;
@@ -141,6 +160,7 @@ function treeline(out: Surface[], ext: RoadExtent, fromX: number, toX: number, s
       const i = row * columns + column;
       const x = fromX + (column + hash01(i, salt + 1)) * cellWidth;
       const y = (row + hash01(i, salt + 2)) * TREE_PITCH.alongY;
+      if (skipY && y >= skipY[0] && y <= skipY[1]) continue;
       const height = TREE.minHeight + hash01(i, salt + 3) * TREE.heightSpread;
       out.push(
         rect('tree', x - radius, y - radius, x + radius, y + radius, height, Math.floor(hash01(i, salt + 4) * 4)),
@@ -185,7 +205,56 @@ function hectometerPosts(out: Surface[], ext: RoadExtent, x: number) {
  * boundary the lanes themselves do not have. Ground goes down before paint; the standing things
  * carry a height and can be emitted wherever they read best.
  */
-export function motorwaySurfaces(road: MotorwayRoad, ext: RoadExtent): Surface[] {
+/**
+ * The oprit: the curve the rider is already on when the ride starts.
+ *
+ * It was missing entirely, which is not a subtle bug once you sit on it — the first forty metres
+ * of the exercise were ridden across the verge, with the motorway visible off to the left and no
+ * road under the wheels at all. The arc exists in `buildRoutes`, so the tarmac has to be built
+ * from the same three numbers or the two will disagree about where the road is.
+ *
+ * Built as an annular sector rather than as quads along a centreline: the ramp *is* part of a
+ * circle about the same centre the route turns about, so its edges are simply two more radii.
+ * Nothing has to be offset perpendicular to anything, and the join with the invoegstrook is exact
+ * by construction — at the end of the sweep the two radii land on the strook's own two edges.
+ */
+function onRamp(out: Surface[], world: MotorwayWorld, lanes: ReturnType<typeof motorwayLanes>) {
+  const { radius, sweepDeg, strookStartY } = world.ramp;
+  const half = world.road.mergeLaneWidth / 2;
+  const cx = lanes.mergeCentre + radius;
+  const cy = strookStartY;
+
+  const at = (angle: number, r: number) => ({
+    x: cx + Math.cos(angle) * r,
+    y: cy + Math.sin(angle) * r,
+  });
+
+  const from = Math.PI + ((sweepDeg + RAMP_LEAD_DEG) * Math.PI) / 180;
+  // A hair past pi so the last quad overlaps the strook instead of meeting it exactly.
+  const to = Math.PI - SEAM / radius;
+  const steps = Math.max(2, Math.ceil(((from - to) * 180) / Math.PI / RAMP_STEP_DEG));
+
+  for (let i = 0; i < steps; i++) {
+    const a0 = from + ((to - from) * i) / steps;
+    const a1 = from + ((to - from) * (i + 1)) / steps;
+    for (const [kind, rIn, rOut] of [
+      ['asphalt', radius - half, radius + half],
+      // The two edge lines. Unbroken: an oprit has a hard edge on both sides until the
+      // invoegstrook begins and the blokmarkering takes the inner one over.
+      ['paint', radius - half - LINE_WIDTH / 2, radius - half + LINE_WIDTH / 2],
+      ['paint', radius + half - LINE_WIDTH / 2, radius + half + LINE_WIDTH / 2],
+    ] as const) {
+      out.push({
+        kind,
+        height: 0,
+        points: [at(a0, rIn), at(a1, rIn), at(a1, rOut), at(a0, rOut)],
+      });
+    }
+  }
+}
+
+export function motorwaySurfaces(world: MotorwayWorld, ext: RoadExtent): Surface[] {
+  const road: MotorwayRoad = world.road;
   const lanes = motorwayLanes(road);
   const out: Surface[] = [];
 
@@ -215,6 +284,8 @@ export function motorwaySurfaces(road: MotorwayRoad, ext: RoadExtent): Surface[]
     width: lanes.blockTo - lanes.blockFrom,
   });
 
+  onRamp(out, world, lanes);
+
   hectometerPosts(out, ext, lanes.mergeTo + HM_POST.offset);
   treeline(
     out,
@@ -222,6 +293,8 @@ export function motorwaySurfaces(road: MotorwayRoad, ext: RoadExtent): Surface[]
     lanes.bermTo + BERM_TREES.clearance,
     lanes.bermTo + BERM_TREES.clearance + BERM_TREES.depth,
     1,
+    // The oprit swings out through this band; a wood standing in it would be a wood on the road.
+    [ext.minY, world.ramp.strookStartY + 4],
   );
 
   return out;

@@ -15,7 +15,7 @@ import { buildRoutes, poseAt } from '../../sim/route';
 import { ReplayPlayer } from '../../sim/replay';
 import { ALL_SCENARIOS, scenarioById } from '../../sim/scenarios';
 import { referenceRide, revealTimeline } from '../../sim/referenceRide';
-import { findObstructions } from '../../sim/validate';
+import { findObstructions, findOffRoad } from '../../sim/validate';
 import { exportScenario } from '../../sim/scenarioExport';
 import { clearDraft, loadDraft, saveDraft } from '../../sim/drafts';
 import type { Handle } from '../../render/builderOverlay';
@@ -27,7 +27,7 @@ import { WorldForm } from './WorldForm';
 /** How long to wait after the last change before riding it. Long enough to drag through. */
 const SETTLE_MS = 220;
 
-const EMPTY: Validation = { record: null, error: null, obstructions: [], reveals: [] };
+const EMPTY: Validation = { record: null, error: null, obstructions: [], offRoad: [], reveals: [] };
 
 /** Which module each shipped scenario lives in, so an export can import its base. */
 const BASE_MODULE: Record<string, { module: string; binding: string }> = {
@@ -103,22 +103,22 @@ export function Builder({ onExit }: { onExit: () => void }) {
     const id = setTimeout(() => {
       const { record, error } = referenceRide(draft);
       if (error) {
-        setValidation({ record: null, error, obstructions: [], reveals: [] });
+        setValidation({ record: null, error, obstructions: [], offRoad: [], reveals: [] });
         return;
       }
       const extent = extentOf(draft);
-      const margin = 60;
+      const margin = 120;
+      const bounds = {
+        minX: extent.minX - margin,
+        maxX: extent.maxX + margin,
+        minY: extent.minY - margin,
+        maxY: extent.maxY + margin,
+      };
       setValidation({
         record,
         error: null,
-        obstructions: routes
-          ? findObstructions(draft.world, routes, {
-              minX: extent.minX - margin,
-              maxX: extent.maxX + margin,
-              minY: extent.minY - margin,
-              maxY: extent.maxY + margin,
-            })
-          : [],
+        obstructions: routes ? findObstructions(draft.world, routes, bounds) : [],
+        offRoad: routes ? findOffRoad(draft.world, routes, bounds) : [],
         reveals: revealTimeline(draft),
       });
     }, SETTLE_MS);

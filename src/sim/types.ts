@@ -29,6 +29,7 @@ export type ControlId =
   // snelheid
   | 'THROTTLE_UP'
   | 'THROTTLE_DOWN'
+  | 'SET_SPEED'
   | 'BRAKE'
   // aandrijving
   | 'CLUTCH'
@@ -79,6 +80,8 @@ export interface ControlEvent {
   /** Metres still to travel to the conflict point. Negative once past it. */
   d: number;
   control: ControlId;
+  /** What the press was for, when it carries one: the km/h a SET_SPEED asked for. */
+  value?: number;
   phase: ControlPhase;
   /** `gaze` means the rider looked at the thing rather than pressing anything. */
   source: 'pointer' | 'keyboard' | 'gaze';

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import type { RoadExtent, Surface } from '../roadSurfaces';
 import { motorwayLanes, motorwaySurfaces } from '../surfaces/motorway';
-import type { MotorwayRoad } from '../types';
+import type { MotorwayRoad, ScenarioWorld } from '../types';
 
 /**
  * A carriageway shaped like the one scenario 2 rides on: two rijstroken, an invoegstrook, and the
@@ -23,8 +23,27 @@ const road: MotorwayRoad = {
  */
 const ext: RoadExtent = { minX: -60, maxX: 60, minY: -200, maxY: 900 };
 
+const world: ScenarioWorld = {
+  kind: 'motorway',
+  road,
+  ramp: { radius: 120, sweepDeg: 18, strookStartY: -150 },
+  mergeEndY: 0,
+  runOutM: 120,
+};
+
 const lanes = motorwayLanes(road);
-const all = motorwaySurfaces(road, ext);
+const everything = motorwaySurfaces(world, ext);
+
+/**
+ * The oprit is a curve, so its quads are not axis-aligned. The assertions below are about the
+ * straight carriageway and read a surface's extremes as if they said everything about it, which
+ * is only true of a rectangle — so they work on the rectangles, and the ramp is checked on its
+ * own terms further down.
+ */
+const isRect = (s: Surface) =>
+  new Set(s.points.map((p) => p.x)).size <= 2 && new Set(s.points.map((p) => p.y)).size <= 2;
+
+const all = everything.filter(isRect);
 
 /** Every surface here is a rectangle, so its extremes say everything about where it is. */
 const bounds = (s: Surface) => {
@@ -135,5 +154,47 @@ describe('de berm', () => {
     // right one — which side each is on is as load-bearing as being off the road at all.
     for (const rail of boundsOf('guardrail')) expect(rail.x2).toBeLessThan(lanes.leftEdgeX);
     for (const paaltje of boundsOf('hectometerPost')) expect(paaltje.x1).toBeGreaterThan(lanes.mergeTo);
+  });
+});
+
+describe('de oprit', () => {
+  const ramp = everything.filter((s) => !isRect(s));
+
+  test('bestaat', () => {
+    expect(ramp.filter((s) => s.kind === 'asphalt').length).toBeGreaterThan(20);
+  });
+
+  test('sluit precies aan op de invoegstrook', () => {
+    // At the end of the sweep the two radii have to land on the strook's own two edges, or
+    // there is a step in the road where the curve meets the straight.
+    const asphalt = ramp.filter((s) => s.kind === 'asphalt');
+    const last = asphalt.reduce((a, b) => (Math.max(...b.points.map((p) => p.y)) > Math.max(...a.points.map((p) => p.y)) ? b : a));
+    const xs = last.points.map((p) => p.x);
+    expect(Math.min(...xs)).toBeCloseTo(lanes.mergeFrom, 1);
+    expect(Math.max(...xs)).toBeCloseTo(lanes.mergeTo, 1);
+  });
+
+  test('is overal even breed', () => {
+    for (const quad of ramp.filter((s) => s.kind === 'asphalt')) {
+      // Opposite corners of each quad sit on the two radii, so the gap between them is the width.
+      const inner = Math.hypot(quad.points[0].x - quad.points[3].x, quad.points[0].y - quad.points[3].y);
+      expect(inner).toBeCloseTo(road.mergeLaneWidth, 2);
+    }
+  });
+
+  test('heeft aan weerszijden een doorgetrokken kantstreep', () => {
+    expect(ramp.filter((s) => s.kind === 'paint').length).toBe(
+      ramp.filter((s) => s.kind === 'asphalt').length * 2,
+    );
+  });
+
+  test('en er staat geen bos op', () => {
+    const trees = everything.filter((s) => s.kind === 'tree');
+    const onRamp = trees.filter((t) => {
+      const y = t.points[0].y;
+      const x = t.points[0].x;
+      return y < -150 && x > lanes.mergeTo && x < 20;
+    });
+    expect(onRamp).toEqual([]);
   });
 });

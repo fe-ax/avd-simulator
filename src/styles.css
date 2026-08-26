@@ -1020,3 +1020,41 @@ kbd {
   padding: 3px 8px;
   font-size: 11px;
 }
+
+
+.set-speed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.set-speed label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.set-speed input {
+  width: 58px;
+  padding: 3px 5px;
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.set-speed em {
+  font-style: normal;
+  opacity: 0.5;
+}
+
+.set-speed .control-btn {
+  flex: 0 0 auto;
+  padding: 4px 12px;
+}

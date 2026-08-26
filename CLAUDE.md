@@ -72,6 +72,14 @@ finds the hazard there. The check is still required, for the reason an examiner 
 covers the strook beside you. A road user that really does sit in the dode hoek on that stretch
 would be a good third actor and is the obvious next thing to add.
 
+**A set speed is a fixed timespan, not a fixed acceleration.** `SET_SPEED` ramps linearly from
+whatever you are doing to what you asked for in `SPEED_RAMP_S`, however big the jump. That is
+unusual and deliberate: a rider practising a merge wants to know *when* they will be at speed, and
+tying it to a rate makes the answer depend on where they started. The throttle steps keep the
+ordinary physics — this is the cruise control, not the wrist, and the brake or the throttle
+cancels it. A press with no value means the road's limit, because the keyboard cannot carry one and
+falling through to zero would stop the machine dead on a motorway.
+
 **Perception tests a vehicle's nose, middle and tail, not its centre.** It tested only the centre
 until a 16.5 m truck existed, at which point a truck filling the whole of a shoulder check counted
 as unseen until the rider drew level with the middle of the trailer.
@@ -174,6 +182,10 @@ These are pinned by tests in `src/sim/__tests__/route.test.ts` and `looking.test
 one, the test tells you; if you change one deliberately, update the test *and* say why in the
 commit.
 
+- **There is road under the whole route.** `findOffRoad` in `validate.ts`. This exists because it
+  happened: the motorway's oprit was described in `buildRoutes` and not in `motorwaySurfaces`, so
+  the first forty metres of scenario 2 were ridden across the verge — carriageway off to the left,
+  trees going past, no tarmac at all — and every test passed, because nothing had thought to ask.
 - **Nothing standing up intersects the route.** The turn cuts the corner well before the mouth of
   the side road, so kerbs and hedges must stop short of it (`KERB_JUNCTION_GAP = 8.5`,
   `HEDGE_GAP = 4.5`). A hedge that looks fine in plan view because the road is painted over it is

@@ -6,7 +6,7 @@ import { describe, expect, test } from 'vitest';
 import { referenceRide, revealTimeline } from '../referenceRide';
 import { rechtsafFietspad } from '../scenario.rechtsaf-fietspad';
 import { invoegenSnelweg } from '../scenario.invoegen-snelweg';
-import { findObstructions } from '../validate';
+import { findObstructions, findOffRoad } from '../validate';
 import { buildRoutes } from '../route';
 import type { Scenario } from '../types';
 
@@ -74,6 +74,16 @@ describe('de wegcontrole', () => {
   ])('%s heeft een vrije route', (_label, scenario) => {
     const s = scenario as Scenario;
     expect(findObstructions(s.world, buildRoutes(s), EXTENT)).toEqual([]);
+  });
+
+  test.each([
+    ['Rechtsaf de Kerkstraat in', rechtsafFietspad],
+    ['Invoegen op de A12', invoegenSnelweg],
+  ])('%s heeft over de hele route asfalt onder de wielen', (_label, scenario) => {
+    // The oprit was described in buildRoutes and not in the surfaces, so the first forty metres
+    // of scenario 2 were ridden across the verge and every test still passed.
+    const s = scenario as Scenario;
+    expect(findOffRoad(s.world, buildRoutes(s), EXTENT)).toEqual([]);
   });
 
   test('en meldt het als er iets op de weg komt te staan', () => {

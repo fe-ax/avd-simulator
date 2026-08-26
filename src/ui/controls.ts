@@ -49,6 +49,7 @@ export const CONTROLS: ControlDef[] = [
 
   { id: 'THROTTLE_UP', label: 'Gas meer', short: 'Gas +', group: 'snelheid', code: 'ArrowUp', keyHint: '↑' },
   { id: 'THROTTLE_DOWN', label: 'Gas minder', short: 'Gas −', group: 'snelheid', code: 'ArrowDown', keyHint: '↓' },
+  { id: 'SET_SPEED', label: 'Zet snelheid', short: 'Zet', group: 'snelheid', code: 'KeyS', keyHint: 'S' },
   { id: 'BRAKE', label: 'Rem (ingedrukt houden)', short: 'Rem', group: 'snelheid', code: 'Space', keyHint: 'spatie', hold: true },
 
   { id: 'CLUTCH', label: 'Koppeling (ingedrukt houden)', short: 'Koppeling', group: 'aandrijving', code: 'ShiftLeft', keyHint: 'shift', hold: true },
