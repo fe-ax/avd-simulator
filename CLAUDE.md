@@ -106,8 +106,15 @@ src/
     gazeOverlay.ts         the DOM dots and reticle
     instrument.ts          the binnacle: speed, gear, indicator telltales
     actors3d.ts, coords.ts
-  render/       the top-down canvas renderer — now the REVIEW view only
+    validate.ts            geometry checks; shared by the tests and the builder
+    referenceRide.ts       what a model rider makes of a scenario — the builder's safety net
+    scenarioExport.ts      a built scenario, as a file you can drop back into src/sim
+  render/       the top-down canvas renderer — the review view, and the builder's
+    camera.ts              ViewCamera (the interface) + the projective chase camera
+    planCamera.ts          flat, north-up, invertible: the one the builder edits through
+    builderOverlay.ts      route line, actor paths, drag handles
   ui/           React. RideView hosts three.js; MapView hosts the canvas
+    builder/               the scenario builder: plan view, forms, validator, export
 public/dev-driver.js       dev-only scripted rider, loaded by hand from the console
 ```
 
@@ -239,6 +246,31 @@ debug tool, and it is how the mirrored-world bug was finally cornered after thre
 theories about it were all wrong.
 
 ---
+
+## The scenario builder
+
+`#bouwen`, or the button at the foot of the sidebar. You start from a scenario that ships, change
+the road's numbers, drag the traffic, and export a TypeScript file that **derives** from the base
+rather than flattening it — so the base keeps its Dutch prose as the source of truth and the diff
+is small enough to read.
+
+Three things make it cheap, and all three are worth preserving:
+
+- **The preview is `drawScene`**, given an orthographic camera and a `WorldView` from a
+  `ReplayPlayer` over the reference ride. What you edit is drawn by exactly the code that draws it
+  when it is ridden, so the two cannot drift.
+- **`referenceRide()` runs the real engine in the browser.** A full ride is a few milliseconds, so
+  it re-rides after every edit and says what a model rider made of it. **A scenario a model rider
+  fails is usually a broken scenario** — that check is the reason the builder exists, and it earned
+  itself the day it was written by finding that scenario 2's car was forty metres too close.
+- **Dependent values are derived, never typed in.** `buildRoutes` throws when
+  `turnInY + turnRadius !== sideLaneCenterY`, which an editor would violate on every keystroke — so
+  the side road's lane centre is computed from the other two. Unrepresentable beats reported.
+
+**Not in it yet, and it matters:** you cannot edit the reeks or the briefing. A derived scenario
+inherits both, which stays coherent for the windows (they are anchored in metres before the
+conflict point) but *not* for the briefing text — a variant will describe itself as its parent. Fix
+that before shipping any built scenario to a student.
 
 ## Scoring, briefly
 
