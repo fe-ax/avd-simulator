@@ -15,7 +15,7 @@ import { buildRoutes, poseAt } from '../../sim/route';
 import { ReplayPlayer } from '../../sim/replay';
 import { ALL_SCENARIOS, scenarioById } from '../../sim/scenarios';
 import { referenceRide, revealTimeline } from '../../sim/referenceRide';
-import { findObstructions, findOffRoad } from '../../sim/validate';
+import { findObstructions, findOffRoad, riddenPath } from '../../sim/validate';
 import { exportScenario } from '../../sim/scenarioExport';
 import { clearDraft, loadDraft, saveDraft } from '../../sim/drafts';
 import type { Handle } from '../../render/builderOverlay';
@@ -118,7 +118,7 @@ export function Builder({ onExit }: { onExit: () => void }) {
         record,
         error: null,
         obstructions: routes ? findObstructions(draft.world, routes, bounds) : [],
-        offRoad: routes ? findOffRoad(draft.world, routes, bounds) : [],
+        offRoad: findOffRoad(draft.world, riddenPath(record.samples), bounds),
         reveals: revealTimeline(draft),
       });
     }, SETTLE_MS);

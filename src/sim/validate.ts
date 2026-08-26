@@ -84,19 +84,35 @@ export function findObstructions(
  * The route is the one thing guaranteed to be ridden, so "is there road under all of it" is the
  * cheapest possible statement of the thing that went wrong.
  */
-export function findOffRoad(
-  world: ScenarioWorld,
-  routes: ScenarioRoutes,
-  extent: RoadExtent,
-  step = 2,
-): Vec2[] {
+export function findOffRoad(world: ScenarioWorld, path: readonly Vec2[], extent: RoadExtent): Vec2[] {
   const driveable = roadSurfaces(world, extent).filter((s) => s.height === 0 && DRIVEABLE.has(s.kind));
   const out: Vec2[] = [];
-  for (let s = 0; s <= routes.turn.total; s += step) {
-    const pose = poseAt(routes.turn, s);
-    if (!driveable.some((surface) => pointInPolygon(surface.points, pose.x, pose.y))) {
-      out.push({ x: Math.round(pose.x * 10) / 10, y: Math.round(pose.y * 10) / 10 });
+  for (const point of path) {
+    if (!driveable.some((surface) => pointInPolygon(surface.points, point.x, point.y))) {
+      out.push({ x: Math.round(point.x * 10) / 10, y: Math.round(point.y * 10) / 10 });
     }
   }
   return out;
+}
+
+/**
+ * The route's own line, for asking about a road before anyone has ridden it.
+ *
+ * Careful with this one on a motorway: the route is the *spine*, and after a lane change the
+ * machine is metres to the left of it. The invoegstrook now ends in a puntstuk, so the spine runs
+ * off the tarmac exactly where it is supposed to — a rider who is still on the spine there has
+ * missed the merge. Ask a recorded ride where it actually went if you want the truthful answer.
+ */
+export function routePath(routes: ScenarioRoutes, step = 2): Vec2[] {
+  const out: Vec2[] = [];
+  for (let s = 0; s <= routes.turn.total; s += step) {
+    const p = poseAt(routes.turn, s);
+    out.push({ x: p.x, y: p.y });
+  }
+  return out;
+}
+
+/** Where a recorded ride actually put the machine, lane changes and all. */
+export function riddenPath(samples: readonly { x: number; y: number }[]): Vec2[] {
+  return samples.map((s) => ({ x: s.x, y: s.y }));
 }

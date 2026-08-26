@@ -182,7 +182,10 @@ These are pinned by tests in `src/sim/__tests__/route.test.ts` and `looking.test
 one, the test tells you; if you change one deliberately, update the test *and* say why in the
 commit.
 
-- **There is road under the whole route.** `findOffRoad` in `validate.ts`. This exists because it
+- **There is road under the whole ride.** `findOffRoad` in `validate.ts`. Ask it about a *recorded
+  ride* (`riddenPath`), not the route: the route is the spine, the machine is metres left of it
+  after a lane change, and the invoegstrook now ends in a puntstuk — so the spine leaves the tarmac
+  exactly where it should. This exists because it
   happened: the motorway's oprit was described in `buildRoutes` and not in `motorwaySurfaces`, so
   the first forty metres of scenario 2 were ridden across the verge — carriageway off to the left,
   trees going past, no tarmac at all — and every test passed, because nothing had thought to ask.

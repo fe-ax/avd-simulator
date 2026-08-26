@@ -19,6 +19,7 @@ const COLOURS = {
   rule: '#2d323e',
   over: '#ff8d84',
   telltale: '#3fbf76',
+  setSpeed: '#8fb4d8',
   telltaleOff: '#232833',
 };
 
@@ -34,6 +35,7 @@ export class Instrument {
   private shownSpeed = -1;
   private shownGear = -1;
   private shownTelltale = '';
+  private shownSet: number | null = -1;
 
   constructor(
     position: THREE.Vector3,
@@ -58,22 +60,34 @@ export class Instrument {
     // binnacle does.
     this.mesh.rotation.x = -0.45;
 
-    this.draw(0, 1, 'off');
+    this.draw(0, 1, 'off', null);
   }
 
   /** Redraws only when something shown actually changes; this runs every frame. */
-  update(speedKmh: number, gear: number, indicator: 'left' | 'right' | 'off', time: number) {
+  update(
+    speedKmh: number,
+    gear: number,
+    indicator: 'left' | 'right' | 'off',
+    time: number,
+    setSpeedKmh: number | null = null,
+  ) {
     const speed = Math.round(speedKmh);
     // A blinking telltale is part of what is shown, so the blink phase joins the dirty check.
     const lit = indicator !== 'off' && Math.floor(time * BLINK_HZ * 2) % 2 === 0;
     const telltale = lit ? indicator : 'off';
-    if (speed === this.shownSpeed && gear === this.shownGear && telltale === this.shownTelltale) {
+    if (
+      speed === this.shownSpeed &&
+      gear === this.shownGear &&
+      telltale === this.shownTelltale &&
+      setSpeedKmh === this.shownSet
+    ) {
       return;
     }
     this.shownSpeed = speed;
     this.shownGear = gear;
     this.shownTelltale = telltale;
-    this.draw(speed, gear, telltale);
+    this.shownSet = setSpeedKmh;
+    this.draw(speed, gear, telltale, setSpeedKmh);
     this.texture.needsUpdate = true;
   }
 
@@ -99,7 +113,12 @@ export class Instrument {
     ctx.fill();
   }
 
-  private draw(speed: number, gear: number, telltale: 'left' | 'right' | 'off') {
+  private draw(
+    speed: number,
+    gear: number,
+    telltale: 'left' | 'right' | 'off',
+    setSpeedKmh: number | null,
+  ) {
     const { ctx } = this;
     const { width: w, height: h } = TEXTURE;
 
@@ -108,6 +127,19 @@ export class Instrument {
 
     this.drawTelltale('left', telltale === 'left');
     this.drawTelltale('right', telltale === 'right');
+
+    // The set speed, between the arrows, where a cruise readout belongs: above the number that
+    // says what you are actually doing, so the two read as a pair — asked for, and achieved.
+    if (setSpeedKmh !== null) {
+      ctx.fillStyle = COLOURS.setSpeed;
+      ctx.textAlign = 'center';
+      ctx.font = '600 21px ui-sans-serif, system-ui, sans-serif';
+      ctx.fillText(`${setSpeedKmh}`, w / 2 + 13, 34);
+      ctx.font = '500 12px ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText('ZET', w / 2 - 8, 33);
+      ctx.textAlign = 'left';
+    }
 
     // Speed fills the left two thirds; the gear gets its own panel on the right.
     const split = Math.round(w * 0.66);

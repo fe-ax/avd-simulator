@@ -262,14 +262,40 @@ export function motorwaySurfaces(world: MotorwayWorld, ext: RoadExtent): Surface
   treeline(out, ext, MIDDENBERM_TREES.from, MIDDENBERM_TREES.to, 0);
   guardrail(out, ext, lanes.leftEdgeX);
 
-  out.push(rect('asphalt', lanes.leftEdgeX, ext.minY, lanes.mergeTo, ext.maxY));
+  const taperEnd = world.mergeEndY + world.taperM;
 
-  // The two doorgetrokken kantstrepen. Unbroken over the whole extent, because a break in an edge
-  // line means something this road does not offer — an exit, a bus lane, somewhere to pull off.
-  // The invoegstrook is the only lane that ends here, and blokmarkering is what says so.
-  for (const x of [lanes.leftEdgeX, lanes.mergeTo]) {
-    out.push(rect('paint', x - LINE_WIDTH / 2, ext.minY, x + LINE_WIDTH / 2, ext.maxY));
-  }
+  // The through carriageway runs the whole extent; the invoegstrook does not, which is the entire
+  // point of it. Full width to the deadline, then a puntstuk narrowing away to nothing.
+  out.push(rect('asphalt', lanes.leftEdgeX, ext.minY, lanes.rightEdgeX, ext.maxY));
+  out.push(rect('asphalt', lanes.rightEdgeX - SEAM, ext.minY, lanes.mergeTo, world.mergeEndY));
+  out.push({
+    kind: 'asphalt',
+    height: 0,
+    points: [
+      { x: lanes.rightEdgeX - SEAM, y: world.mergeEndY },
+      { x: lanes.mergeTo, y: world.mergeEndY },
+      { x: lanes.rightEdgeX - SEAM, y: taperEnd },
+    ],
+  });
+
+  // The left kantstreep is unbroken over the whole extent: a break in an edge line means something
+  // this road does not offer — an exit, a bus lane, somewhere to pull off.
+  out.push(rect('paint', lanes.leftEdgeX - LINE_WIDTH / 2, ext.minY, lanes.leftEdgeX + LINE_WIDTH / 2, ext.maxY));
+
+  // The right one follows the road it edges: out at the strook, in along the puntstuk, and then
+  // hard against the carriageway once there is no strook left.
+  out.push(rect('paint', lanes.mergeTo - LINE_WIDTH / 2, ext.minY, lanes.mergeTo + LINE_WIDTH / 2, world.mergeEndY));
+  out.push({
+    kind: 'paint',
+    height: 0,
+    points: [
+      { x: lanes.mergeTo - LINE_WIDTH / 2, y: world.mergeEndY },
+      { x: lanes.mergeTo + LINE_WIDTH / 2, y: world.mergeEndY },
+      { x: lanes.rightEdgeX + LINE_WIDTH / 2, y: taperEnd },
+      { x: lanes.rightEdgeX - LINE_WIDTH / 2, y: taperEnd },
+    ],
+  });
+  out.push(rect('paint', lanes.rightEdgeX - LINE_WIDTH / 2, taperEnd, lanes.rightEdgeX + LINE_WIDTH / 2, ext.maxY));
 
   for (const x of lanes.laneBoundaries) {
     dashedAlongY(out, x, ext, { dash: LANE_DASH.dash, gap: LANE_DASH.gap, width: LINE_WIDTH });
@@ -278,7 +304,7 @@ export function motorwaySurfaces(world: MotorwayWorld, ext: RoadExtent): Surface
   // The blocks fill the band whole, so their width is the band's rather than a number of their
   // own. A narrower row would leave a strip of bare asphalt on one side of the invoegstrook that
   // belongs to neither lane and means nothing.
-  dashedAlongY(out, (lanes.blockFrom + lanes.blockTo) / 2, ext, {
+  dashedAlongY(out, (lanes.blockFrom + lanes.blockTo) / 2, { ...ext, maxY: world.mergeEndY }, {
     dash: BLOCK.length,
     gap: BLOCK.gap,
     width: lanes.blockTo - lanes.blockFrom,

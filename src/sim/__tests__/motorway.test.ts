@@ -23,13 +23,14 @@ const road: MotorwayRoad = {
  */
 const ext: RoadExtent = { minX: -60, maxX: 60, minY: -200, maxY: 900 };
 
-const world: ScenarioWorld = {
+const world = {
   kind: 'motorway',
   road,
   ramp: { radius: 120, sweepDeg: 18, strookStartY: -150 },
   mergeEndY: 0,
+  taperM: 100,
   runOutM: 120,
-};
+} satisfies Extract<ScenarioWorld, { kind: 'motorway' }>;
 
 const lanes = motorwayLanes(road);
 const everything = motorwaySurfaces(world, ext);
@@ -76,13 +77,36 @@ const gapsAlongY = (spans: { y1: number; y2: number }[]) => {
 const LINE_WIDTH = 0.15;
 
 describe('de belijning', () => {
-  test('beide kantstrepen zijn doorgetrokken, nergens een onderbreking', () => {
-    for (const x of [lanes.leftEdgeX, lanes.mergeTo]) {
-      const streep = paintAt(x);
-      expect(streep.length).toBeGreaterThan(0);
-      expect(gapsAlongY(streep)).toEqual([]);
-      for (const deel of streep) expect(deel.x2 - deel.x1).toBeCloseTo(LINE_WIDTH, 6);
-    }
+  test('de linker kantstreep is doorgetrokken, nergens een onderbreking', () => {
+    const streep = paintAt(lanes.leftEdgeX);
+    expect(streep.length).toBeGreaterThan(0);
+    expect(gapsAlongY(streep)).toEqual([]);
+    for (const deel of streep) expect(deel.x2 - deel.x1).toBeCloseTo(LINE_WIDTH, 6);
+  });
+
+  test('en de rechter volgt de weg die hij begrenst', () => {
+    // Out at the strook up to the deadline, then in along the puntstuk, then hard against the
+    // carriageway. Unbroken, but not straight — an edge line that ran straight on past a lane
+    // that has ended would be drawing a lane that is not there.
+    const beforeTaper = paintAt(lanes.mergeTo);
+    expect(beforeTaper).toHaveLength(1);
+    expect(beforeTaper[0].y1).toBeCloseTo(ext.minY, 6);
+    expect(beforeTaper[0].y2).toBeCloseTo(world.mergeEndY, 6);
+
+    const afterTaper = paintAt(lanes.rightEdgeX).filter((b) => b.y1 >= world.mergeEndY);
+    expect(afterTaper.length).toBeGreaterThan(0);
+    expect(Math.min(...afterTaper.map((b) => b.y1))).toBeCloseTo(world.mergeEndY + world.taperM, 6);
+  });
+
+  test('de invoegstrook houdt een keer op', () => {
+    const strook = everything.filter(
+      (s) => s.kind === 'asphalt' && s.points.some((p) => p.x > lanes.rightEdgeX + 0.5),
+    );
+    const end = Math.max(...strook.flatMap((s) => s.points.map((p) => p.y)));
+    expect(end).toBeCloseTo(world.mergeEndY + world.taperM, 6);
+    // And it narrows to nothing rather than stopping square, which would be a wall.
+    const taper = strook.find((s) => s.points.length === 3);
+    expect(taper).toBeDefined();
   });
 
   test('de strookgrens is 3 m streep en 9 m tussenruimte', () => {
@@ -158,7 +182,11 @@ describe('de berm', () => {
 });
 
 describe('de oprit', () => {
-  const ramp = everything.filter((s) => !isRect(s));
+  // Non-rectangles south of where the strook begins: the puntstuk is a triangle too, but it
+  // lives at the far end of the road.
+  const ramp = everything.filter(
+    (s) => !isRect(s) && s.points.every((p) => p.y < world.ramp.strookStartY),
+  );
 
   test('bestaat', () => {
     expect(ramp.filter((s) => s.kind === 'asphalt').length).toBeGreaterThan(20);

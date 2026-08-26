@@ -302,6 +302,7 @@ function Session({
       speedFactor: world.bike.speed / (scenario.speedLimitKmh / 3.6),
       speedKmh: world.bike.speed * 3.6,
       gear: world.bike.gear,
+      setSpeedKmh: world.bike.setSpeed === null ? null : Math.round(world.bike.setSpeed * 3.6),
       indicator: world.bike.indicator,
       braking: world.bike.brake,
       actors: world.actors,

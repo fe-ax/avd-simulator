@@ -180,6 +180,25 @@ export function urbanCrossingSurfaces(road: UrbanRoad, ext: RoadExtent): Surface
   out.push(rect('asphalt', -halfWidth, ext.minY, halfWidth, ext.maxY));
   out.push(rect('asphalt', ext.minX, -sideHalfWidth, ext.maxX, sideHalfWidth));
 
+  // Pave the corners, where the kerb is interrupted.
+  //
+  // The kerb stops well short of the junction so it does not stand in the line a turn actually
+  // takes — but nothing was laid in its place, so the rider cut the corner across bare ground.
+  // Invisible from above, because a plan view fills the verge and the road in similar greys, and
+  // invisible from the saddle because it goes past in half a second. `findOffRoad` walked the
+  // ride and found it.
+  for (const sign of [1, -1] as const) {
+    out.push(
+      rect(
+        'asphalt',
+        sign * (halfWidth - SEAM),
+        -KERB_JUNCTION_GAP,
+        sign * (kerbTo + SEAM),
+        KERB_JUNCTION_GAP,
+      ),
+    );
+  }
+
   // The red stops at the mouth of the side road and blokmarkering takes over, which is how a
   // Dutch fietsoversteek is laid out. The bike path still has priority — the haaientanden below
   // say so — but the surfacing no longer pretends the crossing is not a crossing.

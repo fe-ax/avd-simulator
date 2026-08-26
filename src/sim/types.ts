@@ -403,6 +403,12 @@ export type ScenarioWorld =
        * measured back from — the motorway's answer to the fietspad centreline.
        */
       mergeEndY: number;
+      /**
+       * How long the puntstuk is: the strook narrows from full width at `mergeEndY` to nothing
+       * over this many metres. Generous on purpose — the scoring deadline is `mergeEndY`, and the
+       * tarmac running out well after it is what makes that a deadline rather than a wall.
+       */
+      taperM: number;
       /** How far past the deadline the ride continues, so a held following distance can be judged. */
       runOutM: number;
     };
@@ -461,6 +467,8 @@ export interface WorldView {
   /** What the instrument on the cowl reads. */
   speedKmh: number;
   gear: number;
+  /** The speed the rider asked for, in km/h, or null when there is none set. */
+  setSpeedKmh: number | null;
   indicator: 'left' | 'right' | 'off';
   braking: boolean;
   actors: ActorState[];
@@ -494,6 +502,8 @@ export interface BikeSample {
    * machine is actually in, so a replay reproduces the lane change rather than the intention.
    */
   laneOffset: number;
+  /** The set speed at this instant, so a replay shows the same cruise readout the rider had. */
+  setSpeedKmh: number | null;
 }
 
 export interface ActorSample {

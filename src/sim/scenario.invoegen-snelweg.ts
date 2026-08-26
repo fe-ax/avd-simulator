@@ -100,6 +100,9 @@ export const invoegenSnelweg: Scenario = {
     ramp: { radius: 120, sweepDeg: 18, strookStartY: -150 },
 
     mergeEndY: 0,
+    // A hundred metres of puntstuk. You are told to be over by the deadline; the road gives you
+    // rather more than that before it actually runs out, which is how a real one is built.
+    taperM: 100,
     runOutM: 120,
   },
 

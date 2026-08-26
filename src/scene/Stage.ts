@@ -126,7 +126,13 @@ export class Stage {
     this.bike.rotation.y = headingToYaw(view.pose.heading);
     this.head.rotation.y = head.yaw;
     this.camera.rotation.x = head.pitch;
-    this.instrument.update(view.speedKmh, view.gear, view.indicator, view.time);
+    this.instrument.update(
+      view.speedKmh,
+      view.gear,
+      view.indicator,
+      view.time,
+      view.setSpeedKmh,
+    );
 
     for (const actor of view.actors) {
       let mesh = this.actors.get(actor.spec.id);
