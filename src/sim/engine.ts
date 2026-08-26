@@ -113,11 +113,6 @@ export interface BikeState {
   steerArmed: boolean;
   /** A set speed on its way in: linear from `from` to `to`, starting at `startedAt`. */
   speedRamp: { from: number; to: number; startedAt: number } | null;
-  /**
-   * The speed that was asked for, which outlives the ramp that delivers it — the cruise stays set
-   * after it has arrived, and the instrument goes on saying so until something takes it back.
-   */
-  setSpeed: number | null;
   /** Metres left of the route spine: which rijstrook the machine is actually in. */
   laneOffset: number;
   /** Index into `routes.laneOffsets`; 0 is the invoegstrook. */
@@ -277,7 +272,6 @@ export class SimEngine {
       branch: 'approach',
       steerArmed: false,
       speedRamp: null,
-      setSpeed: null,
       laneOffset: 0,
       laneIndex: 0,
       laneFromOffset: 0,
@@ -433,12 +427,10 @@ export class SimEngine {
       case 'THROTTLE_UP':
         // A hand on the throttle cancels a set speed, the way it does on any machine that has one.
         bike.speedRamp = null;
-        bike.setSpeed = null;
         bike.targetSpeed = Math.min(this.maxSpeed, bike.targetSpeed + this.throttleStep);
         break;
       case 'THROTTLE_DOWN':
         bike.speedRamp = null;
-        bike.setSpeed = null;
         bike.targetSpeed = Math.max(0, bike.targetSpeed - this.throttleStep);
         break;
       case 'SET_SPEED': {
@@ -447,7 +439,6 @@ export class SimEngine {
         // value falling through to zero, would stop the machine dead on a motorway.
         const want = Math.max(0, Math.min(this.maxSpeed, (value ?? this.scenario.speedLimitKmh) * KMH));
         bike.targetSpeed = want;
-        bike.setSpeed = want;
         bike.speedRamp = { from: bike.speed, to: want, startedAt: this.t };
         break;
       }
@@ -515,8 +506,10 @@ export class SimEngine {
 
     if (bike.brake) {
       // The brake wins over everything, including a set speed still on its way in.
+      // The brake cancels a set speed on its way in, but leaves the target alone: let go and the
+      // machine goes back to what it was doing, which is what a brake is. Clamping the target to
+      // the braking speed ratchets it down for good, and the machine never accelerates again.
       bike.speedRamp = null;
-      bike.setSpeed = null;
       bike.speed = Math.max(0, bike.speed - BRAKE_DECEL * dt);
     } else if (bike.speedRamp) {
       const { from, to, startedAt } = bike.speedRamp;
@@ -764,7 +757,7 @@ export class SimEngine {
       headYaw: round3(this.headPose.yaw),
       headPitch: round3(this.headPose.pitch),
       laneOffset: round3(this.bike.laneOffset),
-      setSpeedKmh: this.bike.setSpeed === null ? null : Math.round(this.bike.setSpeed * 3.6),
+      targetSpeedKmh: Math.round(this.bike.targetSpeed * 3.6),
     });
     for (const actor of this.actors) {
       this.actorTracks[actor.spec.id].push({

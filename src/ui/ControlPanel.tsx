@@ -187,10 +187,24 @@ function SetSpeed({
   scenario: Pick<Scenario, 'speedLimitKmh' | 'maxSpeedKmh'>;
 }) {
   const [value, setValue] = useState(scenario.speedLimitKmh);
-  const commit = () => {
+  const commit = useCallback(() => {
     if (!enabled) return;
     engine.dispatch('SET_SPEED', 'press', 'pointer', value);
-  };
+  }, [enabled, engine, value]);
+
+  // "S" belongs to this widget rather than to the control table, so the key and the button send
+  // the number in the box. A table entry could only ever dispatch without one, and then the two
+  // affordances sitting next to each other would mean different speeds.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyS' || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement;
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
+      commit();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [commit]);
   return (
     <div className="set-speed">
       <label>
@@ -211,8 +225,8 @@ function SetSpeed({
         />
         <em>km/u</em>
       </label>
-      <button type="button" className="control-btn" disabled={!enabled} onClick={commit}>
-        Zet
+      <button type="button" className="control-btn" disabled={!enabled} onClick={commit} title="Zet snelheid">
+        Zet<kbd>S</kbd>
       </button>
     </div>
   );

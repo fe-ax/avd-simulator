@@ -239,6 +239,25 @@ export function WorldForm({ draft, onChange, onPatchActor }: Props) {
             value={world.mergeEndY}
             onChange={(v) => setWorld({ ...world, mergeEndY: v })}
           />
+          <Num
+            label="Puntstuk"
+            unit="m"
+            step={10}
+            value={world.taperM}
+            onChange={(v) => setWorld({ ...world, taperM: Math.max(0, v) })}
+          />
+          <Num
+            label="Uitloop"
+            unit="m"
+            step={10}
+            value={world.runOutM}
+            onChange={(v) => setWorld({ ...world, runOutM: Math.max(0, v) })}
+          />
+          <p className="builder-note">
+            De strook houdt op bij "eindigt" en versmalt daarna over het puntstuk tot niets. Het
+            venster waarop beoordeeld wordt eindigt bij "eindigt"; het asfalt geeft je meer, zodat
+            het een deadline is en geen muur.
+          </p>
         </section>
       )}
 

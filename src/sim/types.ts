@@ -467,8 +467,12 @@ export interface WorldView {
   /** What the instrument on the cowl reads. */
   speedKmh: number;
   gear: number;
-  /** The speed the rider asked for, in km/h, or null when there is none set. */
-  setSpeedKmh: number | null;
+  /**
+   * The speed the machine is aiming for, in km/h. Always a number: there is always an answer to
+   * "what is it trying to do", and a readout that is blank until you happen to use one particular
+   * control is a readout nobody trusts.
+   */
+  targetSpeedKmh: number;
   indicator: 'left' | 'right' | 'off';
   braking: boolean;
   actors: ActorState[];
@@ -502,8 +506,8 @@ export interface BikeSample {
    * machine is actually in, so a replay reproduces the lane change rather than the intention.
    */
   laneOffset: number;
-  /** The set speed at this instant, so a replay shows the same cruise readout the rider had. */
-  setSpeedKmh: number | null;
+  /** The set speed at this instant, so a replay shows the same readout the rider had. */
+  targetSpeedKmh: number;
 }
 
 export interface ActorSample {

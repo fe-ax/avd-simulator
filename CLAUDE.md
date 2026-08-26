@@ -72,6 +72,11 @@ finds the hazard there. The check is still required, for the reason an examiner 
 covers the strook beside you. A road user that really does sit in the dode hoek on that stretch
 would be a good third actor and is the obvious next thing to add.
 
+**The teller always shows what the machine is aiming for**, as `WorldView.targetSpeedKmh` — blue
+while it is still climbing there, grey once it has arrived. Always, not only after a `SET_SPEED`:
+a readout that stays blank until you happen to use one particular control looks broken rather than
+empty, and is one nobody learns to read.
+
 **A set speed is a fixed timespan, not a fixed acceleration.** `SET_SPEED` ramps linearly from
 whatever you are doing to what you asked for in `SPEED_RAMP_S`, however big the jump. That is
 unusual and deliberate: a rider practising a merge wants to know *when* they will be at speed, and

@@ -134,7 +134,8 @@ richting alsnog van `MIRROR_VIEW` afdrijft — in richting, in breedte én in ho
 
 ## Snelheid zetten
 
-De teller laat je gezette snelheid zien boven je werkelijke: gevraagd en gehaald, naast elkaar.
+De teller laat boven je werkelijke snelheid zien waar de motor naartoe wil: blauw zolang hij er
+nog heen klimt, grijs als hij er is. Gevraagd en gehaald, naast elkaar.
 
 Naast gas meer en gas minder staat **Zet op … km/u**. Dat is een cruise control: de motor loopt
 lineair naar die snelheid in vier seconden, hoe groot de sprong ook is. Bedoeld voor de

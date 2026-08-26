@@ -131,7 +131,7 @@ export class Stage {
       view.gear,
       view.indicator,
       view.time,
-      view.setSpeedKmh,
+      view.targetSpeedKmh,
     );
 
     for (const actor of view.actors) {
