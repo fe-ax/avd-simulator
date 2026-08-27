@@ -378,6 +378,12 @@ or stop at a given distance along **its own** path — so the hazard is the othe
 rather than a reaction to yours. *Auto van rechts remt* was built this way start to finish and
 ships unedited; it is the proof that the loop closes.
 
+**A banded rule is edited as a ladder, and the order is the semantics.** `speedBand` and `headway`
+are ordered lists of range → outcome, and both scorers take the *first* band that matches — so
+moving a rung changes what the rule means, and the arrows in `BandEditor` are not a convenience.
+Anything matching no rung at all falls through to the rule's own `missed`, which the editor shows as
+a final rung nobody wrote rather than leaving invisible.
+
 **And the loop now closes without a compiler.** `Bewaar` puts a scenario in the browser's library,
 where it appears in the ride picker beside the four that ship, marked as your own. `Download` writes
 a small `.avd.json` you can email to another instructor; `Open bestand` reads one back. A ride

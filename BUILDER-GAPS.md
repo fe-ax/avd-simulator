@@ -4,7 +4,7 @@ A running list, kept from actually trying to build things with it rather than fr
 That is the whole method: every item here was found by sitting down to build an exercise and being
 unable to, and not one of them was found by reading a file.
 
-Two things are open. Everything else that was ever on this list is closed — the history is in
+One thing is open. Everything else that was ever on this list is closed — the history is in
 `git log` and in pull requests #6 to #12, which is a better home for it than a document whose job is
 to say what is still wrong.
 
@@ -14,13 +14,6 @@ Every rule in every shipped scenario is now missed by at least one deliberately 
 ---
 
 ## Open
-
-### A speedBand's middle rungs cannot be edited
-
-The recipe writes two bands and the editor exposes the outer edges, keeping the shared boundary in
-step so the two can never cross. The Dutch on each rung, and any third rung, still needs a text
-editor. Not blocking — a two-band speed rule is a usable speed rule — but it is the one rule kind
-whose data is richer than its form.
 
 ### The approach headway is not measured on the motorway
 

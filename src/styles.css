@@ -1266,6 +1266,45 @@ kbd {
   margin-top: 8px;
 }
 
+/*
+ * A banded rule reads as a ladder, because that is what it is: the first rung that fits decides the
+ * verdict. The left rule and the indent are doing the explaining — without them the rungs look like
+ * an unordered set of settings and moving one looks cosmetic.
+ */
+.builder-bands {
+  margin-top: 6px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(255, 255, 255, 0.12);
+}
+
+.builder-band {
+  padding: 6px 0;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.builder-band-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  opacity: 0.8;
+  margin-bottom: 3px;
+}
+
+.builder-band-head strong {
+  flex: 1;
+}
+
+/* The rung nobody wrote: everything that matches no band at all still gets a verdict. */
+.builder-band-fall {
+  display: flex;
+  gap: 6px;
+  padding: 6px 0 2px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  opacity: 0.55;
+}
+
 .builder-prose {
   display: block;
 }

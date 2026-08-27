@@ -27,6 +27,8 @@ import type {
   Severity,
 } from '../../sim/types';
 import { CONTROLS } from '../controls';
+import { Choice, Num } from './fields';
+import { HeadwayBands, SpeedBands } from './BandEditor';
 
 /** The rule kinds an author can reach for, and a workable starting point for each. */
 const RECIPES: {
@@ -227,66 +229,6 @@ const SEVERITIES: { id: Severity; label: string }[] = [
   { id: 'kritiek', label: 'Kritiek' },
 ];
 
-function Choice<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: { id: T; label: string }[];
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div className="builder-field builder-choice">
-      <span>{label}</span>
-      <span className="builder-choice-options">
-        {options.map((o) => (
-          <button
-            key={o.id}
-            type="button"
-            className={`replay-btn tiny${o.id === value ? ' active' : ''}`}
-            onClick={() => onChange(o.id)}
-          >
-            {o.label}
-          </button>
-        ))}
-      </span>
-    </div>
-  );
-}
-
-function Num({
-  label,
-  value,
-  step = 1,
-  unit,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  step?: number;
-  unit?: string;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <label className="builder-field">
-      <span>{label}</span>
-      <input
-        type="number"
-        value={Math.round(value * 100) / 100}
-        step={step}
-        onChange={(e) => {
-          const v = Number(e.target.value);
-          if (Number.isFinite(v)) onChange(v);
-        }}
-      />
-      {unit && <em>{unit}</em>}
-    </label>
-  );
-}
-
 /** The numbers that belong to this particular kind of rule, and nothing else. */
 function KindFields({
   kind,
@@ -343,6 +285,7 @@ function KindFields({
               komt geen regel in de nabespreking.
             </p>
           )}
+          <HeadwayBands bands={kind.bands} onChange={(bands) => onChange({ ...kind, bands })} />
         </>
       );
     case 'laneChange':
@@ -384,36 +327,7 @@ function KindFields({
         </>
       );
     case 'speedBand':
-      // The bands themselves are a table of numbers and Dutch, and editing them inline would take
-      // more room than the rest of the rule put together. The outer edges are the part an author
-      // actually retunes; the middle band follows them, so the two can never cross.
-      return (
-        <>
-          <Num
-            label="Goed vanaf"
-            unit="km/u"
-            step={5}
-            value={kind.bands[0]?.fromKmh ?? 0}
-            onChange={(v) =>
-              onChange({
-                ...kind,
-                bands: kind.bands.map((b, i) =>
-                  i === 0 ? { ...b, fromKmh: v } : i === 1 ? { ...b, toKmh: v } : b,
-                ),
-              })
-            }
-          />
-          <Num
-            label="tot"
-            unit="km/u"
-            step={5}
-            value={kind.bands[0]?.toKmh ?? 0}
-            onChange={(v) =>
-              onChange({ ...kind, bands: kind.bands.map((b, i) => (i === 0 ? { ...b, toKmh: v } : b)) })
-            }
-          />
-        </>
-      );
+      return <SpeedBands bands={kind.bands} onChange={(bands) => onChange({ ...kind, bands })} />;
     default:
       return <p className="builder-note">Deze regel heeft hier geen instellingen.</p>;
   }
@@ -482,8 +396,13 @@ export function ReeksEditor({ expected, actors, manoeuvre, onChange }: Props) {
             options={GROUPS}
             onChange={(v) => patch(i, { group: v })}
           />
-          <KindFields kind={e.kind} actors={actors} onChange={(kind) => patch(i, { kind })} />
+          {/*
+            Above the fields, not below them. A banded rule's fields are a ladder several screens
+            long, and the sentence saying what the rule looks at read as an afterthought stranded
+            underneath it rather than as the thing you need before you touch any of the numbers.
+          */}
           <p className="builder-note builder-measures">{MEASURES[e.kind.type]}</p>
+          <KindFields kind={e.kind} actors={actors} onChange={(kind) => patch(i, { kind })} />
 
           {e.window && e.kind.type !== 'afterTurn' && (
             <>
