@@ -127,6 +127,10 @@ export class ReplayPlayer {
       heading: lerpAngle(a.heading, b.heading, u),
       speed: lerp(a.speed, b.speed, u),
       mode: a.mode,
+      // A replay reads what happened rather than deciding it, so the cue bookkeeping is inert
+      // here: every position and speed on screen came off the recording.
+      cuesFired: 0,
+      cueUntil: null,
       perceived: a.perceived,
       perceivedAt: null,
       emergencyBraked: false,

@@ -127,6 +127,27 @@ export interface PoseOnRoute {
 
 export type ActorKind = 'snorfiets' | 'auto' | 'fietser' | 'voetganger' | 'vrachtwagen';
 
+/**
+ * Something a road user does of its own accord, at a point on its own path.
+ *
+ * Anchored to distance travelled, not to the clock and not to where the rider is. That is what
+ * makes it the *other* driver's mistake: it happens in the same place on every run whether you
+ * arrive early, late, or never. Tie it to a time and the same scenario plays differently each
+ * ride; tie it to the rider and the hazard becomes a reaction to you, which is a different lesson
+ * and a much softer one.
+ *
+ * Everything an actor could do on its own belongs here eventually — indicating, pulling away,
+ * stopping at a line. Braking is the one that exists because it is the one an exercise needs
+ * first.
+ */
+export interface ActorCue {
+  /** Metres along this actor's own from → to path. */
+  atDist: number;
+  action: 'brake' | 'stop' | 'resume';
+  /** For `brake`: how long to stand on them. Omitted means until stopped. */
+  forSeconds?: number;
+}
+
 export interface ActorSpec {
   id: string;
   kind: ActorKind;
@@ -148,6 +169,8 @@ export interface ActorSpec {
    * it says which rule was at work.
    */
   priorityReason?: string;
+  /** Things this road user does on its own, wherever the rider happens to be. */
+  cues?: ActorCue[];
   /**
    * Scenario director aid: nudge this actor's speed inside [minSpeed, maxSpeed] so it stays
    * roughly `targetGap` metres behind the rider until it is close to the conflict, then let
@@ -172,6 +195,12 @@ export interface ActorSpec {
 
 export type ActorMode = 'cruise' | 'braking' | 'stopped' | 'resuming' | 'done';
 
+/** A cue that has fired and is still running. */
+export interface ActiveCue {
+  index: number;
+  until: number | null;
+}
+
 export interface ActorState {
   spec: ActorSpec;
   /** Distance travelled along `from`→`to`. */
@@ -184,6 +213,10 @@ export interface ActorState {
   /** True once any look action has revealed this actor. Drives the perception view. */
   perceived: boolean;
   perceivedAt: number | null;
+  /** How many of this actor's own cues have fired, so each fires exactly once. */
+  cuesFired: number;
+  /** Set while a timed cue is running; the actor holds that behaviour until then. */
+  cueUntil: number | null;
   /** True once the actor had to brake hard because the rider took its right of way. */
   emergencyBraked: boolean;
   emergencyBrakedAt: number | null;

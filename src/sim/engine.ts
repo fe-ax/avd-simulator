@@ -182,6 +182,8 @@ function makeActorState(spec: ActorSpec): ActorState {
     heading,
     speed: spec.speed,
     mode: 'cruise',
+    cuesFired: 0,
+    cueUntil: null,
     perceived: false,
     perceivedAt: null,
     emergencyBraked: false,
@@ -596,6 +598,7 @@ export class SimEngine {
       if (actor.mode === 'done') continue;
 
       const cruise = this.directorSpeed(actor, bikeD);
+      this.applyCues(actor);
       const conflict = this.actorConflicts(actor);
 
       if (conflict && (actor.mode === 'cruise' || actor.mode === 'resuming')) {
@@ -613,7 +616,14 @@ export class SimEngine {
             wasPerceived: actor.perceived,
           });
         }
-      } else if (!conflict && (actor.mode === 'braking' || actor.mode === 'stopped')) {
+      } else if (
+        !conflict &&
+        actor.cueUntil === null &&
+        (actor.mode === 'braking' || actor.mode === 'stopped')
+      ) {
+        // A cue still running holds the actor where it is. Otherwise the moment it stops being a
+        // conflict for the rider it would pull away again, and a car that brakes hard for its own
+        // reasons would set off the instant you were no longer in its way.
         actor.mode = 'resuming';
       }
 
@@ -645,6 +655,40 @@ export class SimEngine {
       actor.x = spec.from.x + (spec.to.x - spec.from.x) * u;
       actor.y = spec.from.y + (spec.to.y - spec.from.y) * u;
       if (u >= 1) actor.mode = 'done';
+    }
+  }
+
+  /**
+   * Whatever this road user does on its own, at the point on its path where it does it.
+   *
+   * Read off `dist`, which the actor already tracks, so a cue fires in the same place on every run
+   * — the whole reason for anchoring them to distance rather than to a clock or to the rider.
+   */
+  private applyCues(actor: ActorState) {
+    const cues = actor.spec.cues;
+    if (cues) {
+      while (actor.cuesFired < cues.length && actor.dist >= cues[actor.cuesFired].atDist) {
+        const cue = cues[actor.cuesFired];
+        actor.cuesFired += 1;
+        switch (cue.action) {
+          case 'brake':
+            actor.mode = 'braking';
+            actor.cueUntil = cue.forSeconds === undefined ? null : this.t + cue.forSeconds;
+            break;
+          case 'stop':
+            actor.mode = 'braking';
+            actor.cueUntil = Infinity;
+            break;
+          case 'resume':
+            actor.cueUntil = null;
+            actor.mode = 'resuming';
+            break;
+        }
+      }
+    }
+    if (actor.cueUntil !== null && actor.cueUntil !== Infinity && this.t >= actor.cueUntil) {
+      actor.cueUntil = null;
+      if (actor.mode === 'braking' || actor.mode === 'stopped') actor.mode = 'resuming';
     }
   }
 
