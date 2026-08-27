@@ -34,6 +34,17 @@ Node version is pinned in `.nvmrc`. `npm run build` is the only typecheck that c
 
 **Always run `npm test` and `npm run build` before committing, and `rm -rf dist` after building.**
 
+**GitHub work on this repo runs as `fe-ax`.** The machine's default `gh` account is
+enterprise-managed and fails there with *"Unauthorized: As an Enterprise Managed User"* — which
+reads like a broken command rather than the wrong identity, and costs you a while. `gh auth status`
+says which is active:
+
+```bash
+gh auth switch --user fe-ax
+```
+
+Git itself pushes over SSH and does not care; this is only `gh`.
+
 ---
 
 ## The one idea
@@ -350,12 +361,20 @@ or stop at a given distance along **its own** path — so the hazard is the othe
 rather than a reaction to yours. *Auto van rechts remt* was built this way start to finish and
 ships unedited; it is the proof that the loop closes.
 
-**What it still cannot do, and it matters:** the validator only ever rides a model rider who does
-everything *right*. That answers "is this exercise possible?" but not "is it about anything?" — a
-rule a careless rider also passes goes green just the same. Ride the scenario a second time with
-`referenceRide(s, { anticipate: false })` and check the rule actually fails; there is no way to ask
-that from the browser yet. `BUILDER-GAPS.md` is the running list, and it is kept from building
-things rather than from reading code.
+**It rides the wrong line too.** `analyseScenario` rides the exercise several deliberately sloppy
+ways — one mistake at a time — and reports which rules caught which mistake. A rule no sloppy rider
+fails is a rule that teaches nothing, and the panel says so. That check found, on its first run,
+that a rule in a scenario shipped the week before was earned by a rider who did nothing right.
+
+**One mistake at a time is load-bearing, not tidiness.** A rider who skipped the mirror *and* the
+schouderblik made the whole overtake reeks look un-missable, because without the schouderblik the
+richtingaanwijzer prerequisite refuses the manoeuvre — so the rider never changes lane and every
+rule about how they did it produces no row at all. Two mistakes hide each other.
+
+`BUILDER-GAPS.md` is the running list of what it still cannot do, and it is kept from building
+things rather than from reading code. Five rules across the four scenarios are still missed by
+nobody; each is pinned in `discrimination.test.ts` with a comment saying whether that is a finding
+about the scenario or a blind spot in the headless driver.
 
 ## Scoring, briefly
 

@@ -9,7 +9,14 @@
  */
 import type { ActorCue, ActorKind, ActorSpec } from '../../sim/types';
 
-const KMH = 1 / 3.6;
+/*
+ * Divide, never multiply by a stored reciprocal. `70 * (1/3.6)` is 19.444444444444446 and
+ * `70 / 3.6` is 19.444444444444443 — different doubles, so a speed the builder wrote was always
+ * one ulp away from the same speed written by hand, and the exporter could not recognise it as
+ * "seventy" to print it as one.
+ */
+const toMs = (kmh: number) => kmh / 3.6;
+const toKmh = (ms: number) => ms * 3.6;
 
 /** What each kind is called, and how long one is when you first put it down. */
 const KINDS: { id: ActorKind; label: string; length: number; speedKmh: number }[] = [
@@ -186,8 +193,8 @@ export function ActorList({ actors, onPatch, onAdd, onRemove, selected, onSelect
               label="Snelheid"
               unit="km/u"
               step={5}
-              value={a.speed / KMH}
-              onChange={(v) => onPatch(a.id, { speed: v * KMH })}
+              value={toKmh(a.speed)}
+              onChange={(v) => onPatch(a.id, { speed: toMs(v) })}
             />
             <Field
               label="Lengte"

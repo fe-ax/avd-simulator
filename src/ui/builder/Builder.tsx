@@ -278,13 +278,9 @@ export function Builder({ onExit }: { onExit: () => void }) {
             },
             speed: kind.speedKmh / 3.6,
             length: kind.length,
-            keepInBlindSpot: {
-              enabled: false,
-              minSpeed: kind.speedKmh / 3.6,
-              maxSpeed: kind.speedKmh / 3.6,
-              targetGap: 0,
-              releaseAt: 0,
-            },
+            // No keepInBlindSpot at all rather than a disabled one. The field is optional, and a
+            // block of numbers that does nothing still travels into the exported file, where it
+            // reads like a setting somebody chose.
           },
         ],
       };

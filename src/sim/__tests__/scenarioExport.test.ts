@@ -7,6 +7,7 @@ import { describe, expect, test } from 'vitest';
 import { exportScenario, overridesOf, toSource, deepEqual } from '../scenarioExport';
 import { rechtsafFietspad } from '../scenario.rechtsaf-fietspad';
 import { invoegenSnelweg } from '../scenario.invoegen-snelweg';
+import { blankJunction } from '../starters';
 import type { Scenario } from '../types';
 
 /** Evaluate an emitted object literal. It is data, and this proves the source really parses. */
@@ -51,6 +52,44 @@ describe('exporteren', () => {
     expect(src).toContain('speedLimitKmh: 30');
     expect(src).toContain("title: 'Piet\\'s straat'");
     expect(evaluate(src)).toEqual({ speedLimitKmh: 30, title: "Piet's straat", nested: { a: [1, 2] } });
+  });
+
+  test('snelheden komen eruit als de km/u-deling die ze opleverde', () => {
+    const src = toSource({ speed: 70 / 3.6, length: 4.4 });
+    expect(src).toContain('speed: 70 / 3.6');
+    // And it is the same double, not a tidied-up one — which is the only reason this is allowed.
+    expect((evaluate(src) as { speed: number }).speed).toBe(70 / 3.6);
+  });
+
+  test('maar een snelheid die niet exact terugkomt, gaat als getal', () => {
+    // Not a round km/h at any sensible precision: printing 12.34 / 3.6 would be a different value.
+    const odd = 3.4287654321;
+    expect(toSource({ speed: odd })).toContain(`speed: ${odd}`);
+    expect((evaluate(toSource({ speed: odd })) as { speed: number }).speed).toBe(odd);
+  });
+
+  test('een uitgeschakelde dodehoekinstelling reist niet mee', () => {
+    const withDisabled: Scenario = {
+      ...rechtsafFietspad,
+      id: 'variant-v1',
+      title: 'Variant',
+      actors: rechtsafFietspad.actors.map((a) => ({
+        ...a,
+        keepInBlindSpot: { enabled: false, minSpeed: 5, maxSpeed: 6, targetGap: 7, releaseAt: 8 },
+      })),
+    };
+    const out = exportScenario(withDisabled, null);
+    expect(out.source).not.toContain('keepInBlindSpot');
+    expect(out.source).not.toContain('releaseAt');
+  });
+
+  test('en een scenario opent op wie het is, niet op de kijkdiscipline', () => {
+    const out = exportScenario(blankJunction, null);
+    const at = (k: string) => out.source.indexOf(`\n  ${k}:`);
+    expect(at('id')).toBeGreaterThan(-1);
+    expect(at('id')).toBeLessThan(at('world'));
+    expect(at('world')).toBeLessThan(at('expected'));
+    expect(at('expected')).toBeLessThan(at('lookDiscipline'));
   });
 
   test('getallen komen er exact uit, ook de lelijke', () => {

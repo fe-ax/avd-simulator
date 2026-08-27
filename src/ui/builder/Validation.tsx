@@ -43,7 +43,7 @@ function seconds(v: number | null): string {
  * The real warning is narrower and never wrong: when no way of riding changes when you see
  * somebody, no rule about looking at them can teach anything.
  */
-function readRow(r: Reveal): { tone: 'warn' | 'note'; text: string } | null {
+function readRow(r: Reveal, allFlat: boolean): { tone: 'warn' | 'note'; text: string } | null {
   if (r.full === null) {
     return { tone: 'warn', text: 'komt nooit in beeld — ook niet als je alles goed doet.' };
   }
@@ -53,6 +53,11 @@ function readRow(r: Reveal): { tone: 'warn' | 'note'; text: string } | null {
     return { tone: 'note', text: 'zonder kijken zie je hem helemaal niet. Daar zit de les.' };
   }
   if (same(r.full, r.noMirrors) && same(r.full, r.noLooks)) {
+    // One flat row among several that are not is a road user in the wrong place. *Every* row flat
+    // is a fact about the road: on an open stretch everything is ahead of you or comes past you, so
+    // nothing you do with your head changes when you first see it. Saying that once, calmly, beats
+    // four warnings that push an author to fix a scenario that is right. It is said above instead.
+    if (allFlat) return null;
     return {
       tone: 'warn',
       text: 'even vroeg gezien, hoe je ook rijdt — een kijkregel hierover leert dus niets.',
@@ -94,6 +99,18 @@ export function ValidationPanel({
   }
 
   const passed = record?.verdict === 'geslaagd' && record.counts.fout === 0 && record.counts.kritiek === 0;
+
+  // Every road user seen at the same moment however you ride. A property of the road, not a fault.
+  const allFlat =
+    reveals.length > 0 &&
+    reveals.every(
+      (r) =>
+        r.full !== null &&
+        r.noMirrors !== null &&
+        r.noLooks !== null &&
+        Math.abs(r.full - r.noMirrors) < 0.15 &&
+        Math.abs(r.full - r.noLooks) < 0.15,
+    );
 
   return (
     <>
@@ -256,9 +273,16 @@ export function ValidationPanel({
             ))}
           </tbody>
         </table>
+        {allFlat && (
+          <p className="builder-note">
+            Hier verschilt geen enkele kolom: alles rijdt vóór je of komt langs je heen, dus wanneer
+            je het ziet hangt niet van je hoofd af. Niet fout — maar de les zit dan in de manoeuvre,
+            niet in het kijken, en de regels moeten daarover gaan.
+          </p>
+        )}
         <ul className="builder-reveal-notes">
           {reveals.map((r) => {
-            const read = readRow(r);
+            const read = readRow(r, allFlat);
             if (!read) return null;
             return (
               <li key={r.actorId} className={read.tone === 'warn' ? 'warn' : undefined}>
