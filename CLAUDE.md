@@ -25,7 +25,8 @@ The UI is Dutch. Code, comments and commit messages are English.
 
 ```bash
 npm run dev      # vite dev server; :5173 by default, next free port if taken
-npm test         # vitest run — all of them fast, none needing a browser
+npm test         # vitest run — two projects: `sim` in node, `ui` in jsdom
+                 #   npx vitest run --project sim   the simulation, no DOM, ~2s
 npm run build    # tsc -b && vite build
 ```
 
@@ -173,6 +174,7 @@ src/
     builderOverlay.ts      route line, actor paths, drag handles
   ui/           React. RideView hosts three.js; MapView hosts the canvas
     files.ts               Blob out, file input in — the DOM half of scenarioFile.ts
+    __tests__/             jsdom + Testing Library; the only part of the tree that needs a DOM
     builder/               the scenario builder: plan view, forms, validator, export
 public/dev-driver.js       dev-only scripted rider, loaded by hand from the console
 ```
@@ -292,6 +294,10 @@ looked right, it probably depends on something else in the scene. Find out what,
 Screenshots lie, especially in a 550-px pane where a geometrically correct cockpit looks huge.
 What has actually worked:
 
+- **Test the panel's wording, not just its numbers.** `src/ui/__tests__` runs under jsdom and
+  asserts the distinctions the panels draw — soft rule against untested rule, mirrors-add-nothing
+  against nobody-sees-this. Those were checked by driving a browser and reading, which works once
+  and does not survive the next edit. Assert the meaning, not the phrasing.
 - **Read the geometry, not the picture.** Walk a mesh's `position` attribute and assert on world
   coordinates. That is how the crossing gap and the lamp positions were confirmed.
 - **Read canvas pixels.** `instrument.texture.image.getContext('2d').getImageData(...)` proves a

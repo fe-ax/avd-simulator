@@ -48,7 +48,14 @@ export const RESERVED_IDS: ReadonlySet<string> = new Set(ALL_SCENARIOS.map((s) =
  * saves one in the builder and expects it in the picker without a reload.
  */
 export function allScenarios(): Scenario[] {
-  return [...ALL_SCENARIOS, ...listSaved().map((s) => s.scenario)];
+  // Saved entries claiming a shipped id are dropped rather than listed. `scenarioById` already
+  // resolves such an id to the shipped scenario, so listing the impostor puts a second button in
+  // the picker with the same name that selects the first one — a row that looks like a choice and
+  // is not. Same rule in both places, or they disagree about what exists.
+  return [
+    ...ALL_SCENARIOS,
+    ...listSaved().map((s) => s.scenario).filter((s) => !RESERVED_IDS.has(s.id)),
+  ];
 }
 
 /** Null rather than undefined or a throw: "this run's scenario is gone" is a state to show. */

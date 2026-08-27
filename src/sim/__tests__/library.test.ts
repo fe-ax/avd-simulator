@@ -71,6 +71,18 @@ describe('de scenario-bibliotheek', () => {
     expect(scenarioById('rechtsaf-fietspad-v1')).toBe(rechtsafFietspad);
   });
 
+  it('en zo een staat ook niet dubbel in de lijst', () => {
+    localStorage.setItem(
+      'avd-simulator.scenarios.v1',
+      JSON.stringify([{ scenario: { ...mine, id: 'rechtsaf-fietspad-v1' }, savedAt: '' }]),
+    );
+    // scenarioById already resolves that id to the shipped scenario, so listing the impostor puts
+    // a second button in the picker with the same name that selects the first one. Both places
+    // apply the same rule, or they disagree about what exists.
+    expect(allScenarios().filter((s) => s.id === 'rechtsaf-fietspad-v1')).toHaveLength(1);
+    expect(allScenarios()).toHaveLength(ALL_SCENARIOS.length);
+  });
+
   it('negeert opslag die deze versie niet kan rijden', () => {
     localStorage.setItem(
       'avd-simulator.scenarios.v1',

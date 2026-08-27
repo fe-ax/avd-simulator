@@ -342,6 +342,21 @@ the ridden line as well as the route, which is the check that would have caught 
 
 # Still open
 
+### 37. ~~Half the app had no tests~~
+
+All 226 simulation tests, and none for the React. The panels an instructor reads were verified by
+me driving a browser and looking — which works once and does not survive the next edit.
+
+`src/ui/__tests__` runs under jsdom now, in its own vitest project so the simulation keeps running
+in plain Node in under two seconds. It asserts the distinctions rather than the phrasing: soft rule
+against untested rule, mirrors-add-nothing against nobody-sees-this, a saved scenario marked as
+your own, a bad file explaining itself.
+
+It found one on the first run. `scenarioById` resolves a shipped id to the shipped scenario however
+the library got one claiming it — but `allScenarios()` concatenated without applying the same rule,
+so the picker would have shown **two buttons with the same name**, the second of which selects the
+first. Both places apply the same rule now.
+
 ### 34. The overtake's three soft rules
 
 Both `schouderblik` rules are belt-and-braces over `controlPrerequisites` and cannot be missed by
