@@ -95,3 +95,57 @@ right turn nobody asked for.
 
 This is the worst item on the list. A validator that goes green on a scenario that tests nothing is
 worse than no validator, because the whole point of it is to be trusted.
+
+---
+
+# The plan
+
+Decided after the shakedown. Bugs first, because they are cheap next to the features and the draft
+crash bites hardest during exactly the kind of work that follows.
+
+## Phase 1 — the four bugs
+
+| | |
+|---|---|
+| **Draft crash** | `loadDraft` validates by *trying the draft*: build its routes and surfaces, and discard it if anything throws. A schema would go stale; actually using it cannot. Plus an error boundary around the builder, so no future shape change can white-screen the app again. |
+| **Off-screen handles** | The default fit includes every actor's `from` point. They were filtered out for being outside the framed stretch, which is exactly backwards: where a road user starts is a placement you chose and need to see. `to` stays excluded — on the A12 it is nine hundred metres away and means "and then it carries on". |
+| **Zoom floor** | `MIN_SCALE` drops so a three-hundred-metre span and a fifteen-metre road can be on screen together. |
+| **False green** | The validator says *what it validated*. After the model ride it checks whether each actor appears in any scored rule or causes any incident, and says so plainly when one does not: an actor nothing is measured against is a hazard the exercise is not actually about. It also states that the reeks is inherited unchanged, so "0/0/0" can never again be read as "this exercise works". |
+
+## Phase 2 — scripted actor cues
+
+`ActorSpec.cues`: a list of things a vehicle does at a given distance **along its own path**, not at
+a time and not in reaction to the rider. Anchored that way it fires in the same place every run, so
+the hazard stays the other driver's mistake rather than a response to yours.
+
+```ts
+cues: [{ atDist: 120, action: 'brake', forSeconds: 2.5 }, { atDist: 160, action: 'resume' }]
+```
+
+Applied in `stepActors`, which already tracks `dist` per actor. Generalises later to indicating,
+stopping and pulling away without changing shape.
+
+## Phase 3 — a plain junction world
+
+A new `ScenarioWorld` kind: two crossing roads, no fietspad, and the manoeuvre — straight on, left or
+right — as scenario data. A separate generator rather than more options on `urbanCrossing`, whose
+geometry is the Kerkstraat's and whose route is always a right turn.
+
+Straight-through is the shape most hazard-anticipation exercises take, and none of them are
+expressible today.
+
+## Phase 4 — the builder catches up
+
+Actors: add, remove, set kind and label, and edit the cues from phase 2. The reeks: add steps from a
+menu of the rule kinds that already exist, edit their numbers and their Dutch. The briefing:
+situation, assignment and hints.
+
+## Phase 5 — build the shakedown scenario in the browser, and only in the browser
+
+The test is the same one that failed: *a car comes from the right far too fast, stands on its brakes
+and stops short; you brake too and carry on.* You have priority — haaientanden on the side road — and
+the car is the one at fault. Doing it right means slowing markedly while it is still a threat and
+then continuing, not stopping dead.
+
+If any of it still needs a text editor, that goes at the top of this file rather than into a
+commit message.
