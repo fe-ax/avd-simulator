@@ -1058,3 +1058,37 @@ kbd {
   flex: 0 0 auto;
   padding: 4px 12px;
 }
+
+
+.crash {
+  padding: 24px;
+  max-width: 640px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.crash h2 {
+  margin: 0;
+  font-size: 16px;
+  color: #e0645c;
+}
+
+.crash p {
+  margin: 0;
+  opacity: 0.75;
+}
+
+.crash pre {
+  margin: 0;
+  padding: 10px;
+  font-size: 11px;
+  white-space: pre-wrap;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+
+.crash button {
+  justify-self: start;
+}

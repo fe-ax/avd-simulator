@@ -63,7 +63,9 @@ that is not the one being taught.
 
 ## Bugs found on the way, independent of this exercise
 
-### 8. A stale draft crashes the builder to a white screen — and there is no way out
+**All six of these are fixed.** Two of them (12 and 13) only turned up while fixing the others.
+
+### 8. ~~A stale draft crashes the builder to a white screen — and there is no way out~~
 
 `loadDraft` checks only that a scenario id is present, not that the shape still fits. A draft saved
 before `world.stretch` was introduced still has `world.ramp` at the top level, so `StretchFields`
@@ -74,19 +76,19 @@ A saved draft outlives the code that made it, exactly like a saved run — and r
 migration in `recorder.ts`. Drafts need the same, plus a hard validation that discards anything it
 cannot understand.
 
-### 9. The actor handles are off-screen when the builder opens
+### 9. ~~The actor handles are off-screen when the builder opens~~
 
 The default framing is the conflict point ±85 m, but an actor can start far outside it — scenario 1's
 snorfiets begins 131 m back. Both its handles project outside the canvas (y = 837 and y = −222 on a
 617-pixel canvas) while the sidebar says "sleep de stippen in beeld". You have to know to zoom out
 before the thing you are told to drag exists.
 
-### 10. The zoom floor is too high to see a long path and the road at once
+### 10. ~~The zoom floor is too high to see a long path and the road at once~~
 
 Zooming out far enough to reach both handles hits `MIN_SCALE` at 1.2 px/m, where the whole
 carriageway is eighteen pixels across. You can see the dots or you can see the road.
 
-### 11. The validator reports a false green
+### 11. ~~The validator reports a false green~~
 
 After moving the traffic onto the side road, the panel still says **"Een rijder die alles goed doet,
 haalt dit. 0/0/0"** — because it is answering "does the inherited reeks still pass", not "does this
@@ -95,6 +97,23 @@ right turn nobody asked for.
 
 This is the worst item on the list. A validator that goes green on a scenario that tests nothing is
 worse than no validator, because the whole point of it is to be trusted.
+
+### 12. The opening frame could be skipped entirely
+
+Found while fixing 9. `BuilderView` decided "this is the first measurement, so fit now" from the
+camera having no width — but a first measurement can arrive with a real width and **no height**, from
+a container that has not laid out vertically yet. That reading used up the one chance to fit while
+`fit` quietly refused for want of a height, and the builder opened at the default zoom with the
+handles below the bottom of the canvas. `fit` reports whether it applied now, and the view keeps
+trying until one takes.
+
+### 13. Actor end points were framed out, so the second handle was always off-screen
+
+Found while fixing 9 as well, and it is the opposite mistake: `to` was excluded from the framing
+because on the A12 it is nine hundred metres away and squeezes the exercise into a thread. On a
+junction it is forty metres past the conflict, and excluding it put the second of an actor's two
+handles off the top of the screen. It is included now when it is within sixty metres of everything
+else, and ignored when it is not.
 
 ---
 

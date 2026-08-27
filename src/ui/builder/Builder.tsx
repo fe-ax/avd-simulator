@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildRoutes, poseAt } from '../../sim/route';
 import { ReplayPlayer } from '../../sim/replay';
 import { ALL_SCENARIOS, scenarioById } from '../../sim/scenarios';
-import { referenceRide, revealTimeline } from '../../sim/referenceRide';
+import { referenceRide, revealTimeline, unscoredActors } from '../../sim/referenceRide';
 import { findObstructions, findOffRoad, riddenPath } from '../../sim/validate';
 import { exportScenario } from '../../sim/scenarioExport';
 import { clearDraft, loadDraft, saveDraft } from '../../sim/drafts';
@@ -27,7 +27,15 @@ import { WorldForm } from './WorldForm';
 /** How long to wait after the last change before riding it. Long enough to drag through. */
 const SETTLE_MS = 220;
 
-const EMPTY: Validation = { record: null, error: null, obstructions: [], offRoad: [], reveals: [] };
+const EMPTY: Validation = {
+  record: null,
+  error: null,
+  obstructions: [],
+  offRoad: [],
+  unscored: [],
+  inheritedFrom: null,
+  reveals: [],
+};
 
 /** Which module each shipped scenario lives in, so an export can import its base. */
 const BASE_MODULE: Record<string, { module: string; binding: string }> = {
@@ -37,6 +45,9 @@ const BASE_MODULE: Record<string, { module: string; binding: string }> = {
 
 /** How much road to show around the conflict point, in metres either side along the route. */
 const FRAME_M = 85;
+
+/** How far outside everything else an actor's end point may be and still be worth framing. */
+const FAR_M = 60;
 
 /**
  * What to frame: the stretch around the conflict point, not the whole route.
@@ -62,15 +73,32 @@ function extentOf(scenario: Scenario) {
   } catch {
     // A draft that will not build a route is still worth looking at; its traffic frames it.
   }
-  // Anything starting inside the framed stretch belongs in the picture too.
+  // Every actor's starting point, wherever it is: that is a placement you chose and have to be
+  // able to see. These used to be dropped unless they fell inside the framed stretch, which was
+  // exactly backwards — scenario 1's snorfiets begins a hundred and thirty metres back, so both of
+  // its handles opened off-screen while the sidebar told you to drag them.
   for (const a of scenario.actors) {
-    const near = ys.length === 0 || (a.from.y >= Math.min(...ys) - 40 && a.from.y <= Math.max(...ys) + 40);
-    if (near) {
-      xs.push(a.from.x);
-      ys.push(a.from.y);
-    }
+    xs.push(a.from.x);
+    ys.push(a.from.y);
   }
   if (xs.length === 0) return { minX: -20, maxX: 20, minY: -20, maxY: 20 };
+
+  // End points only if they are somewhere near. An actor's `to` is usually just "and then it
+  // carries on" — on the A12 it is nine hundred metres away, and framing that squeezes the whole
+  // exercise into a strip a few pixels wide. But on a junction it is forty metres past the
+  // conflict, and leaving it out puts the second of its two handles off the top of the screen.
+  const near = {
+    minX: Math.min(...xs) - FAR_M,
+    maxX: Math.max(...xs) + FAR_M,
+    minY: Math.min(...ys) - FAR_M,
+    maxY: Math.max(...ys) + FAR_M,
+  };
+  for (const a of scenario.actors) {
+    if (a.to.x < near.minX || a.to.x > near.maxX) continue;
+    if (a.to.y < near.minY || a.to.y > near.maxY) continue;
+    xs.push(a.to.x);
+    ys.push(a.to.y);
+  }
   return {
     minX: Math.min(...xs),
     maxX: Math.max(...xs),
@@ -103,7 +131,7 @@ export function Builder({ onExit }: { onExit: () => void }) {
     const id = setTimeout(() => {
       const { record, error } = referenceRide(draft);
       if (error) {
-        setValidation({ record: null, error, obstructions: [], offRoad: [], reveals: [] });
+        setValidation({ ...EMPTY, error });
         return;
       }
       const extent = extentOf(draft);
@@ -119,11 +147,15 @@ export function Builder({ onExit }: { onExit: () => void }) {
         error: null,
         obstructions: routes ? findObstructions(draft.world, routes, bounds) : [],
         offRoad: findOffRoad(draft.world, riddenPath(record.samples), bounds),
+        unscored: unscoredActors(draft, record),
+        // The reeks always comes from the base until there is a way to edit it, and a green
+        // verdict about somebody else's reeks is the easiest thing in here to misread.
+        inheritedFrom: base.title,
         reveals: revealTimeline(draft),
       });
     }, SETTLE_MS);
     return () => clearTimeout(id);
-  }, [draft, routes]);
+  }, [draft, routes, base.title]);
 
   useEffect(() => {
     const id = setTimeout(() => saveDraft(draft, baseId), 500);

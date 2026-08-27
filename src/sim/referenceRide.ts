@@ -23,7 +23,7 @@ import {
   type OvertakePlan,
   type RidePlan,
 } from './testDriver';
-import type { RunRecord, Scenario } from './types';
+import type { ActorSpec, RunRecord, Scenario } from './types';
 
 export interface ReferenceRide {
   record: RunRecord;
@@ -119,4 +119,42 @@ export function revealTimeline(scenario: Scenario): Reveal[] {
     }
   }
   return [...rows.values()];
+}
+
+/**
+ * Road users the scenario never actually judges anything about.
+ *
+ * "A model rider passes" is a true answer to the wrong question when the exercise no longer tests
+ * what you think it does. Moving a hazard somewhere it plays no part still leaves the inherited
+ * reeks passing, and the panel goes green on a scenario that measures nothing — which is the worst
+ * thing a validator can do, because being trusted is the whole job.
+ *
+ * An actor counts as involved if some rule names it, or if it ever has to react to the rider. The
+ * second half needs a deliberately bad ride to find out: a hazard nobody can provoke is scenery.
+ */
+export function unscoredActors(scenario: Scenario, record: RunRecord): ActorSpec[] {
+  const involved = new Set<string>();
+
+  for (const expected of scenario.expected) {
+    if (expected.kind.type === 'headway') involved.add(expected.kind.actorId);
+  }
+  for (const incident of record.incidents) involved.add(incident.actorId);
+
+  // Ride it badly on purpose, more than one way. Anything that brakes for a bad rider is part of
+  // the exercise even when a clean ride never disturbs it.
+  //
+  // Two rides, because one is self-defeating: a rider who checks nothing has their lane change
+  // refused by the prerequisite, so they never pull out and never provoke the traffic they were
+  // supposed to provoke. The second looks properly and then goes anyway.
+  const badRides: Array<RidePlan & MergePlan & OvertakePlan> = [
+    { mirrors: false, mirror: false, eyes: false, shoulder: false, shoulderPrep: false, yieldToActor: false },
+    { ignoreTraffic: true, yieldToActor: false },
+  ];
+  for (const plan of badRides) {
+    const bad = referenceRide(scenario, plan);
+    if (bad.error) continue;
+    for (const incident of bad.record.incidents) involved.add(incident.actorId);
+  }
+
+  return scenario.actors.filter((a) => !involved.has(a.id));
 }

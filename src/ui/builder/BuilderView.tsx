@@ -55,9 +55,20 @@ export function BuilderView({ getScene, onDragHandle, fitKey, fitBounds }: Props
 
   const fitRef = useRef(fitBounds);
   fitRef.current = fitBounds;
+  /**
+   * Whether the opening frame has actually been applied.
+   *
+   * Not inferred from the camera having a width, which is what it used to be: a first measurement
+   * can arrive with a real width and no height — a container that has not laid out vertically yet,
+   * or a hidden tab — and that reading used up the one chance to fit while `fit` quietly refused
+   * for want of a height. The builder then opened at the default zoom with the handles it tells
+   * you to drag below the bottom of the canvas.
+   */
+  const fitted = useRef(false);
+
   useEffect(() => {
     const b = fitRef.current;
-    if (b) cameraRef.current.fit(b);
+    if (b) fitted.current = cameraRef.current.fit(b);
   }, [fitKey]);
 
   useEffect(() => {
@@ -75,10 +86,9 @@ export function BuilderView({ getScene, onDragHandle, fitKey, fitBounds }: Props
       canvas.width = Math.round(rect.width * dpr);
       canvas.height = Math.round(rect.height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const first = camera.width === 0;
       camera.resize(rect.width, rect.height);
-      // The first measurement is the first chance to frame anything.
-      if (first && fitRef.current) camera.fit(fitRef.current);
+      // Keep trying until one of them takes.
+      if (!fitted.current && fitRef.current) fitted.current = camera.fit(fitRef.current);
     };
 
     const observer = new ResizeObserver(resize);
