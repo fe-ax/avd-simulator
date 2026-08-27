@@ -11,7 +11,8 @@ Four scenarios:
    coming up the inside. Teaches the look sequence and the dode hoek.
 2. *Auto van rechts remt* — a plain crossroads, straight on, with priority; a car arrives from the
    right far too fast and stands on its brakes. Teaches that having priority is not the same as
-   being given it. **Built entirely in the scenario builder** — see `BUILDER-GAPS.md`.
+   being given it. **Built entirely in the scenario builder**, and shipped as its export — the
+   provenance is in the header of `scenario.auto-van-rechts.ts`.
 3. *Invoegen op de A12* — a motorway merge from an on-ramp into a gap between a car ahead and a
    truck coming up behind. Teaches speed matching and following distance.
 4. *Inhalen op de A12* — open motorway, two lorries nose to tail at 90, busy left lane. Teaches
