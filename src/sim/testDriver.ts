@@ -5,8 +5,9 @@
  */
 import { SimEngine } from './engine';
 import { GAZE_DURATION_S, isLookControl, LOOK_DIRECTIONS } from './perception';
+import { poseAt } from './route';
 import { scoreRun } from './scoring';
-import type { RunRecord, Scenario } from './types';
+import type { ActorState, RunRecord, Scenario } from './types';
 
 export interface RidePlan {
   mirrors?: boolean;
@@ -33,6 +34,15 @@ export interface RidePlan {
   shoulderTooFarBack?: boolean;
   /** Stop and let the snorfiets pass. */
   yieldToActor?: boolean;
+  /**
+   * Ease off when somebody is closing on the same piece of junction at the same moment.
+   *
+   * Not the same thing as giving way. Giving way is a rule about who goes first; this is the
+   * judgement that being entitled to go is not the same as it being safe to — and it is the whole
+   * content of a hazard exercise, where the other driver is the one making the mistake and your
+   * job is to have read it.
+   */
+  anticipate?: boolean;
   gear?: boolean;
   slowDown?: boolean;
   indicatorOff?: 'direct' | 'laat' | 'nooit';
@@ -76,6 +86,7 @@ const DEFAULTS: Required<Omit<RidePlan, 'onSample'>> = {
   scanConstantly: false,
   steer: true,
   yieldToActor: true,
+  anticipate: false,
   gear: true,
   slowDown: true,
   indicatorOff: 'direct',
@@ -98,9 +109,36 @@ const SCAN_CYCLE = [
   'SHOULDER_RIGHT',
 ] as const;
 
+/**
+ * A snapshot of the ride, for tuning.
+ *
+ * Everything about the traffic is optional, because a road can have none: an empty starter is a
+ * perfectly good scenario that simply has nothing on it yet, and the model rider used to fall over
+ * reading the first actor's position on a road where there was no first actor.
+ */
+/** Metres the actor has travelled past the point where its path crosses the rider's. */
+function clearedConflict(engine: SimEngine, actor: ActorState): boolean {
+  const meeting = poseAt(engine.routes.turn, engine.routes.conflictS);
+  const along =
+    (actor.x - meeting.x) * Math.cos(actor.heading) + (actor.y - meeting.y) * Math.sin(actor.heading);
+  return along > (actor.spec.length ?? 1.8) / 2 + 1.5;
+}
+
 function probe(engine: SimEngine): Probe {
-  const actor = engine.actors[0];
+  const actor: ActorState | undefined = engine.actors[0];
   const pose = engine.bike.pose;
+  if (!actor) {
+    return {
+      t: engine.t,
+      d: engine.distanceToConflict(),
+      speedKmh: engine.bike.speed * 3.6,
+      gap: Infinity,
+      bearing: 0,
+      dist: Infinity,
+      mode: 'cruise',
+      perceived: false,
+    };
+  }
   const dx = actor.x - pose.x;
   const dy = actor.y - pose.y;
   let bearing = ((Math.atan2(dy, dx) - pose.heading) * 180) / Math.PI;
@@ -170,7 +208,7 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
     }
 
     const d = engine.distanceToConflict();
-    const actor = engine.actors[0];
+    const actor: ActorState | undefined = engine.actors[0];
     plan.onSample?.(probe(engine));
 
     once('startSlow', () => {
@@ -225,9 +263,33 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
     if (p.shoulder && d <= 14) once('shoulder', () => dispatch('SHOULDER_RIGHT'));
     if (p.steer && d <= 11) once('steer', () => dispatch('STEER_RIGHT'));
 
-    const actorPast =
-      engine.routes.kind === 'urbanCrossing' && actor.y > engine.routes.crossYSpan[1] + 1.5;
-    const wantStop = p.yieldToActor && d <= 12 && !actorPast;
+    // Has the hazard gone by yet?
+    //
+    // Measured along the actor's own direction of travel, past the point where the two paths
+    // cross. It used to ask whether the actor's y had climbed past the swept strip, which is only
+    // "past" for something coming up the fietspad beside you: a car crossing east to west holds
+    // its y for the whole ride, so the rider waited for it forever and every such scenario ran
+    // into the ninety-second cap with the machine sitting still.
+    const actorPast = !actor || clearedConflict(engine, actor);
+
+    // Somebody arriving at the same place at the same time. Compared in seconds rather than
+    // metres, because that is the question actually being asked: not "how far away is it" but
+    // "will we be there together".
+    let closing = false;
+    if (p.anticipate) {
+      const bike = engine.world(false).bike;
+      const meeting = poseAt(engine.routes.turn, engine.routes.conflictS);
+      const mine = d / Math.max(bike.speed, 0.5);
+      for (const other of engine.actors) {
+        if (other.speed < 1) continue;
+        const toMeeting =
+          (meeting.x - other.x) * Math.cos(other.heading) +
+          (meeting.y - other.y) * Math.sin(other.heading);
+        if (toMeeting <= 0) continue;
+        if (Math.abs(toMeeting / other.speed - mine) < 2.5) closing = true;
+      }
+    }
+    const wantStop = (p.yieldToActor && d <= 12 && !actorPast) || (closing && d <= 55 && d > -2);
     if (wantStop !== braking) {
       braking = wantStop;
       dispatch('BRAKE', wantStop ? 'down' : 'up');

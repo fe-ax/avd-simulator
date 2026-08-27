@@ -14,7 +14,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildRoutes, poseAt } from '../../sim/route';
 import { ReplayPlayer } from '../../sim/replay';
 import { ALL_SCENARIOS, scenarioById } from '../../sim/scenarios';
-import { referenceRide, revealTimeline } from '../../sim/referenceRide';
+import { STARTERS } from '../../sim/starters';
+import { referenceRide, revealTimeline, unscoredActors } from '../../sim/referenceRide';
 import { findObstructions, findOffRoad, riddenPath } from '../../sim/validate';
 import { exportScenario } from '../../sim/scenarioExport';
 import { clearDraft, loadDraft, saveDraft } from '../../sim/drafts';
@@ -23,11 +24,22 @@ import type { ActorSpec, Scenario, Vec2 } from '../../sim/types';
 import { BuilderView, type BuilderScene } from './BuilderView';
 import { ValidationPanel, type Validation } from './Validation';
 import { WorldForm } from './WorldForm';
+import { ActorList, defaultsFor } from './ActorList';
+import { ReeksEditor } from './ReeksEditor';
+import { BriefingEditor } from './BriefingEditor';
 
 /** How long to wait after the last change before riding it. Long enough to drag through. */
 const SETTLE_MS = 220;
 
-const EMPTY: Validation = { record: null, error: null, obstructions: [], offRoad: [], reveals: [] };
+const EMPTY: Validation = {
+  record: null,
+  error: null,
+  obstructions: [],
+  offRoad: [],
+  unscored: [],
+  inheritedFrom: null,
+  reveals: [],
+};
 
 /** Which module each shipped scenario lives in, so an export can import its base. */
 const BASE_MODULE: Record<string, { module: string; binding: string }> = {
@@ -37,6 +49,9 @@ const BASE_MODULE: Record<string, { module: string; binding: string }> = {
 
 /** How much road to show around the conflict point, in metres either side along the route. */
 const FRAME_M = 85;
+
+/** How far outside everything else an actor's end point may be and still be worth framing. */
+const FAR_M = 60;
 
 /**
  * What to frame: the stretch around the conflict point, not the whole route.
@@ -62,15 +77,32 @@ function extentOf(scenario: Scenario) {
   } catch {
     // A draft that will not build a route is still worth looking at; its traffic frames it.
   }
-  // Anything starting inside the framed stretch belongs in the picture too.
+  // Every actor's starting point, wherever it is: that is a placement you chose and have to be
+  // able to see. These used to be dropped unless they fell inside the framed stretch, which was
+  // exactly backwards — scenario 1's snorfiets begins a hundred and thirty metres back, so both of
+  // its handles opened off-screen while the sidebar told you to drag them.
   for (const a of scenario.actors) {
-    const near = ys.length === 0 || (a.from.y >= Math.min(...ys) - 40 && a.from.y <= Math.max(...ys) + 40);
-    if (near) {
-      xs.push(a.from.x);
-      ys.push(a.from.y);
-    }
+    xs.push(a.from.x);
+    ys.push(a.from.y);
   }
   if (xs.length === 0) return { minX: -20, maxX: 20, minY: -20, maxY: 20 };
+
+  // End points only if they are somewhere near. An actor's `to` is usually just "and then it
+  // carries on" — on the A12 it is nine hundred metres away, and framing that squeezes the whole
+  // exercise into a strip a few pixels wide. But on a junction it is forty metres past the
+  // conflict, and leaving it out puts the second of its two handles off the top of the screen.
+  const near = {
+    minX: Math.min(...xs) - FAR_M,
+    maxX: Math.max(...xs) + FAR_M,
+    minY: Math.min(...ys) - FAR_M,
+    maxY: Math.max(...ys) + FAR_M,
+  };
+  for (const a of scenario.actors) {
+    if (a.to.x < near.minX || a.to.x > near.maxX) continue;
+    if (a.to.y < near.minY || a.to.y > near.maxY) continue;
+    xs.push(a.to.x);
+    ys.push(a.to.y);
+  }
   return {
     minX: Math.min(...xs),
     maxX: Math.max(...xs),
@@ -86,8 +118,12 @@ export function Builder({ onExit }: { onExit: () => void }) {
   const [time, setTime] = useState(0);
   const [fitKey, setFitKey] = useState(0);
   const [exported, setExported] = useState<string | null>(null);
+  const [hoveredActor, setHoveredActor] = useState<string | null>(null);
 
-  const base = scenarioById(baseId) ?? ALL_SCENARIOS[0];
+  // A starter is a road to build on, not an exercise to derive from — so a draft based on one
+  // exports as a whole file rather than as a spread that would owe its parent nothing.
+  const starter = STARTERS.find((s) => s.id === baseId) ?? null;
+  const base = starter ?? scenarioById(baseId) ?? ALL_SCENARIOS[0];
 
   const routes = useMemo(() => {
     try {
@@ -103,7 +139,7 @@ export function Builder({ onExit }: { onExit: () => void }) {
     const id = setTimeout(() => {
       const { record, error } = referenceRide(draft);
       if (error) {
-        setValidation({ record: null, error, obstructions: [], offRoad: [], reveals: [] });
+        setValidation({ ...EMPTY, error });
         return;
       }
       const extent = extentOf(draft);
@@ -119,11 +155,15 @@ export function Builder({ onExit }: { onExit: () => void }) {
         error: null,
         obstructions: routes ? findObstructions(draft.world, routes, bounds) : [],
         offRoad: findOffRoad(draft.world, riddenPath(record.samples), bounds),
+        unscored: unscoredActors(draft, record),
+        // Only when there is genuinely somebody else's reeks in play. A starter brings none, and
+        // warning about an inherited reeks that does not exist is its own kind of lying.
+        inheritedFrom: starter ? null : base.title,
         reveals: revealTimeline(draft),
       });
     }, SETTLE_MS);
     return () => clearTimeout(id);
-  }, [draft, routes]);
+  }, [draft, routes, base.title, starter]);
 
   useEffect(() => {
     const id = setTimeout(() => saveDraft(draft, baseId), 500);
@@ -143,10 +183,10 @@ export function Builder({ onExit }: { onExit: () => void }) {
   const handles = useMemo<Handle[]>(
     () =>
       draft.actors.flatMap((a) => [
-        { id: `${a.id}:from`, at: a.from, label: a.id },
-        { id: `${a.id}:to`, at: a.to },
+        { id: `${a.id}:from`, at: a.from, label: a.label, active: a.id === hoveredActor },
+        { id: `${a.id}:to`, at: a.to, active: a.id === hoveredActor },
       ]),
-    [draft.actors],
+    [draft.actors, hoveredActor],
   );
 
   const getScene = useCallback((): BuilderScene | null => {
@@ -179,7 +219,7 @@ export function Builder({ onExit }: { onExit: () => void }) {
   }, []);
 
   const changeBase = useCallback((id: string) => {
-    const next = scenarioById(id);
+    const next = scenarioById(id) ?? STARTERS.find((s) => s.id === id) ?? null;
     if (!next) return;
     setBaseId(id);
     setDraft(next);
@@ -194,9 +234,78 @@ export function Builder({ onExit }: { onExit: () => void }) {
     }));
   }, []);
 
+  /**
+   * A new road user, dropped somewhere you can see and reach.
+   *
+   * Placed across the conflict point rather than at the origin: a vehicle that appears in a corner
+   * of the world is a vehicle you have to go and find before you can do anything with it, and the
+   * whole point of the plan view is that the thing you are editing is in front of you.
+   */
+  const addActor = useCallback(() => {
+    setDraft((d) => {
+      const kind = defaultsFor('auto');
+      const n = d.actors.length + 1;
+      let at = { x: 0, y: 0 };
+      let heading = { x: 1, y: 0 };
+      try {
+        const r = buildRoutes(d);
+        const p = poseAt(r.turn, r.conflictS);
+        at = { x: p.x, y: p.y };
+        // Across the rider's path, which is where traffic that matters tends to come from.
+        heading = { x: Math.cos(p.heading + Math.PI / 2), y: Math.sin(p.heading + Math.PI / 2) };
+      } catch {
+        // An unbuildable draft still gets its actor; it lands at the origin and can be dragged.
+      }
+      const reach = 60;
+      return {
+        ...d,
+        actors: [
+          ...d.actors,
+          {
+            id: `weggebruiker-${n}`,
+            kind: kind.id,
+            label: `${kind.label} ${n}`,
+            from: {
+              x: Math.round((at.x - heading.x * reach) * 10) / 10,
+              y: Math.round((at.y - heading.y * reach) * 10) / 10,
+            },
+            to: {
+              x: Math.round((at.x + heading.x * reach) * 10) / 10,
+              y: Math.round((at.y + heading.y * reach) * 10) / 10,
+            },
+            speed: kind.speedKmh / 3.6,
+            length: kind.length,
+            keepInBlindSpot: {
+              enabled: false,
+              minSpeed: kind.speedKmh / 3.6,
+              maxSpeed: kind.speedKmh / 3.6,
+              targetGap: 0,
+              releaseAt: 0,
+            },
+          },
+        ],
+      };
+    });
+  }, []);
+
+  const removeActor = useCallback((actorId: string) => {
+    setDraft((d) => ({
+      ...d,
+      actors: d.actors.filter((a) => a.id !== actorId),
+      // A rule pointed at a road user that is gone would score nothing and say nothing about why.
+      expected: d.expected.filter(
+        (e) => !(e.kind.type === 'headway' && e.kind.actorId === actorId),
+      ),
+    }));
+  }, []);
+
   const doExport = useCallback(() => {
-    const meta = BASE_MODULE[base.id] ?? { module: 'scenario.rechtsaf-fietspad', binding: 'rechtsafFietspad' };
-    setExported(exportScenario(draft, base, meta.module, meta.binding).source);
+    const meta = BASE_MODULE[base.id];
+    setExported(
+      meta
+        ? exportScenario(draft, base, meta.module, meta.binding).source
+        : exportScenario(draft, null).source,
+    );
   }, [draft, base]);
 
   const dirty = draft !== base;
@@ -209,7 +318,7 @@ export function Builder({ onExit }: { onExit: () => void }) {
             ← Terug naar rijden
           </button>
           <span className="builder-bases">
-            {ALL_SCENARIOS.map((s) => (
+            {[...ALL_SCENARIOS, ...STARTERS].map((s) => (
               <button
                 key={s.id}
                 type="button"
@@ -276,7 +385,36 @@ export function Builder({ onExit }: { onExit: () => void }) {
           </p>
         </header>
 
-        <WorldForm draft={draft} onChange={setDraft} onPatchActor={patchActor} />
+        <WorldForm draft={draft} onChange={setDraft} />
+
+        <ActorList
+          actors={draft.actors}
+          onPatch={patchActor}
+          onAdd={addActor}
+          onRemove={removeActor}
+          selected={hoveredActor}
+          onSelect={setHoveredActor}
+        />
+
+        <ReeksEditor
+          expected={draft.expected}
+          actors={draft.actors}
+          manoeuvre={draft.world.kind === 'junction' ? draft.world.manoeuvre : null}
+          onChange={(expected) =>
+            setDraft((d) => ({
+              ...d,
+              expected,
+              // The order rule points at rule ids; one naming a step that has been deleted would
+              // silently never fire again.
+              sequence: { ...d.sequence, ids: d.sequence.ids.filter((id) => expected.some((e) => e.id === id)) },
+            }))
+          }
+        />
+
+        <BriefingEditor
+          briefing={draft.briefing}
+          onChange={(briefing) => setDraft((d) => ({ ...d, briefing }))}
+        />
 
         <ValidationPanel {...validation} />
 

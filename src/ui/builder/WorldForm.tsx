@@ -7,14 +7,16 @@
  * the other two rather than offered as a field. The kink is unrepresentable instead of reported,
  * which is the same move that took the mirror tilt out of a hand-picked constant.
  */
-import type { ActorSpec, MotorwayStretch, Scenario, ScenarioWorld } from '../../sim/types';
-
-const KMH = 1 / 3.6;
+import type {
+  Manoeuvre,
+  MotorwayStretch,
+  Scenario,
+  ScenarioWorld,
+} from '../../sim/types';
 
 interface Props {
   draft: Scenario;
   onChange: (next: Scenario) => void;
-  onPatchActor: (id: string, patch: Partial<ActorSpec>) => void;
 }
 
 function Num({
@@ -47,7 +49,7 @@ function Num({
   );
 }
 
-export function WorldForm({ draft, onChange, onPatchActor }: Props) {
+export function WorldForm({ draft, onChange }: Props) {
   const world = draft.world;
 
   const setWorld = (next: ScenarioWorld) => onChange({ ...draft, world: next });
@@ -99,7 +101,9 @@ export function WorldForm({ draft, onChange, onPatchActor }: Props) {
         />
       </section>
 
-      {world.kind === 'urbanCrossing' ? (
+      {world.kind === 'junction' ? (
+        <JunctionFields world={world} setWorld={setWorld} />
+      ) : world.kind === 'urbanCrossing' ? (
         <section className="sidebar-section">
           <h3>Kruispunt</h3>
           <Num
@@ -218,32 +222,6 @@ export function WorldForm({ draft, onChange, onPatchActor }: Props) {
         </section>
       )}
 
-      <section className="sidebar-section">
-        <h3>Verkeer</h3>
-        <p className="builder-note">Sleep de stippen in beeld om te verzetten waar iemand vandaan komt.</p>
-        {draft.actors.map((a) => (
-          <div key={a.id} className="builder-actor">
-            <h4>{a.label}</h4>
-            <Num
-              label="Snelheid"
-              unit="km/u"
-              step={5}
-              value={a.speed / KMH}
-              onChange={(v) => onPatchActor(a.id, { speed: v * KMH })}
-            />
-            <Num
-              label="Lengte"
-              unit="m"
-              value={a.length ?? 1.8}
-              onChange={(v) => onPatchActor(a.id, { length: v })}
-            />
-            <p className="builder-coords">
-              van ({a.from.x.toFixed(1)}, {a.from.y.toFixed(1)}) naar ({a.to.x.toFixed(1)},{' '}
-              {a.to.y.toFixed(1)})
-            </p>
-          </div>
-        ))}
-      </section>
     </>
   );
 }
@@ -333,5 +311,118 @@ function StretchFields({
         deadline is en geen muur.
       </p>
     </>
+  );
+}
+
+
+/** A plain crossroads: two widths, a verge, which way you are going, and who gives way. */
+function JunctionFields({
+  world,
+  setWorld,
+}: {
+  world: Extract<ScenarioWorld, { kind: 'junction' }>;
+  setWorld: (next: ScenarioWorld) => void;
+}) {
+  return (
+    <section className="sidebar-section">
+      <h3>Kruispunt</h3>
+      <Num
+        label="Halve rijbaan"
+        unit="m"
+        value={world.road.halfWidth}
+        onChange={(v) => setWorld({ ...world, road: { ...world.road, halfWidth: v } })}
+      />
+      <Num
+        label="Halve zijweg"
+        unit="m"
+        value={world.road.sideHalfWidth}
+        onChange={(v) => setWorld({ ...world, road: { ...world.road, sideHalfWidth: v } })}
+      />
+      <Num
+        label="Berm tot"
+        unit="m"
+        value={world.road.vergeTo}
+        onChange={(v) => setWorld({ ...world, road: { ...world.road, vergeTo: v } })}
+      />
+
+      <h4 className="builder-subhead">Route</h4>
+      <Num
+        label="Start"
+        unit="m"
+        step={5}
+        value={world.startY}
+        onChange={(v) => setWorld({ ...world, startY: v })}
+      />
+      <Num
+        label="Uitloop"
+        unit="m"
+        step={5}
+        value={world.runOutM}
+        onChange={(v) => setWorld({ ...world, runOutM: Math.max(0, v) })}
+      />
+      <Num
+        label="Bochtstraal"
+        unit="m"
+        value={world.turnRadius}
+        onChange={(v) => setWorld({ ...world, turnRadius: Math.max(1, v) })}
+      />
+
+      <Choice
+        label="Opdracht"
+        value={world.manoeuvre}
+        options={[
+          ['straight', 'Rechtdoor'],
+          ['right', 'Rechtsaf'],
+          ['left', 'Linksaf'],
+        ]}
+        onChange={(v) => setWorld({ ...world, manoeuvre: v as Manoeuvre })}
+      />
+      <Choice
+        label="Haaientanden"
+        value={world.giveWay}
+        options={[
+          ['side', 'Op de zijweg'],
+          ['main', 'Op jouw weg'],
+          ['none', 'Nergens'],
+        ]}
+        onChange={(v) => setWorld({ ...world, giveWay: v as 'side' | 'main' | 'none' })}
+      />
+      <p className="builder-note">
+        Het insturpunt volgt uit de bochtstraal, dus dat staat er niet bij: anders kun je een
+        geknikte route tekenen. Haaientanden op de zijweg betekent dat jij voorrang hebt — en dat
+        iemand die er toch uit komt rijden een fout maakt in plaats van een regel te volgen.
+      </p>
+    </section>
+  );
+}
+
+/** A short list of named alternatives. Segmented rather than a dropdown: there are never many. */
+function Choice({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: [string, string][];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="builder-field builder-choice">
+      <span>{label}</span>
+      <span className="builder-choice-options">
+        {options.map(([id, text]) => (
+          <button
+            key={id}
+            type="button"
+            className={`replay-btn tiny${id === value ? ' active' : ''}`}
+            onClick={() => onChange(id)}
+          >
+            {text}
+          </button>
+        ))}
+      </span>
+    </div>
   );
 }

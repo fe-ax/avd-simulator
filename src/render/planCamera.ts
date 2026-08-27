@@ -13,7 +13,14 @@
 import type { CameraSpace, Projected, ViewCamera } from './camera';
 import type { Vec2 } from '../sim/types';
 
-const MIN_SCALE = 1.2;
+/**
+ * Pixels per metre at the far end of the zoom.
+ *
+ * Low enough that a three-hundred-metre actor path and a fifteen-metre carriageway can be on
+ * screen together. At the old floor of 1.2 you could frame the handles or the road, not both: the
+ * whole road came out eighteen pixels across.
+ */
+const MIN_SCALE = 0.45;
 const MAX_SCALE = 40;
 
 export class PlanCamera implements ViewCamera {
@@ -105,14 +112,22 @@ export class PlanCamera implements ViewCamera {
     this.y += anchor.y - moved.y;
   }
 
-  /** Frame a world box with a margin in metres, which is how the builder opens a scenario. */
-  fit(bounds: { minX: number; maxX: number; minY: number; maxY: number }, marginM = 8) {
-    this.x = (bounds.minX + bounds.maxX) / 2;
-    this.y = (bounds.minY + bounds.maxY) / 2;
+  /**
+   * Frame a world box with a margin in metres, which is how the builder opens a scenario.
+   *
+   * Reports whether it actually managed it. A canvas that has not been laid out yet has no size to
+   * scale against, and a caller that assumes the framing happened anyway leaves the view at
+   * whatever the default was — which is how the builder came to open with the handles you are told
+   * to drag sitting off the bottom of the screen.
+   */
+  fit(bounds: { minX: number; maxX: number; minY: number; maxY: number }, marginM = 8): boolean {
     const w = bounds.maxX - bounds.minX + marginM * 2;
     const h = bounds.maxY - bounds.minY + marginM * 2;
-    if (w <= 0 || h <= 0 || this.width === 0 || this.height === 0) return;
+    if (w <= 0 || h <= 0 || this.width === 0 || this.height === 0) return false;
+    this.x = (bounds.minX + bounds.maxX) / 2;
+    this.y = (bounds.minY + bounds.maxY) / 2;
     // North up, so world height maps to canvas height.
     this.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.min(this.width / w, this.height / h)));
+    return true;
   }
 }

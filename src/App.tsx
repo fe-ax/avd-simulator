@@ -19,6 +19,8 @@ import type { CheckState } from './ui/CheckStrip';
 import { RunHistory } from './ui/RunHistory';
 import { RideSettings } from './ui/RideSettings';
 import { Builder } from './ui/builder/Builder';
+import { ErrorBoundary } from './ui/ErrorBoundary';
+import { clearDraft } from './sim/drafts';
 import { Timeline } from './ui/Timeline';
 
 /** How often the replay playhead is pushed into React while playing. */
@@ -50,6 +52,7 @@ export default function App() {
   // of the session rather than a flag inside it. The hash makes it linkable and survives a reload,
   // which matters when you are iterating on a scenario and reloading constantly.
   const [building, setBuilding] = useState(() => window.location.hash === '#bouwen');
+  const [builderAttempt, setBuilderAttempt] = useState(0);
   const [scenarioId, setScenarioId] = useState(DEFAULT_SCENARIO.id);
   const [timeScale, setTimeScale] = useState(1);
   const [autoSteer, setAutoSteer] = useState(true);
@@ -87,7 +90,22 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  if (building) return <Builder onExit={() => setMode(false)} />;
+  if (building) {
+    // Keyed on a counter so "opnieuw proberen" genuinely remounts the builder rather than
+    // re-rendering the component that just threw.
+    return (
+      <ErrorBoundary
+        key={builderAttempt}
+        resetLabel="Gooi het concept weg en begin opnieuw"
+        onReset={() => {
+          clearDraft();
+          setBuilderAttempt((n) => n + 1);
+        }}
+      >
+        <Builder onExit={() => setMode(false)} />
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <Session

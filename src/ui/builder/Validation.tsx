@@ -7,7 +7,7 @@
  * Here it is a red panel that appears while you are still holding the thing you moved.
  */
 import type { Obstruction } from '../../sim/validate';
-import type { Vec2 } from '../../sim/types';
+import type { ActorSpec, Vec2 } from '../../sim/types';
 import type { Reveal } from '../../sim/referenceRide';
 import type { RunRecord } from '../../sim/types';
 
@@ -17,6 +17,10 @@ export interface Validation {
   obstructions: Obstruction[];
   /** Points along the route with no road under them. */
   offRoad: Vec2[];
+  /** Road users no rule measures anything about. */
+  unscored: ActorSpec[];
+  /** The scenario this one derives from, whose reeks it is still being judged by. */
+  inheritedFrom: string | null;
   reveals: Reveal[];
 }
 
@@ -24,7 +28,15 @@ function seconds(v: number | null): string {
   return v === null ? '—' : `${v.toFixed(1).replace('.', ',')}s`;
 }
 
-export function ValidationPanel({ record, error, obstructions, offRoad, reveals }: Validation) {
+export function ValidationPanel({
+  record,
+  error,
+  obstructions,
+  offRoad,
+  unscored,
+  inheritedFrom,
+  reveals,
+}: Validation) {
   if (error) {
     return (
       <section className="builder-panel builder-panel-bad">
@@ -67,6 +79,13 @@ export function ValidationPanel({ record, error, obstructions, offRoad, reveals 
                 maar het is zelden wat je bedoelde.
               </p>
             )}
+            {inheritedFrom && (
+              <p className="builder-note">
+                Let op: er wordt beoordeeld op de reeks van <strong>{inheritedFrom}</strong>, die je
+                hier niet kunt aanpassen. "Geslaagd" betekent dus dat <em>díe</em> reeks nog klopt,
+                niet dat jouw oefening werkt.
+              </p>
+            )}
           </>
         ) : (
           <p>Nog niet gereden.</p>
@@ -82,6 +101,29 @@ export function ValidationPanel({ record, error, obstructions, offRoad, reveals 
           </p>
           <p className="builder-note">
             Vanaf ({offRoad[0].x.toFixed(1)}, {offRoad[0].y.toFixed(1)}).
+          </p>
+        </section>
+      )}
+
+      {unscored.length > 0 && (
+        <section className="builder-panel builder-panel-bad">
+          <h3>Er wordt niets over ze beoordeeld</h3>
+          <p>
+            {unscored.length === 1 ? 'Deze weggebruiker doet' : 'Deze weggebruikers doen'} niets uit
+            zichzelf, {unscored.length === 1 ? 'komt' : 'komen'} in geen enkele regel voor, en
+            {unscored.length === 1 ? ' hoeft' : ' hoeven'} ook nooit voor de rijder te remmen — hoe
+            slecht die ook rijdt:
+          </p>
+          <ul className="builder-faults">
+            {unscored.map((a) => (
+              <li key={a.id}>
+                <strong>{a.label}</strong>
+                <span>staat er wel, maar doet niet mee</span>
+              </li>
+            ))}
+          </ul>
+          <p className="builder-note">
+            Decor mag, maar als dit je gevaar is, meet de oefening het niet.
           </p>
         </section>
       )}

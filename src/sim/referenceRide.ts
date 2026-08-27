@@ -23,7 +23,7 @@ import {
   type OvertakePlan,
   type RidePlan,
 } from './testDriver';
-import type { RunRecord, Scenario } from './types';
+import type { ActorSpec, RunRecord, Scenario } from './types';
 
 export interface ReferenceRide {
   record: RunRecord;
@@ -60,6 +60,30 @@ function mergePlanFor(scenario: Scenario): MergePlan {
   };
 }
 
+/**
+ * How a model rider handles a junction.
+ *
+ * The crossroads driver was written for the Kerkstraat, where the manoeuvre is a right turn across
+ * a fietspad — so it changes down, slows to a walking pace and gives way as a matter of course. On
+ * a junction you have priority at and are riding straight through, all of that is wrong: slowing to
+ * fifteen and staying there is not carefulness, it is dawdling, and a rule that says "get going
+ * again afterwards" would mark the model rider for it.
+ */
+function crossingPlanFor(scenario: Scenario): RidePlan {
+  if (scenario.world.kind !== 'junction') return {};
+  const turning = scenario.world.manoeuvre !== 'straight';
+  return {
+    slowDown: turning,
+    gear: turning,
+    // Yielding is for a road user who has priority over you. Whether one does is what the
+    // haaientanden say.
+    yieldToActor: scenario.world.giveWay !== 'side',
+    // Read the traffic even when it is the one that should be stopping. Having priority is not
+    // the same as being given it, and that gap is what a hazard exercise is about.
+    anticipate: true,
+  };
+}
+
 /** Ride it the way it is meant to be ridden. */
 export function referenceRide(
   scenario: Scenario,
@@ -70,7 +94,7 @@ export function referenceRide(
     // stretch has nothing to merge onto, so the only manoeuvre available is an overtake.
     const record =
       scenario.world.kind !== 'motorway'
-        ? driveRun(scenario, override)
+        ? driveRun(scenario, { ...crossingPlanFor(scenario), ...override })
         : scenario.world.stretch.kind === 'doorgaand'
           ? driveOvertake(scenario, { ...override, cruiseKmh: override.cruiseKmh ?? scenario.startSpeedKmh })
           : driveMerge(scenario, { ...mergePlanFor(scenario), ...override });
@@ -119,4 +143,50 @@ export function revealTimeline(scenario: Scenario): Reveal[] {
     }
   }
   return [...rows.values()];
+}
+
+/**
+ * Road users the scenario never actually judges anything about.
+ *
+ * "A model rider passes" is a true answer to the wrong question when the exercise no longer tests
+ * what you think it does. Moving a hazard somewhere it plays no part still leaves the inherited
+ * reeks passing, and the panel goes green on a scenario that measures nothing — which is the worst
+ * thing a validator can do, because being trusted is the whole job.
+ *
+ * An actor counts as involved if some rule names it, or if it ever has to react to the rider. The
+ * second half needs a deliberately bad ride to find out: a hazard nobody can provoke is scenery.
+ */
+export function unscoredActors(scenario: Scenario, record: RunRecord): ActorSpec[] {
+  const involved = new Set<string>();
+
+  for (const expected of scenario.expected) {
+    if (expected.kind.type === 'headway') involved.add(expected.kind.actorId);
+  }
+  for (const incident of record.incidents) involved.add(incident.actorId);
+
+  // A road user with cues of its own is deliberate by definition. Strictly it may still be
+  // unmeasured — the rules in a hazard exercise judge the *rider's* speed, not the car's — but
+  // somebody sat down and told this one to stand on its brakes at a particular spot, and calling
+  // that decor would be the check crying wolf at exactly the scenario it exists to help build.
+  for (const actor of scenario.actors) {
+    if (actor.cues?.length) involved.add(actor.id);
+  }
+
+  // Ride it badly on purpose, more than one way. Anything that brakes for a bad rider is part of
+  // the exercise even when a clean ride never disturbs it.
+  //
+  // Two rides, because one is self-defeating: a rider who checks nothing has their lane change
+  // refused by the prerequisite, so they never pull out and never provoke the traffic they were
+  // supposed to provoke. The second looks properly and then goes anyway.
+  const badRides: Array<RidePlan & MergePlan & OvertakePlan> = [
+    { mirrors: false, mirror: false, eyes: false, shoulder: false, shoulderPrep: false, yieldToActor: false },
+    { ignoreTraffic: true, yieldToActor: false },
+  ];
+  for (const plan of badRides) {
+    const bad = referenceRide(scenario, plan);
+    if (bad.error) continue;
+    for (const incident of bad.record.incidents) involved.add(incident.actorId);
+  }
+
+  return scenario.actors.filter((a) => !involved.has(a.id));
 }

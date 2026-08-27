@@ -10,6 +10,7 @@
  * Pure data, like the scenarios themselves. The registry is derived from `scenario.id` rather
  * than written out as a literal, so a key and the scenario it points at cannot drift apart.
  */
+import { autoVanRechts } from './scenario.auto-van-rechts';
 import { inhalenSnelweg } from './scenario.inhalen-snelweg';
 import { invoegenSnelweg } from './scenario.invoegen-snelweg';
 import { rechtsafFietspad } from './scenario.rechtsaf-fietspad';
@@ -18,6 +19,7 @@ import type { Scenario } from './types';
 /** In the order they are offered to the student, easiest first. */
 export const ALL_SCENARIOS: readonly Scenario[] = [
   rechtsafFietspad,
+  autoVanRechts,
   invoegenSnelweg,
   inhalenSnelweg,
 ];

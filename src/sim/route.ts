@@ -8,6 +8,7 @@
 import { motorwayLanes } from './surfaces/motorway';
 import type {
   ArcSegment,
+  JunctionRoad,
   PoseOnRoute,
   RouteSegment,
   Scenario,
@@ -165,9 +166,89 @@ export type ScenarioRoutes =
  * `(sin theta, -cos theta)`: heading north at theta = pi, heading east at theta = pi/2.
  */
 export function buildRoutes(scenario: Scenario): ScenarioRoutes {
-  return scenario.world.kind === 'motorway'
-    ? buildMotorwayRoutes(scenario.world)
-    : buildCrossingRoutes(scenario.world);
+  switch (scenario.world.kind) {
+    case 'motorway':
+      return buildMotorwayRoutes(scenario.world);
+    case 'junction':
+      return buildJunctionRoutes(scenario.world);
+    default:
+      return buildCrossingRoutes(scenario.world);
+  }
+}
+
+/** Lane centres for a plain crossroads, all derived from the two half-widths. */
+export function junctionLanes(road: JunctionRoad) {
+  return {
+    /** Your lane, northbound: the right-hand half of the road you are on. */
+    northbound: road.halfWidth / 2,
+    /** The side road's two lanes: eastbound is its right-hand half as you look east. */
+    eastbound: -road.sideHalfWidth / 2,
+    westbound: road.sideHalfWidth / 2,
+  };
+}
+
+/**
+ * Straight on, right, or left through a plain crossroads.
+ *
+ * The turn-in point is derived from the radius rather than given alongside it. The two have to
+ * agree or the route has a kink in it, and the crossing route next door asserts that relationship
+ * and throws when a scenario gets it wrong — which is the right thing to do about data that has
+ * already been written down, and the wrong thing to demand of an editor where the number changes
+ * under your finger. Here there is only one number, so there is nothing to disagree with.
+ */
+function buildJunctionRoutes(world: Extract<ScenarioWorld, { kind: 'junction' }>): ScenarioRoutes {
+  const { road, startY, runOutM, manoeuvre, turnRadius: r } = world;
+  const lanes = junctionLanes(road);
+  const x = lanes.northbound;
+
+  const spine = (() => {
+    if (manoeuvre === 'straight') {
+      return makeRoute([
+        { kind: 'line', from: { x, y: startY }, to: { x, y: road.sideHalfWidth + runOutM } },
+      ]);
+    }
+    const right = manoeuvre === 'right';
+    // The centre of the turn is abeam the rider, on the side they are turning towards, and the
+    // exit lane fixes how far along the approach that is. Both turns start `r` short of their exit
+    // lane, because both sweep a quarter circle from heading north.
+    const exitY = right ? lanes.eastbound : lanes.westbound;
+    const turnInY = exitY - r;
+    const center: Vec2 = { x: right ? x + r : x - r, y: turnInY };
+    const exitX = right ? road.sideHalfWidth + runOutM : -(road.sideHalfWidth + runOutM);
+    return makeRoute([
+      { kind: 'line', from: { x, y: startY }, to: { x, y: turnInY } },
+      {
+        // Parameterised as C + R(cos, sin). A right-hander has its centre to the east, so the
+        // rider starts at theta = pi and runs down to pi/2; a left-hander has it to the west, so
+        // the rider starts at theta = 0 and runs up to pi/2. Both leave heading along the side
+        // road, and both are a quarter turn — the same arc mirrored, not a longer way round.
+        kind: 'arc',
+        center,
+        radius: r,
+        startAngle: right ? Math.PI : 0,
+        endAngle: Math.PI / 2,
+        cw: right,
+      },
+      { kind: 'line', from: { x: center.x, y: exitY }, to: { x: exitX, y: exitY } },
+    ]);
+  })();
+
+  // The point of no return: where the machine enters the junction box. Every manoeuvre has one,
+  // and unlike the fietspad centreline next door it means the same thing whichever way you go.
+  const conflictS = findSAtY(spine, -road.sideHalfWidth);
+
+  return {
+    kind: 'urbanCrossing',
+    turn: spine,
+    straight: spine,
+    // One route, no branch: the manoeuvre is the assignment, not a choice made with the bars.
+    decisionS: spine.total + 1,
+    conflictS,
+    runOutM,
+    crossEntryS: conflictS,
+    crossExitS: findSAtY(spine, road.sideHalfWidth) || spine.total,
+    crossYSpan: [-road.sideHalfWidth - 1.15, road.sideHalfWidth + 1.15],
+  };
 }
 
 /**
