@@ -77,7 +77,7 @@ scenario 1        full reeks        snorfiets first seen at   8.1s   (right mirr
 
 scenario 2        full reeks        car from the right at      3.4s   (through the windscreen)
                   no mirrors                                  3.4s   (mirrors cannot see it)
-                  no looks at all                             7.8s   (as it arrives)
+                  no looks at all                             7.9s   (as it arrives)
 
 scenario 3        full reeks        truck first seen at        3.8s   (left mirror)
                   no mirror                                   never   (see below)
@@ -85,6 +85,16 @@ scenario 3        full reeks        truck first seen at        3.8s   (left mirr
 
 scenario 4        every column identical: lorries at 0.0s and 4.8s, cars at 3.0s and 6.0s
 ```
+
+**Perception has no occlusion.** `perception.ts` is purely angular — bearing, distance, a frustum —
+so a house standing between the rider and an actor is something the screen shows and the model does
+not know about. Nothing in the suite notices, because every check downstream of perception believes
+it. On scenario 2 that gap *was* the exercise: the terraces hid the car until 7,4 s, it started
+braking at 6,5 s, and the model credited the look at 3,4 s. A trick question that measured as a
+clean ride. The junction's `openCorners` is the answer for now — the sight line as scenario data,
+per corner, so opening the one the rider must look into does not flatten the other three — and
+`zicht.test.ts` traces the actual line and fails if the two drift apart again. Real occlusion in
+`perception.ts` would be the proper fix and is a much bigger change.
 
 Scenario 2's flat mirror column is not a bug: the car comes from the right, through the windscreen,
 so no mirror can reach it and the two columns *should* agree. The column that carries the lesson

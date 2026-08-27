@@ -43,7 +43,14 @@ const HOUSE_DEPTH = 8;
 
 const LINE = { dash: 3, gap: 3, width: 0.12 };
 
-/** A terrace down one side of a road, index-derived so a replay draws the identical street. */
+/**
+ * A terrace down one side of a road, index-derived so a replay draws the identical street.
+ *
+ * The two clearances are the gap at each end, and they differ because a terrace spans two corners:
+ * the east side of the main road is the NE corner going north and the SE corner going south, and
+ * an exercise about traffic from the right needs one of those open and has no reason to flatten
+ * the other.
+ */
 function terrace(
   out: Surface[],
   along: 'y' | 'x',
@@ -51,12 +58,13 @@ function terrace(
   facing: Facing,
   from: number,
   to: number,
-  clear: number,
+  clearNeg: number,
+  clearPos: number,
 ) {
   for (let i = Math.floor(from / HOUSE_PITCH) - 1; i <= Math.ceil(to / HOUSE_PITCH) + 1; i++) {
     const at = i * HOUSE_PITCH;
     // Leave the corners open, or the junction is a hole in a wall and unreadable from a distance.
-    if (at + 7 > -clear && at < clear) continue;
+    if (at + 7 > -clearNeg && at < clearPos) continue;
     const depth = HOUSE_DEPTH + (((i % 3) + 3) % 3);
     if (along === 'y') {
       const x1 = offset > 0 ? offset : offset - depth;
@@ -82,10 +90,18 @@ export function junctionSurfaces(road: JunctionRoad, ext: RoadExtent): Surface[]
     out.push(rect('hedge', CORNER_GAP, inner, ext.maxX, outer, HEDGE_HEIGHT));
   }
 
-  terrace(out, 'y', vergeTo + 1, 'west', ext.minY, ext.maxY, vergeTo + 4);
-  terrace(out, 'y', -vergeTo - 1, 'east', ext.minY, ext.maxY, vergeTo + 4);
-  terrace(out, 'x', vergeTo + 1, 'south', ext.minX, ext.maxX, vergeTo + 4);
-  terrace(out, 'x', -vergeTo - 1, 'north', ext.minX, ext.maxX, vergeTo + 4);
+  // How far back the terraces stand is the sight line, and the sight line is the exercise: a rider
+  // cannot read traffic on the side road through a house. See `JunctionRoad.openCorners`.
+  //
+  // Each terrace runs between two corners, so it takes the clearance of whichever corner is at
+  // each end — negative along its axis first, then positive.
+  const shut = vergeTo + 4;
+  const o = road.openCorners ?? {};
+  const at = (corner: 'ne' | 'nw' | 'se' | 'sw') => o[corner] ?? shut;
+  terrace(out, 'y', vergeTo + 1, 'west', ext.minY, ext.maxY, at('se'), at('ne'));
+  terrace(out, 'y', -vergeTo - 1, 'east', ext.minY, ext.maxY, at('sw'), at('nw'));
+  terrace(out, 'x', vergeTo + 1, 'south', ext.minX, ext.maxX, at('nw'), at('ne'));
+  terrace(out, 'x', -vergeTo - 1, 'north', ext.minX, ext.maxX, at('sw'), at('se'));
 
   // Raised kerbs, interrupted at the corners. From the saddle the raised edge running alongside
   // you stopping dead is the strongest cue that a junction is coming; a flat strip is invisible

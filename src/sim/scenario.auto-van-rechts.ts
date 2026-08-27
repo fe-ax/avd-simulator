@@ -5,13 +5,20 @@
  * same as being given it. Doing this right means backing off while the car is still a threat and
  * then carrying on, rather than either ploughing through on your rights or stopping dead.
  *
- * **This file is the scenario builder's output, unedited apart from this comment.** It is the
- * proof that the builder can produce a shipping scenario without anyone opening an editor: it was
- * built in the browser, validated against the model rider there, exported, and dropped in.
+ * Built in the browser with the scenario builder, validated against the model rider there,
+ * exported, and dropped in — the proof that the loop closes without anyone opening an editor.
  *
- * Re-exported once since, when the exporter learned to write a speed as the km/h it came from and
- * to leave out a blind-spot block nobody enabled. Same scenario, and it now reads like the
- * hand-written ones beside it rather than like output — which was the point of fixing the exporter.
+ * **No longer untouched, and the edits are the interesting part.** As built it was a trick
+ * question: the terraces hid the car until 7,4 s, it began braking at 6,5 s, and perception —
+ * which is purely angular and knows nothing about buildings — credited the rider with seeing it at
+ * 3,4 s. You were marked on reading a hazard that was behind a house until after it had reacted,
+ * and every check in the suite called that a clean ride.
+ *
+ * So the south-east corner is open now, the car starts further back and stands on everything at
+ * 8 m/s² instead of coasting to a halt at 5. `zicht.test.ts` holds the sight line where it is.
+ *
+ * Two of those three edits had to be made here rather than in the builder, which had no form field
+ * for either — see `BUILDER-GAPS.md`.
  */
 
 import type { Scenario } from './types';
@@ -32,6 +39,9 @@ export const autoVanRechts: Scenario = {
       halfWidth: 3,
       sideHalfWidth: 3,
       vergeTo: 11,
+      openCorners: {
+        se: 80,
+      },
     },
     startY: -120,
     runOutM: 55,
@@ -51,7 +61,7 @@ export const autoVanRechts: Scenario = {
       kind: 'auto',
       label: 'Auto van rechts',
       from: {
-        x: 170,
+        x: 175,
         y: 1.5,
       },
       to: {
@@ -62,8 +72,9 @@ export const autoVanRechts: Scenario = {
       length: 4.4,
       cues: [
         {
-          atDist: 126,
+          atDist: 146,
           action: 'stop',
+          decel: 8,
         },
       ],
     },
