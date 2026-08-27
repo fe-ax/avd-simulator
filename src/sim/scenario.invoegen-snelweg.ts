@@ -93,17 +93,20 @@ export const invoegenSnelweg: Scenario = {
       bermWidth: 4,
     },
 
-    // A gentle bend onto north. Deliberately gentle, and deliberately over before the
-    // invoegstrook starts: a lane change is a lateral offset from the spine, and on a curve an
-    // offset machine's real ground speed differs from its progress along the spine by
-    // offset / radius. Ending the arc first makes that term exactly zero.
-    ramp: { radius: 120, sweepDeg: 18, strookStartY: -150 },
+    stretch: {
+      kind: 'oprit',
+      // A gentle bend onto north. Deliberately gentle, and deliberately over before the
+      // invoegstrook starts: a lane change is a lateral offset from the spine, and on a curve an
+      // offset machine's real ground speed differs from its progress along the spine by
+      // offset / radius. Ending the arc first makes that term exactly zero.
+      ramp: { radius: 120, sweepDeg: 18, strookStartY: -150 },
 
-    mergeEndY: 0,
-    // A hundred metres of puntstuk. You are told to be over by the deadline; the road gives you
-    // rather more than that before it actually runs out, which is how a real one is built.
-    taperM: 100,
-    runOutM: 120,
+      mergeEndY: 0,
+      // A hundred metres of puntstuk. You are told to be over by the deadline; the road gives you
+      // rather more than that before it actually runs out, which is how a real one is built.
+      taperM: 100,
+      runOutM: 120,
+    },
   },
 
   speedLimitKmh: 100,

@@ -1,8 +1,9 @@
 # AVD Simulator
 
-Twee oefeningen: **Rechtsaf de Kerkstraat in** (afslaan over een vrijliggend fietspad) en
+Drie oefeningen: **Rechtsaf de Kerkstraat in** (afslaan over een vrijliggend fietspad),
 **Invoegen op de A12** (van de oprit het gat in tussen een auto vóór je en een vrachtwagen achter
-je). Je kiest ze in de briefing, vóór elke rit.
+je) en **Inhalen op de A12** (twee vrachtwagens kort achter elkaar, druk op de linkerrijstrook).
+Je kiest ze in de briefing, vóór elke rit.
 
 Browser-simulator voor het **AVD-deel** (*Verkeersdeelneming*) van het Nederlandse
 motorrijexamen. Je zit op de motor, kijkt met de muis om je heen, en moet de bediening op het

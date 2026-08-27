@@ -37,9 +37,10 @@ describe('de modelrit', () => {
 
   test('het plan volgt de meetkunde: een kortere invoegstrook verzet de gasmomenten', () => {
     const world = invoegenSnelweg.world as Extract<Scenario['world'], { kind: 'motorway' }>;
+    const entry = world.stretch as Extract<typeof world.stretch, { kind: 'oprit' }>;
     const shorter: Scenario = {
       ...invoegenSnelweg,
-      world: { ...world, ramp: { ...world.ramp, strookStartY: -90 } },
+      world: { ...world, stretch: { ...entry, ramp: { ...entry.ramp, strookStartY: -90 } } },
     };
     // A fixed plan would still be waiting to press the throttle at 148 m on a strook that is
     // ninety long, and would blame the scenario for it.

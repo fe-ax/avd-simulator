@@ -20,6 +20,7 @@ import type {
   ControlId,
   ControlPhase,
   HeadPose,
+  LaneChange,
   LookControl,
   PoseOnRoute,
   RouteBranch,
@@ -121,6 +122,9 @@ export interface BikeState {
   laneTargetOffset: number;
   /** 0 to 1 through the current change; 1 means settled. */
   laneU: number;
+  /** Where the change in progress began, so the finished move can be recorded whole. */
+  laneChangeFrom: number;
+  laneChangeStartedAt: number;
   pose: PoseOnRoute;
 }
 
@@ -230,6 +234,7 @@ export class SimEngine {
   samples: BikeSample[] = [];
   actorTracks: Record<string, ActorSample[]> = {};
   incidents: ActorIncident[] = [];
+  laneChanges: LaneChange[] = [];
   manoeuvreCompletedAt: number | null = null;
 
   private accumulator = 0;
@@ -277,6 +282,8 @@ export class SimEngine {
       laneFromOffset: 0,
       laneTargetOffset: 0,
       laneU: 1,
+      laneChangeFrom: 0,
+      laneChangeStartedAt: 0,
       pose: poseAt(this.routes.turn, 0),
     };
   }
@@ -336,6 +343,7 @@ export class SimEngine {
     this.samples = [];
     this.actorTracks = Object.fromEntries(this.scenario.actors.map((a) => [a.id, []]));
     this.incidents = [];
+    this.laneChanges = [];
     this.manoeuvreCompletedAt = null;
     this.paused = false;
     this.accumulator = 0;
@@ -546,7 +554,17 @@ export class SimEngine {
     const before = bike.laneOffset;
     if (bike.laneU < 1) {
       bike.laneU = Math.min(1, bike.laneU + dt / LANE_CHANGE_S);
-      if (bike.laneU >= 1 && this.manoeuvreCompletedAt === null) this.manoeuvreCompletedAt = this.t;
+      if (bike.laneU >= 1) {
+        // Offsets grow leftward, so a higher lane index is further left.
+        this.laneChanges.push({
+          startedAt: round3(bike.laneChangeStartedAt),
+          completedAt: round3(this.t),
+          direction: bike.laneIndex > bike.laneChangeFrom ? 'left' : 'right',
+          fromLane: bike.laneChangeFrom,
+          toLane: bike.laneIndex,
+        });
+        if (this.manoeuvreCompletedAt === null) this.manoeuvreCompletedAt = this.t;
+      }
     }
     bike.laneOffset =
       bike.laneFromOffset +
@@ -709,6 +727,8 @@ export class SimEngine {
     if (bike.s < this.routes.mergeFromS) return;
     const next = bike.laneIndex + dir;
     if (next < 0 || next >= this.routes.laneOffsets.length) return;
+    bike.laneChangeFrom = bike.laneIndex;
+    bike.laneChangeStartedAt = this.t;
     bike.laneIndex = next;
     bike.laneFromOffset = bike.laneOffset;
     bike.laneTargetOffset = this.routes.laneOffsets[next];
@@ -787,6 +807,7 @@ export class SimEngine {
       actorTracks: this.actorTracks,
       events: this.events,
       incidents: this.incidents,
+      laneChanges: this.laneChanges,
       // scoring.ts fills these in; kept on the record so a saved run needs no re-scoring.
       results: [],
       faults: [],

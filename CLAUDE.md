@@ -11,6 +11,8 @@ Two scenarios:
    coming up the inside. Teaches the look sequence and the dode hoek.
 2. *Invoegen op de A12* — a motorway merge from an on-ramp into a gap between a car ahead and a
    truck coming up behind. Teaches speed matching and following distance.
+3. *Inhalen op de A12* — open motorway, two lorries nose to tail at 90, busy left lane. Teaches
+   waiting for a gap, and **not** tucking back in between the lorries.
 
 The UI is Dutch. Code, comments and commit messages are English.
 
@@ -60,7 +62,15 @@ scenario 1        full reeks        snorfiets first seen at   8.1s   (right mirr
 scenario 2        full reeks        truck first seen at        4.7s   (left mirror)
                   no mirror                                   never   (see below)
                   no looks at all                             18.2s   (as it goes past)
+
+scenario 3        every column identical: lorries at 0.0s and 4.8s, cars at 3.0s and 6.0s
 ```
+
+Scenario 3's flat table is not a bug either, and it is a different flatness from scenario 2's
+`never`. Everything there is ahead of you or comes past you, so the forward view finds all of it at
+the same moment whatever you do with your head. What the mirrors change is not *when you see* the
+traffic but *whether you know it is safe to move* — which is why that scenario's proof is the
+incident tests (`ignoreTraffic` puts two cars on the brakes) rather than this table.
 
 If those move, something about the view changed. That is either the point of your change or a bug;
 know which.
@@ -212,6 +222,16 @@ commit.
 - **The mirror glass tilt is derived from `EYE_HEIGHT`**, not a constant. See below.
 - **A clean ride scores Geslaagd 0/0/0**, in both scenarios. Anything else means the windows or the
   targets moved, not the rules.
+- **Following distance is a same-lane thing.** `headwaySeconds` skips any sample where the other
+  vehicle is more than half a lane off your line. Overtaking means spending seconds level with a
+  lorry, where the distance measured along the heading is nearly nothing — without the gate, the
+  rule marks every successful overtake as tailgating, and the better the overtake the closer the
+  "gap" it reports. A headway with nothing to measure returns **no row at all**: it is not
+  applicable, and the thing that actually went wrong has a row of its own.
+- **Not every exercise has a conflict point.** The first two happen somewhere and their windows are
+  metres before that place. An overtake happens wherever the rider decides, so scenario 3's reeks
+  hangs off the manoeuvre instead — `beforeLaneChange` asks whether a look happened in the seconds
+  before the machine moved. Anchor that to a milepost and you score the rider's choice of milepost.
 - **Following distance is a state, not an event.** The headway rule scores the lowest gap actually
   *held* for half a second, never the gap at one instant. Sampling the moment of the merge is
   gameable in the obvious direction: drop in three seconds clear, bank the credit, then close right
