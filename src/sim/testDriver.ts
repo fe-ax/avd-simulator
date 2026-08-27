@@ -581,6 +581,19 @@ export interface OvertakePlan {
   stayLeft?: boolean;
   /** Ignore the left lane entirely and pull out regardless. */
   ignoreTraffic?: boolean;
+  /**
+   * Do the checks as early as possible rather than at the moment of moving.
+   *
+   * Looked, then waited, then went — a real fault, and the one `beforeLaneChange` is for: its
+   * `missed` outcome on the A12 is literally called LOOK_LATE. Every rider before this one did its
+   * checks and steered in the same frame, so the gap was always zero and a six-second window could
+   * not be failed by anybody.
+   *
+   * Modelled as looking early rather than as moving late, because moving late spends road: delay
+   * the return by seven seconds and the stretch ends with the rider still in rijstrook 2, which
+   * fails a different rule and tests neither.
+   */
+  lookEarly?: boolean;
   /** Sit on the bumper of whoever is ahead, so the headway rule has somebody to catch. */
   tailgate?: boolean;
 }
@@ -597,6 +610,7 @@ const OVERTAKE_DEFAULTS: Required<OvertakePlan> = {
   stayLeft: false,
   ignoreTraffic: false,
   tailgate: false,
+  lookEarly: false,
 };
 
 /**
@@ -717,6 +731,13 @@ export function driveOvertake(scenario: Scenario, plan: OvertakePlan = {}): RunR
             if (Math.abs(r.across - LEFT_LANE_OFFSET_M) > SAME_LANE_M) return true;
             return Math.abs(r.along) / speed > p.needsGapS;
           });
+        if (p.lookEarly) {
+          // Before there is anywhere to go: the checks happen, and then the rider sits waiting for
+          // a gap with the look going stale behind them.
+          if (p.mirror) once('mirrorL', () => dispatch('MIRROR_LEFT'));
+          if (p.shoulder) once('shoulderL', () => dispatch('SHOULDER_LEFT'));
+          if (p.indicator) once('indicatorL', () => dispatch('INDICATOR_LEFT'));
+        }
         if (!clear) break;
         if (p.mirror) once('mirrorL', () => dispatch('MIRROR_LEFT'));
         if (p.shoulder) once('shoulderL', () => dispatch('SHOULDER_LEFT'));
@@ -743,7 +764,18 @@ export function driveOvertake(scenario: Scenario, plan: OvertakePlan = {}): RunR
           ? trucks.reduce((a, b) => (relativeTo(engine, a).along < relativeTo(engine, b).along ? a : b))
           : trucks.reduce((a, b) => (relativeTo(engine, a).along > relativeTo(engine, b).along ? a : b));
         const behindMe = -relativeTo(engine, target).along;
-        const room = (target.spec.length ?? 2) / 2 + 1.15 + target.speed * CLEAR_BY_S;
+        // The weaver takes what physically fits, not what is safe — which is the whole fault. With
+        // the model rider's 2.6 s it needs sixty-five metres of clearance from the lorry it just
+        // passed, and the gap between the two is forty-three: it could never land in it, so it
+        // cleared both and cut in front of the leader instead. That is a different mistake, and it
+        // left the rule about the gap with nobody to catch.
+        const clearBy = p.cutInEarly ? 0.6 : CLEAR_BY_S;
+        const room = (target.spec.length ?? 2) / 2 + 1.15 + target.speed * clearBy;
+        if (p.lookEarly) {
+          if (p.mirror) once('mirrorR', () => dispatch('MIRROR_RIGHT'));
+          if (p.shoulder) once('shoulderR', () => dispatch('SHOULDER_RIGHT'));
+          if (p.indicator) once('indicatorR', () => dispatch('INDICATOR_RIGHT'));
+        }
         if (behindMe < room) break;
         if (p.mirror) once('mirrorR', () => dispatch('MIRROR_RIGHT'));
         if (p.shoulder) once('shoulderR', () => dispatch('SHOULDER_RIGHT'));

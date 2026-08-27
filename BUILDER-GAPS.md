@@ -4,36 +4,16 @@ A running list, kept from actually trying to build things with it rather than fr
 That is the whole method: every item here was found by sitting down to build an exercise and being
 unable to, and not one of them was found by reading a file.
 
-Two things are open. Everything that was ever on this list is closed — the history is in `git log`
-and in pull requests #6 to #10, which is a better home for it than a document whose job is to say
-what is still wrong.
+Two things are open. Everything else that was ever on this list is closed — the history is in
+`git log` and in pull requests #6 to #12, which is a better home for it than a document whose job is
+to say what is still wrong.
+
+Every rule in every shipped scenario is now missed by at least one deliberately sloppy rider, and
+`discrimination.test.ts` asserts it with no exceptions list.
 
 ---
 
 ## Open
-
-### The overtake's three soft rules
-
-`inhalen-snelweg-v1` has three rules that no deliberately sloppy rider misses:
-`schouderblik-links`, `schouderblik-rechts` and `afstand-vrachtwagen-1`. They are pinned in
-`discrimination.test.ts` so the list cannot grow in silence.
-
-**The two schouderblik rules cannot be missed by omission.** `controlPrerequisites` refuses the
-richtingaanwijzer without a schouderblik, so a rider who skips it never changes lane at all, and
-every rule about how they changed lane produces no row rather than a miss. A rider who skips only
-the mirror does look over their shoulder, and passes. So those rules are measured and never failed.
-They are belt-and-braces over the prerequisite, which is a defensible thing to be — but nothing here
-can confirm they do any work of their own.
-
-**`afstand-vrachtwagen-1` is anchored to the wrong lane change.** `scoreHeadway` measures from
-`manoeuvreCompletedAt`, which is the *first* lane change — by which point the rider is already left
-of that lorry. The ride the rule was written to catch is caught anyway, and hard: `cutInEarly`
-scores gezakt on an incident plus `afstand-vrachtwagen-2`, because tucking in between two lorries
-puts you close in front of the one *behind*, not close behind the one ahead.
-
-Measuring from the *last* lane change instead is the real fix. It changes scoring for the merge
-scenario too, so it is not a change to make in passing, and it wants a before-and-after on both
-motorways.
 
 ### A speedBand's middle rungs cannot be edited
 
@@ -42,7 +22,16 @@ step so the two can never cross. The Dutch on each rung, and any third rung, sti
 editor. Not blocking — a two-band speed rule is a usable speed rule — but it is the one rule kind
 whose data is richer than its form.
 
----
+### The approach headway is not measured on the motorway
+
+`scoreHeadway` only measures once the rider has changed lane, because before that "the gap is not a
+following distance, it is just two vehicles on different bits of road" — true on the oprit, where
+the traffic is on a different carriageway. On the open motorway it is false: sitting on the bumper
+of the lorry you are waiting to pass is a real fault, the exam looks for it, and there is a
+`tailgate` rider ready to catch it. Nothing measures it.
+
+Making the gate scenario-controlled rather than universal would fix it. That is a scoring change
+affecting both motorways and wants its own before-and-after.
 
 ## What this list has taught
 
@@ -71,3 +60,11 @@ every shipped motorway has traffic far enough up the road to stretch the frame p
 showed only on the empty starter — the first thing a new author sees and the last thing anybody
 tests. Same shape as the reveal table in `CLAUDE.md` having gone stale for exactly one scenario: the
 interesting case is the one that is not like the others.
+
+**A rule that cannot be failed is more often a missing rider than a bad rule.** Three rules on the
+A12 sat on this list for two rounds under a confident explanation of why they were unfixable — the
+prerequisite made the mistake impossible, the anchor was wrong, they were belt-and-braces. All three
+were wrong. The schouderblik rules are about looking *too early*, which nothing did; the gap rule
+needed a weaver that actually fits between the lorries, and `cutInEarly` demanded sixty-five metres
+of clearance to enter a forty-three metre gap, so it cleared both and cut in front instead. Check
+that the mistake is really being made before concluding it cannot be.

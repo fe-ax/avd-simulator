@@ -65,32 +65,14 @@ describe('welke regels vangen iets', () => {
   });
 
   /**
-   * Rules no sloppy rider misses, and why each one is like that.
+   * Every rule in every shipped scenario is missed by at least one sloppy rider.
    *
-   * Every entry is either a finding about the scenario or a understood property of the exercise —
-   * never a shrug. Three of the four scenarios have none. Shrinking this list is the work; growing
-   * it in silence is what the test exists to prevent.
+   * This began as an allow-list of five rules nothing could fail, each with a comment saying why.
+   * It is empty, and the assertion is now the plain one: if a rule here stops discriminating,
+   * either it went soft or the rider that used to catch it stopped being able to make the mistake.
+   * Both are worth stopping for, and neither should be absorbed by adding a name to a list.
    */
-  const KNOWN_OPEN: Record<string, string[]> = {
-    'rechtsaf-fietspad-v1': [],
-    'auto-van-rechts-v1': [],
-    'invoegen-snelweg-v1': [],
-    // The two schouderblik rules are belt-and-braces over `controlPrerequisites`, and cannot be
-    // missed by omission: skip the schouderblik and the richtingaanwijzer is refused, so the rider
-    // never changes lane and the rule produces no row at all. The rider who skips only the mirror
-    // does change lane, does look over their shoulder, and passes. Both are true at once, so the
-    // rules are measured and never failed. Defensible — the omission is punished by the
-    // prerequisite — but this check cannot confirm they do any work of their own.
-    //
-    // `afstand-vrachtwagen-1` is measured from the *first* lane change, by which point the rider
-    // is already left of that lorry. The ride it was written to catch — tucking in between the two
-    // — is caught, and hard: `cutInEarly` scores gezakt on an incident plus
-    // `afstand-vrachtwagen-2`, because cutting in puts you close in front of the lorry *behind*,
-    // not close behind the one ahead. Measuring from the last lane change instead would fix the
-    // anchor, and would change scoring for the merge scenario too, so it is not a change to make
-    // in passing.
-    'inhalen-snelweg-v1': ['schouderblik-links', 'schouderblik-rechts', 'afstand-vrachtwagen-1'],
-  };
+  const KNOWN_OPEN: Record<string, string[]> = {};
 
   it.each([
     ['rechtsaf-fietspad-v1', rechtsafFietspad],
