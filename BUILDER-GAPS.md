@@ -21,8 +21,9 @@ Every rule in every shipped scenario is missed by at least one deliberately slop
 
 ## What this list has taught
 
-Four things worth keeping. What the rest of the closed items taught is in `CLAUDE.md`, next to the
-code it applies to.
+Six things worth keeping. What the rest of the closed items taught is in `CLAUDE.md`, next to the
+code it applies to — these are the ones about *finding* the problem rather than about the code that
+had it.
 
 **A gap is invisible while the author and the user are the same person.** For its first three rounds
 every item here was about whether an exercise was any *good*. Not one noticed that an exercise could
