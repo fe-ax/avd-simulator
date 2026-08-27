@@ -180,8 +180,34 @@ export function buildRoutes(scenario: Scenario): ScenarioRoutes {
  * remember to apply.
  */
 function buildMotorwayRoutes(world: Extract<ScenarioWorld, { kind: 'motorway' }>): ScenarioRoutes {
-  const { road, ramp, mergeEndY, runOutM } = world;
-  const lanes = motorwayLanes(road);
+  const lanes = motorwayLanes(world.road);
+  const stretch = world.stretch;
+
+  if (stretch.kind === 'doorgaand') {
+    // Open road. The spine runs down rijstrook 1 — where the rider starts — and the lane offsets
+    // count leftward from it. No conflict point: nothing here happens at a fixed place, so the
+    // anchor is simply the end, and `d` reads as metres of road left.
+    const spine = makeRoute([
+      {
+        kind: 'line',
+        from: { x: lanes.centres[0], y: stretch.startY },
+        to: { x: lanes.centres[0], y: stretch.endY },
+      },
+    ]);
+    return {
+      kind: 'motorway',
+      turn: spine,
+      straight: spine,
+      decisionS: spine.total + 1,
+      conflictS: spine.total,
+      runOutM: 0,
+      laneOffsets: lanes.centres.map((c) => lanes.centres[0] - c),
+      // Change lane whenever you like: it is an open road, not a slip road with a mouth.
+      mergeFromS: 0,
+    };
+  }
+
+  const { ramp, mergeEndY, runOutM } = stretch;
   const sweep = (ramp.sweepDeg * Math.PI) / 180;
 
   // The arc ends heading north at the mouth of the invoegstrook. Its centre therefore lies

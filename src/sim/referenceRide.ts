@@ -15,7 +15,14 @@
  * few milliseconds, which is well inside the budget for re-running on every edit.
  */
 import { buildRoutes } from './route';
-import { driveMerge, driveRun, type MergePlan, type RidePlan } from './testDriver';
+import {
+  driveMerge,
+  driveOvertake,
+  driveRun,
+  type MergePlan,
+  type OvertakePlan,
+  type RidePlan,
+} from './testDriver';
 import type { RunRecord, Scenario } from './types';
 
 export interface ReferenceRide {
@@ -34,9 +41,11 @@ export interface ReferenceRide {
  */
 function mergePlanFor(scenario: Scenario): MergePlan {
   const routes = buildRoutes(scenario);
-  const strook = scenario.world.kind === 'motorway'
-    ? scenario.world.mergeEndY - scenario.world.ramp.strookStartY
-    : 100;
+  const entry =
+    scenario.world.kind === 'motorway' && scenario.world.stretch.kind === 'oprit'
+      ? scenario.world.stretch
+      : null;
+  const strook = entry ? entry.mergeEndY - entry.ramp.strookStartY : 100;
   const needed = Math.max(
     0,
     Math.ceil((scenario.speedLimitKmh - scenario.startSpeedKmh) / scenario.throttleStepKmh),
@@ -52,12 +61,19 @@ function mergePlanFor(scenario: Scenario): MergePlan {
 }
 
 /** Ride it the way it is meant to be ridden. */
-export function referenceRide(scenario: Scenario, override: RidePlan & MergePlan = {}): ReferenceRide {
+export function referenceRide(
+  scenario: Scenario,
+  override: RidePlan & MergePlan & OvertakePlan = {},
+): ReferenceRide {
   try {
+    // Which model rider fits is a question about the road, not about the scenario's name: an open
+    // stretch has nothing to merge onto, so the only manoeuvre available is an overtake.
     const record =
-      scenario.world.kind === 'motorway'
-        ? driveMerge(scenario, { ...mergePlanFor(scenario), ...override })
-        : driveRun(scenario, override);
+      scenario.world.kind !== 'motorway'
+        ? driveRun(scenario, override)
+        : scenario.world.stretch.kind === 'doorgaand'
+          ? driveOvertake(scenario, { ...override, cruiseKmh: override.cruiseKmh ?? scenario.startSpeedKmh })
+          : driveMerge(scenario, { ...mergePlanFor(scenario), ...override });
     return { record, error: null };
   } catch (e) {
     return { record: null as unknown as RunRecord, error: e instanceof Error ? e.message : String(e) };
@@ -83,7 +99,7 @@ export interface Reveal {
  * writing a briefing that claims otherwise.
  */
 export function revealTimeline(scenario: Scenario): Reveal[] {
-  const plans: Array<[keyof Omit<Reveal, 'actorId' | 'label'>, RidePlan & MergePlan]> = [
+  const plans: Array<[keyof Omit<Reveal, 'actorId' | 'label'>, RidePlan & MergePlan & OvertakePlan]> = [
     ['full', {}],
     ['noMirrors', { mirrors: false, mirror: false }],
     ['noLooks', { mirrors: false, mirror: false, eyes: false, shoulder: false, shoulderPrep: false }],

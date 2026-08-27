@@ -219,7 +219,8 @@ function hectometerPosts(out: Surface[], ext: RoadExtent, x: number) {
  * by construction — at the end of the sweep the two radii land on the strook's own two edges.
  */
 function onRamp(out: Surface[], world: MotorwayWorld, lanes: ReturnType<typeof motorwayLanes>) {
-  const { radius, sweepDeg, strookStartY } = world.ramp;
+  if (world.stretch.kind !== 'oprit') return;
+  const { radius, sweepDeg, strookStartY } = world.stretch.ramp;
   const half = world.road.mergeLaneWidth / 2;
   const cx = lanes.mergeCentre + radius;
   const cy = strookStartY;
@@ -262,18 +263,21 @@ export function motorwaySurfaces(world: MotorwayWorld, ext: RoadExtent): Surface
   treeline(out, ext, MIDDENBERM_TREES.from, MIDDENBERM_TREES.to, 0);
   guardrail(out, ext, lanes.leftEdgeX);
 
-  const taperEnd = world.mergeEndY + world.taperM;
+  const entry = world.stretch.kind === 'oprit' ? world.stretch : null;
+  const mergeEndY = entry ? entry.mergeEndY : ext.minY;
+  const taperEnd = entry ? mergeEndY + entry.taperM : ext.minY;
 
   // The through carriageway runs the whole extent; the invoegstrook does not, which is the entire
   // point of it. Full width to the deadline, then a puntstuk narrowing away to nothing.
   out.push(rect('asphalt', lanes.leftEdgeX, ext.minY, lanes.rightEdgeX, ext.maxY));
-  out.push(rect('asphalt', lanes.rightEdgeX - SEAM, ext.minY, lanes.mergeTo, world.mergeEndY));
+  if (entry) {
+  out.push(rect('asphalt', lanes.rightEdgeX - SEAM, ext.minY, lanes.mergeTo, mergeEndY));
   out.push({
     kind: 'asphalt',
     height: 0,
     points: [
-      { x: lanes.rightEdgeX - SEAM, y: world.mergeEndY },
-      { x: lanes.mergeTo, y: world.mergeEndY },
+      { x: lanes.rightEdgeX - SEAM, y: mergeEndY },
+      { x: lanes.mergeTo, y: mergeEndY },
       { x: lanes.rightEdgeX - SEAM, y: taperEnd },
     ],
   });
@@ -284,18 +288,24 @@ export function motorwaySurfaces(world: MotorwayWorld, ext: RoadExtent): Surface
 
   // The right one follows the road it edges: out at the strook, in along the puntstuk, and then
   // hard against the carriageway once there is no strook left.
-  out.push(rect('paint', lanes.mergeTo - LINE_WIDTH / 2, ext.minY, lanes.mergeTo + LINE_WIDTH / 2, world.mergeEndY));
+  out.push(rect('paint', lanes.mergeTo - LINE_WIDTH / 2, ext.minY, lanes.mergeTo + LINE_WIDTH / 2, mergeEndY));
   out.push({
     kind: 'paint',
     height: 0,
     points: [
-      { x: lanes.mergeTo - LINE_WIDTH / 2, y: world.mergeEndY },
-      { x: lanes.mergeTo + LINE_WIDTH / 2, y: world.mergeEndY },
+      { x: lanes.mergeTo - LINE_WIDTH / 2, y: mergeEndY },
+      { x: lanes.mergeTo + LINE_WIDTH / 2, y: mergeEndY },
       { x: lanes.rightEdgeX + LINE_WIDTH / 2, y: taperEnd },
       { x: lanes.rightEdgeX - LINE_WIDTH / 2, y: taperEnd },
     ],
   });
   out.push(rect('paint', lanes.rightEdgeX - LINE_WIDTH / 2, taperEnd, lanes.rightEdgeX + LINE_WIDTH / 2, ext.maxY));
+  } else {
+    // Open road: the right-hand kantstreep is simply the edge of the carriageway, all the way.
+    out.push(
+      rect('paint', lanes.rightEdgeX - LINE_WIDTH / 2, ext.minY, lanes.rightEdgeX + LINE_WIDTH / 2, ext.maxY),
+    );
+  }
 
   for (const x of lanes.laneBoundaries) {
     dashedAlongY(out, x, ext, { dash: LANE_DASH.dash, gap: LANE_DASH.gap, width: LINE_WIDTH });
@@ -304,23 +314,27 @@ export function motorwaySurfaces(world: MotorwayWorld, ext: RoadExtent): Surface
   // The blocks fill the band whole, so their width is the band's rather than a number of their
   // own. A narrower row would leave a strip of bare asphalt on one side of the invoegstrook that
   // belongs to neither lane and means nothing.
-  dashedAlongY(out, (lanes.blockFrom + lanes.blockTo) / 2, { ...ext, maxY: world.mergeEndY }, {
-    dash: BLOCK.length,
-    gap: BLOCK.gap,
-    width: lanes.blockTo - lanes.blockFrom,
-  });
+  // Blokmarkering only exists to mark a lane that ends, so an open stretch has none.
+  if (entry) {
+    dashedAlongY(out, (lanes.blockFrom + lanes.blockTo) / 2, { ...ext, maxY: mergeEndY }, {
+      dash: BLOCK.length,
+      gap: BLOCK.gap,
+      width: lanes.blockTo - lanes.blockFrom,
+    });
+  }
 
   onRamp(out, world, lanes);
 
-  hectometerPosts(out, ext, lanes.mergeTo + HM_POST.offset);
+  const roadEdgeX = entry ? lanes.mergeTo : lanes.rightEdgeX;
+  hectometerPosts(out, ext, roadEdgeX + HM_POST.offset);
   treeline(
     out,
     ext,
-    lanes.bermTo + BERM_TREES.clearance,
-    lanes.bermTo + BERM_TREES.clearance + BERM_TREES.depth,
+    roadEdgeX + road.bermWidth + BERM_TREES.clearance,
+    roadEdgeX + road.bermWidth + BERM_TREES.clearance + BERM_TREES.depth,
     1,
     // The oprit swings out through this band; a wood standing in it would be a wood on the road.
-    [ext.minY, world.ramp.strookStartY + 4],
+    entry ? [ext.minY, entry.ramp.strookStartY + 4] : undefined,
   );
 
   return out;

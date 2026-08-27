@@ -23,14 +23,18 @@ const road: MotorwayRoad = {
  */
 const ext: RoadExtent = { minX: -60, maxX: 60, minY: -200, maxY: 900 };
 
-const world = {
-  kind: 'motorway',
-  road,
+const stretch = {
+  kind: 'oprit',
   ramp: { radius: 120, sweepDeg: 18, strookStartY: -150 },
   mergeEndY: 0,
   taperM: 100,
   runOutM: 120,
-} satisfies Extract<ScenarioWorld, { kind: 'motorway' }>;
+} as const;
+
+const world = { kind: 'motorway', road, stretch } satisfies Extract<
+  ScenarioWorld,
+  { kind: 'motorway' }
+>;
 
 const lanes = motorwayLanes(road);
 const everything = motorwaySurfaces(world, ext);
@@ -91,11 +95,11 @@ describe('de belijning', () => {
     const beforeTaper = paintAt(lanes.mergeTo);
     expect(beforeTaper).toHaveLength(1);
     expect(beforeTaper[0].y1).toBeCloseTo(ext.minY, 6);
-    expect(beforeTaper[0].y2).toBeCloseTo(world.mergeEndY, 6);
+    expect(beforeTaper[0].y2).toBeCloseTo(stretch.mergeEndY, 6);
 
-    const afterTaper = paintAt(lanes.rightEdgeX).filter((b) => b.y1 >= world.mergeEndY);
+    const afterTaper = paintAt(lanes.rightEdgeX).filter((b) => b.y1 >= stretch.mergeEndY);
     expect(afterTaper.length).toBeGreaterThan(0);
-    expect(Math.min(...afterTaper.map((b) => b.y1))).toBeCloseTo(world.mergeEndY + world.taperM, 6);
+    expect(Math.min(...afterTaper.map((b) => b.y1))).toBeCloseTo(stretch.mergeEndY + stretch.taperM, 6);
   });
 
   test('de invoegstrook houdt een keer op', () => {
@@ -103,7 +107,7 @@ describe('de belijning', () => {
       (s) => s.kind === 'asphalt' && s.points.some((p) => p.x > lanes.rightEdgeX + 0.5),
     );
     const end = Math.max(...strook.flatMap((s) => s.points.map((p) => p.y)));
-    expect(end).toBeCloseTo(world.mergeEndY + world.taperM, 6);
+    expect(end).toBeCloseTo(stretch.mergeEndY + stretch.taperM, 6);
     // And it narrows to nothing rather than stopping square, which would be a wall.
     const taper = strook.find((s) => s.points.length === 3);
     expect(taper).toBeDefined();
@@ -185,7 +189,7 @@ describe('de oprit', () => {
   // Non-rectangles south of where the strook begins: the puntstuk is a triangle too, but it
   // lives at the far end of the road.
   const ramp = everything.filter(
-    (s) => !isRect(s) && s.points.every((p) => p.y < world.ramp.strookStartY),
+    (s) => !isRect(s) && s.points.every((p) => p.y < stretch.ramp.strookStartY),
   );
 
   test('bestaat', () => {

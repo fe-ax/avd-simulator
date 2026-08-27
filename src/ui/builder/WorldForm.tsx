@@ -7,7 +7,7 @@
  * the other two rather than offered as a field. The kink is unrepresentable instead of reported,
  * which is the same move that took the mirror tilt out of a hand-picked constant.
  */
-import type { ActorSpec, Scenario, ScenarioWorld } from '../../sim/types';
+import type { ActorSpec, MotorwayStretch, Scenario, ScenarioWorld } from '../../sim/types';
 
 const KMH = 1 / 3.6;
 
@@ -211,53 +211,10 @@ export function WorldForm({ draft, onChange, onPatchActor }: Props) {
             onChange={(v) => setWorld({ ...world, road: { ...world.road, bermWidth: v } })}
           />
 
-          <h4 className="builder-subhead">Oprit</h4>
-          <Num
-            label="Boogstraal"
-            unit="m"
-            step={5}
-            value={world.ramp.radius}
-            onChange={(v) => setWorld({ ...world, ramp: { ...world.ramp, radius: v } })}
+          <StretchFields
+            stretch={world.stretch}
+            onChange={(stretch) => setWorld({ ...world, stretch })}
           />
-          <Num
-            label="Boog"
-            unit="°"
-            value={world.ramp.sweepDeg}
-            onChange={(v) => setWorld({ ...world, ramp: { ...world.ramp, sweepDeg: v } })}
-          />
-          <Num
-            label="Strook begint"
-            unit="m"
-            step={5}
-            value={world.ramp.strookStartY}
-            onChange={(v) => setWorld({ ...world, ramp: { ...world.ramp, strookStartY: v } })}
-          />
-          <Num
-            label="Strook eindigt"
-            unit="m"
-            step={5}
-            value={world.mergeEndY}
-            onChange={(v) => setWorld({ ...world, mergeEndY: v })}
-          />
-          <Num
-            label="Puntstuk"
-            unit="m"
-            step={10}
-            value={world.taperM}
-            onChange={(v) => setWorld({ ...world, taperM: Math.max(0, v) })}
-          />
-          <Num
-            label="Uitloop"
-            unit="m"
-            step={10}
-            value={world.runOutM}
-            onChange={(v) => setWorld({ ...world, runOutM: Math.max(0, v) })}
-          />
-          <p className="builder-note">
-            De strook houdt op bij "eindigt" en versmalt daarna over het puntstuk tot niets. Het
-            venster waarop beoordeeld wordt eindigt bij "eindigt"; het asfalt geeft je meer, zodat
-            het een deadline is en geen muur.
-          </p>
         </section>
       )}
 
@@ -287,6 +244,94 @@ export function WorldForm({ draft, onChange, onPatchActor }: Props) {
           </div>
         ))}
       </section>
+    </>
+  );
+}
+
+
+/** The oprit's numbers, or the open road's. Which set you get is the stretch's own tag. */
+function StretchFields({
+  stretch,
+  onChange,
+}: {
+  stretch: MotorwayStretch;
+  onChange: (next: MotorwayStretch) => void;
+}) {
+  if (stretch.kind === 'doorgaand') {
+    return (
+      <>
+        <h4 className="builder-subhead">Doorgaande weg</h4>
+        <Num
+          label="Start"
+          unit="m"
+          step={10}
+          value={stretch.startY}
+          onChange={(v) => onChange({ ...stretch, startY: v })}
+        />
+        <Num
+          label="Einde"
+          unit="m"
+          step={10}
+          value={stretch.endY}
+          onChange={(v) => onChange({ ...stretch, endY: v })}
+        />
+        <p className="builder-note">
+          Open weg: geen oprit, geen invoegstrook. Hier gebeurt niets op een vaste plek, dus wat
+          beoordeeld wordt hangt aan de manoeuvre die de rijder zelf kiest.
+        </p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <h4 className="builder-subhead">Oprit</h4>
+      <Num
+        label="Boogstraal"
+        unit="m"
+        step={5}
+        value={stretch.ramp.radius}
+        onChange={(v) => onChange({ ...stretch, ramp: { ...stretch.ramp, radius: v } })}
+      />
+      <Num
+        label="Boog"
+        unit="°"
+        value={stretch.ramp.sweepDeg}
+        onChange={(v) => onChange({ ...stretch, ramp: { ...stretch.ramp, sweepDeg: v } })}
+      />
+      <Num
+        label="Strook begint"
+        unit="m"
+        step={5}
+        value={stretch.ramp.strookStartY}
+        onChange={(v) => onChange({ ...stretch, ramp: { ...stretch.ramp, strookStartY: v } })}
+      />
+      <Num
+        label="Strook eindigt"
+        unit="m"
+        step={5}
+        value={stretch.mergeEndY}
+        onChange={(v) => onChange({ ...stretch, mergeEndY: v })}
+      />
+      <Num
+        label="Puntstuk"
+        unit="m"
+        step={10}
+        value={stretch.taperM}
+        onChange={(v) => onChange({ ...stretch, taperM: Math.max(0, v) })}
+      />
+      <Num
+        label="Uitloop"
+        unit="m"
+        step={10}
+        value={stretch.runOutM}
+        onChange={(v) => onChange({ ...stretch, runOutM: Math.max(0, v) })}
+      />
+      <p className="builder-note">
+        De strook houdt op bij "eindigt" en versmalt daarna over het puntstuk tot niets. Het venster
+        waarop beoordeeld wordt eindigt bij "eindigt"; het asfalt geeft je meer, zodat het een
+        deadline is en geen muur.
+      </p>
     </>
   );
 }

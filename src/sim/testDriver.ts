@@ -418,3 +418,224 @@ export function driveMerge(scenario: Scenario, plan: MergePlan = {}): RunRecord 
   const scored = scoreRun(record, scenario);
   return { ...(record as RunRecord), ...scored };
 }
+
+// ---------------------------------------------------------------------------
+// Overtaking
+// ---------------------------------------------------------------------------
+
+/**
+ * How an overtake is ridden, headless.
+ *
+ * Unlike the other two this rider has to *decide*: it watches the left lane and goes when there is
+ * room, rather than acting at a fixed distance. That is the whole exercise, so a driver that acted
+ * on a stopwatch would be measuring the stopwatch.
+ */
+export interface OvertakePlan {
+  /** Cruise speed in km/h. */
+  cruiseKmh?: number;
+  /** Speed used while actually alongside, because an overtake is supposed to be brisk. */
+  passingKmh?: number;
+  mirror?: boolean;
+  shoulder?: boolean;
+  indicator?: boolean;
+  /** Seconds of clear road needed behind and ahead in the left lane before pulling out. */
+  needsGapS?: number;
+  /** Go out, but come back as soon as the first truck is passed — the weave. */
+  cutInEarly?: boolean;
+  /** Never leave rijstrook 1. */
+  neverOvertake?: boolean;
+  /** Overtake, and then stay in the left lane for good. */
+  stayLeft?: boolean;
+  /** Ignore the left lane entirely and pull out regardless. */
+  ignoreTraffic?: boolean;
+}
+
+const OVERTAKE_DEFAULTS: Required<OvertakePlan> = {
+  cruiseKmh: 105,
+  passingKmh: 120,
+  mirror: true,
+  shoulder: true,
+  indicator: true,
+  needsGapS: 2.2,
+  cutInEarly: false,
+  neverOvertake: false,
+  stayLeft: false,
+  ignoreTraffic: false,
+};
+
+/**
+ * Where the rider is in the overtake.
+ *
+ * Held on an object rather than in a plain local. The stage advances from inside callbacks, and a
+ * local would be narrowed by the compiler as if those assignments never happened — leaving it
+ * convinced half the switch is unreachable. A property is re-widened by any call, which is exactly
+ * the honest answer here: anything might have moved it.
+ */
+type OvertakeStage = 'approach' | 'goingOut' | 'passing' | 'comingBack' | 'settled';
+
+/** How far left of the rider's own line the next lane sits. */
+const LEFT_LANE_OFFSET_M = 3.5;
+
+/**
+ * Seconds of daylight the rider wants behind a lorry before tucking back in front of it.
+ *
+ * Time, not metres: what matters to the lorry is how long it has, and twenty-five metres in front
+ * of something doing ninety is one second — which the following-distance rule quite rightly calls
+ * a fault. The model rider was committing the very mistake the scenario teaches.
+ */
+const CLEAR_BY_S = 2.6;
+
+/** Metres ahead (positive) or behind (negative) along the rider's heading, and how far off the line. */
+function relativeTo(engine: SimEngine, actor: { x: number; y: number }) {
+  const bike = engine.world(false).bike.pose;
+  const cos = Math.cos(bike.heading);
+  const sin = Math.sin(bike.heading);
+  const dx = actor.x - bike.x;
+  const dy = actor.y - bike.y;
+  return { along: dx * cos + dy * sin, across: -dx * sin + dy * cos };
+}
+
+export function driveOvertake(scenario: Scenario, plan: OvertakePlan = {}): RunRecord {
+  const p = { ...OVERTAKE_DEFAULTS, ...plan };
+  const engine = new SimEngine(scenario);
+  let record: RunRecord | null = null;
+  engine.arm((r) => {
+    record = r;
+  }, '2026-01-01T12:00:00.000Z');
+
+  const done = new Set<string>();
+  let headHold = 0;
+  let outAt = -99;
+
+  const once = (key: string, fn: () => void) => {
+    if (done.has(key)) return;
+    done.add(key);
+    fn();
+  };
+  const dispatch = (control: Parameters<SimEngine['dispatch']>[0], value?: number) => {
+    if (isLookControl(control)) {
+      const aim = LOOK_DIRECTIONS[control];
+      engine.headPose.yaw = (aim.yaw * Math.PI) / 180;
+      engine.headPose.pitch = (aim.pitch * Math.PI) / 180;
+      headHold = GAZE_DURATION_S;
+    }
+    engine.dispatch(control, 'press', isLookControl(control) ? 'gaze' : 'keyboard', value);
+  };
+
+  const ride: { stage: OvertakeStage } = { stage: 'approach' };
+  let lastSet = -1;
+  let lastSetAt = -99;
+
+  for (let frame = 0; frame < MAX_FRAMES && record === null; frame++) {
+    engine.advance(DT);
+    if (engine.phase !== 'riding') continue;
+
+    if (headHold > 0) {
+      headHold -= DT;
+      if (headHold <= 0) {
+        engine.headPose.yaw = 0;
+        engine.headPose.pitch = 0;
+      }
+    }
+
+    once('cruise', () => dispatch('SET_SPEED', p.cruiseKmh));
+
+    // Ease off for whatever is in front, in this lane. Without it the model rider holds its cruise
+    // straight into the back of the lorry it is waiting to pass, and the scenario gets blamed for
+    // the harness having no brakes.
+    {
+      const bike = engine.world(false).bike;
+      const cos = Math.cos(bike.pose.heading);
+      const sin = Math.sin(bike.pose.heading);
+      let closest = Infinity;
+      for (const actor of engine.actors) {
+        const dx = actor.x - bike.pose.x;
+        const dy = actor.y - bike.pose.y;
+        const along = dx * cos + dy * sin;
+        const across = -dx * sin + dy * cos;
+        if (along <= 0 || Math.abs(across) > SAME_LANE_M) continue;
+        const clear = along - (actor.spec.length ?? 1.8) / 2 - 1.15;
+        closest = Math.min(closest, clear / Math.max(bike.speed, 0.1));
+      }
+      // Ease off for the lorry while waiting; press on while past it. Fifteen km/h of closing
+      // speed makes overtaking two lorries a thirty-four second affair, which is not an exercise
+      // so much as an endurance test — and dawdling alongside is its own fault on the road.
+      const busy = ride.stage === 'goingOut' || ride.stage === 'passing';
+      const wantKmh = closest < 2.6 ? 88 : busy ? p.passingKmh : p.cruiseKmh;
+      if (Math.abs(wantKmh - lastSet) > 0.5 && engine.t - lastSetAt > 0.5) {
+        lastSet = wantKmh;
+        lastSetAt = engine.t;
+        dispatch('SET_SPEED', wantKmh);
+      }
+    }
+
+    if (p.neverOvertake) continue;
+
+    const speed = Math.max(engine.world(false).bike.speed, 1);
+    const trucks = engine.actors.filter((a) => a.spec.kind === 'vrachtwagen');
+    const others = engine.actors.filter((a) => a.spec.kind !== 'vrachtwagen');
+
+    // A switch rather than a chain of guarded ifs: the stage advances from inside callbacks,
+    // which control-flow analysis cannot follow, and an if-chain ends up arguing with itself
+    // about which branches are reachable.
+    switch (ride.stage) {
+      case 'approach': {
+        // Room in the left lane, in seconds, both ways. Anything within a lane width of the line
+        // the rider would move onto counts; anything further out is on somebody else's road.
+        const clear =
+          p.ignoreTraffic ||
+          others.every((a) => {
+            const r = relativeTo(engine, a);
+            if (Math.abs(r.across - LEFT_LANE_OFFSET_M) > SAME_LANE_M) return true;
+            return Math.abs(r.along) / speed > p.needsGapS;
+          });
+        if (!clear) break;
+        if (p.mirror) once('mirrorL', () => dispatch('MIRROR_LEFT'));
+        if (p.shoulder) once('shoulderL', () => dispatch('SHOULDER_LEFT'));
+        if (p.indicator) once('indicatorL', () => dispatch('INDICATOR_LEFT'));
+        once('out', () => {
+          dispatch('STEER_LEFT');
+          outAt = engine.t;
+          ride.stage = 'goingOut';
+        });
+        break;
+      }
+
+      case 'goingOut': {
+        if (engine.t - outAt <= 2.5) break;
+        once('indicatorOffL', () => dispatch('INDICATOR_OFF'));
+        ride.stage = 'passing';
+        break;
+      }
+
+      case 'passing': {
+        if (trucks.length === 0 || p.stayLeft) break;
+        // Past which truck? The weaver settles for the first; a proper overtake clears them all.
+        const target = p.cutInEarly
+          ? trucks.reduce((a, b) => (relativeTo(engine, a).along < relativeTo(engine, b).along ? a : b))
+          : trucks.reduce((a, b) => (relativeTo(engine, a).along > relativeTo(engine, b).along ? a : b));
+        const behindMe = -relativeTo(engine, target).along;
+        const room = (target.spec.length ?? 2) / 2 + 1.15 + target.speed * CLEAR_BY_S;
+        if (behindMe < room) break;
+        if (p.mirror) once('mirrorR', () => dispatch('MIRROR_RIGHT'));
+        if (p.shoulder) once('shoulderR', () => dispatch('SHOULDER_RIGHT'));
+        if (p.indicator) once('indicatorR', () => dispatch('INDICATOR_RIGHT'));
+        once('back', () => {
+          dispatch('STEER_RIGHT');
+          ride.stage = 'comingBack';
+        });
+        break;
+      }
+
+      case 'comingBack': {
+        once('indicatorOffR', () => dispatch('INDICATOR_OFF'));
+        ride.stage = 'settled';
+        break;
+      }
+    }
+  }
+
+  if (record === null) throw new Error('rit is niet afgerond binnen de tijd');
+  const scored = scoreRun(record, scenario);
+  return { ...(record as RunRecord), ...scored };
+}
