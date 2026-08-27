@@ -202,50 +202,99 @@ conflict point against each moving actor's, and backs off when those coincide.
 The field hides when you pick Stoppen and its value stays on the object, so the export carried a
 duration nobody chose. The action buttons now drop it.
 
-## Open
+## Fixed in the second pass
 
-### 20. The builder cannot ride the *wrong* line
+### 20. ~~The builder cannot ride the *wrong* line~~
 
-This is the biggest one left. The validator rides a model rider who does everything right, which
-answers "is this exercise possible?" — but not "is it about anything?". A rule that a careless rider
-also passes teaches nothing, and the panel goes green either way.
+It rides it several wrong ways now, one mistake at a time, and reports which rules caught which
+mistake. Mutation testing, pointed at an exercise: a rule no sloppy rider fails is a rule that
+teaches nothing, and the panel says so while you are still editing it.
 
-Both my rules passed on the first model ride. Only a headless test riding it a second time with
-`anticipate: false` showed that rule 1 discriminates — and that test is in the repo now precisely
-because the browser could not answer the question. The builder wants a second column: **a rider who
-ignores the hazard**, with the same green/red treatment. A rule both riders pass is a rule to
-delete.
+**One mistake at a time is load-bearing.** The first overtake rider skipped the mirror *and* the
+schouderblik together and the whole looking reeks came back un-missable — because without the
+schouderblik the richtingaanwijzer prerequisite refuses the manoeuvre, the rider never changes
+lane, and every rule about how they did it produces no row at all. Split in two, the mirror rules
+fail as they should. Two mistakes can hide each other.
 
-### 21. Nothing says how a rule is measured
+Adding seven rides per keystroke on top of the six already there needed the rides consolidated
+first, so `analyseScenario` runs each distinct plan once and answers all three questions from one
+cache.
 
-`speedAtMost` reads the speed at **one** sample — the one nearest the window's `to` — not across the
-window. I set `to: 0` meaning "be slow at the junction", and the model rider failed, because by then
-it had correctly decided the car was stopping and was already accelerating away. The fix was to end
-the window at 20 m, while the car is still a threat.
+### 21. ~~Nothing says how a rule is measured~~
 
-That was several tuning cycles spent on a definition the UI never states. Each rule kind needs one
-sentence next to it saying what it looks at.
+Every kind carries one sentence saying what it looks at, beside the rule rather than in a tooltip,
+and for all nine kinds rather than the four the menu offers — a derived scenario inherits kinds the
+menu cannot add, and those are the ones nobody can reason about.
 
-### 22. The reveal table gives motorway advice at a junction
+### 22. ~~The reveal table gives motorway advice at a junction~~
 
-It warns that if a road user is spotted equally early with and without mirrors, "die spiegel leert
-niets en staat het verkeer op de verkeerde plek". For a car arriving from the right through the
-windscreen that is simply what the geometry is, and the mirror column *should* read the same. The
-column that matters there is "niet kijken" — 3,4 s against 7,9 s in this scenario. The note needs to
-know which world it is in.
+It reads each row now. The one warning it still gives is the narrow one that is never wrong: when
+no way of riding changes *when* you see somebody, no rule about looking at them can teach anything.
+Equal mirror columns at a crossroads are stated as what they are — the car comes in through the
+windscreen — instead of being reported as a mistake.
 
-### 23. The export is machine-shaped
+### 23. ~~The export is machine-shaped~~
 
-Three things, all cosmetic and all making a generated scenario read worse than a hand-written one
-sitting beside it:
+Speeds go out as `70 / 3.6`, guarded by an exact-equality check so nothing is rounded; a disabled
+`keepInBlindSpot` is left out entirely; and a file opens on `id`, `title`, `briefing` and `world`
+rather than on look-discipline thresholds.
 
-- speeds come out as `19.444444444444446` rather than `70 / 3.6`
-- `keepInBlindSpot` is emitted in full even when `enabled: false`
-- `id`, `title` and `briefing` land *after* the reeks, because the base is spread first
+There was a real bug underneath. `ActorList` held `KMH = 1 / 3.6` and multiplied, and
+`70 * (1/3.6)` is a *different double* from `70 / 3.6`. Every speed the builder wrote was one ulp
+away from the same speed written by hand — invisible, harmless, and enough to stop the exporter
+recognising seventy as seventy.
 
-### 24. No way to say "this run cannot be animated here"
+### 24. ~~No way to say "this run cannot be animated here"~~
 
-Not a builder gap, but worth recording next to the rest: the browser pane throttles `requestAnimationFrame`
-when it is not the front window, and lays the canvas out at zero height. The scene renders one frame
-and freezes on the countdown. Every behavioural claim in this file was verified headlessly for that
-reason — `npm test`, not screenshots.
+Never a builder gap. It is in CLAUDE.md, where it belongs, and is gone from here.
+
+### 25. ~~`speedAtMost` was gameable~~
+
+Found while reading the scoring to fix 21, not by using the builder. It read one sample — the one
+nearest the window's end — so a rider could hold fifty the whole way, brake across the window's
+edge, and pass. Same hole the headway rule closed, same fix: the lowest speed actually held for
+half a second.
+
+`gearAtMost` has the same shape and is deliberately left alone. You sit in a gear rather than blip
+one, so there is no cheat to refuse.
+
+---
+
+# What the check found the moment it existed
+
+Five rules across the four shipped scenarios that no sloppy rider misses. They are pinned in
+`discrimination.test.ts` with a comment each, so the list cannot grow in silence.
+
+### 26. My own "ride on afterwards" rule teaches nothing
+
+`auto-van-rechts-v1 / regel-2`. An *opmerking* for getting going again after the junction, which a
+rider who does everything else wrong still earns — nothing available dawdles away from a
+straight-through crossing. **This is the tool working**: I wrote that rule last week, shipped it,
+and would not otherwise have known. Either the rule wants sharpening or the driver wants a rider
+who sits there.
+
+### 27. Nothing tailgates
+
+`invoegen-snelweg-v1 / volgafstand-auto` and `inhalen-snelweg-v1 / afstand-vrachtwagen-1`.
+`chaseAfterMerge` shuts the gap to the vehicle *behind*, so the headway bands against the vehicle
+ahead have never been tested by a bad ride. A `tailgate` flag on the two motorway drivers would
+close both.
+
+### 28. The schouderblik rules cannot be missed
+
+`inhalen-snelweg-v1`, both of them. `controlPrerequisites` refuses the richtingaanwijzer without a
+schouderblik, so a rider who skips it never changes lane and the rule produces no row rather than a
+miss. They are belt-and-braces over the prerequisite — a defensible thing to be, but this check
+cannot confirm they do any work, and it should be able to distinguish *"nobody failed it"* from
+*"nobody was measured against it"*.
+
+### 29. The recipe menu still offers four kinds of nine
+
+`laneChange`, `beforeLaneChange`, `speedBand`, `gearAtMost` and `afterTurn` can be inherited and
+edited but not added. Every motorway exercise needs the first three, so a scenario built from a
+blank motorway cannot express its own reeks.
+
+### 30. A rule cannot be pointed at a different actor without retyping it
+
+`headway` has an actor picker; nothing else does. Not blocking, but it is the field an author
+changes most often after dragging traffic around.

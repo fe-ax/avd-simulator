@@ -34,6 +34,17 @@ Node version is pinned in `.nvmrc`. `npm run build` is the only typecheck that c
 
 **Always run `npm test` and `npm run build` before committing, and `rm -rf dist` after building.**
 
+**GitHub work on this repo runs as `fe-ax`.** The machine's default `gh` account is
+enterprise-managed and fails there with *"Unauthorized: As an Enterprise Managed User"* — which
+reads like a broken command rather than the wrong identity, and costs you a while. `gh auth status`
+says which is active:
+
+```bash
+gh auth switch --user fe-ax
+```
+
+Git itself pushes over SSH and does not care; this is only `gh`.
+
 ---
 
 ## The one idea
@@ -62,14 +73,23 @@ scenario 1        full reeks        snorfiets first seen at   8.1s   (right mirr
                   no mirrors                                 15.5s   (schouderblik, step 8)
                   no looks at all                            16.9s   (once it has overtaken)
 
-scenario 2        full reeks        truck first seen at        4.7s   (left mirror)
-                  no mirror                                   never   (see below)
-                  no looks at all                             18.2s   (as it goes past)
+scenario 2        full reeks        car from the right at      3.4s   (through the windscreen)
+                  no mirrors                                  3.4s   (mirrors cannot see it)
+                  no looks at all                             7.9s   (as it arrives)
 
-scenario 3        every column identical: lorries at 0.0s and 4.8s, cars at 3.0s and 6.0s
+scenario 3        full reeks        truck first seen at        3.8s   (left mirror)
+                  no mirror                                   never   (see below)
+                  no looks at all                             never   (see below)
+
+scenario 4        every column identical: lorries at 0.0s and 4.8s, cars at 3.0s and 6.0s
 ```
 
-Scenario 3's flat table is not a bug either, and it is a different flatness from scenario 2's
+Scenario 2's flat mirror column is not a bug: the car comes from the right, through the windscreen,
+so no mirror can reach it and the two columns *should* agree. The column that carries the lesson
+there is the third one — 3,4s against 7,9s is what looking buys you. The builder's reveal table now
+reads each row and says which of these it is rather than assuming the motorway case.
+
+Scenario 4's flat table is not a bug either, and it is a different flatness from scenario 3's
 `never`. Everything there is ahead of you or comes past you, so the forward view finds all of it at
 the same moment whatever you do with your head. What the mirrors change is not *when you see* the
 traffic but *whether you know it is safe to move* — which is why that scenario's proof is the
@@ -78,7 +98,7 @@ incident tests (`ignoreTraffic` puts two cars on the brakes) rather than this ta
 If those move, something about the view changed. That is either the point of your change or a bug;
 know which.
 
-That `never` is not a bug and is worth understanding before you "fix" it. Ride scenario 2 properly
+That `never` is not a bug and is worth understanding before you "fix" it. Ride scenario 3 properly
 and the truck is still three seconds back when you merge — seventy-odd metres, nowhere near the
 blind spot — so the schouderblik genuinely cannot reveal it. Unlike scenario 1, the mirror is what
 finds the hazard there. The check is still required, for the reason an examiner gives: no mirror
@@ -341,12 +361,20 @@ or stop at a given distance along **its own** path — so the hazard is the othe
 rather than a reaction to yours. *Auto van rechts remt* was built this way start to finish and
 ships unedited; it is the proof that the loop closes.
 
-**What it still cannot do, and it matters:** the validator only ever rides a model rider who does
-everything *right*. That answers "is this exercise possible?" but not "is it about anything?" — a
-rule a careless rider also passes goes green just the same. Ride the scenario a second time with
-`referenceRide(s, { anticipate: false })` and check the rule actually fails; there is no way to ask
-that from the browser yet. `BUILDER-GAPS.md` is the running list, and it is kept from building
-things rather than from reading code.
+**It rides the wrong line too.** `analyseScenario` rides the exercise several deliberately sloppy
+ways — one mistake at a time — and reports which rules caught which mistake. A rule no sloppy rider
+fails is a rule that teaches nothing, and the panel says so. That check found, on its first run,
+that a rule in a scenario shipped the week before was earned by a rider who did nothing right.
+
+**One mistake at a time is load-bearing, not tidiness.** A rider who skipped the mirror *and* the
+schouderblik made the whole overtake reeks look un-missable, because without the schouderblik the
+richtingaanwijzer prerequisite refuses the manoeuvre — so the rider never changes lane and every
+rule about how they did it produces no row at all. Two mistakes hide each other.
+
+`BUILDER-GAPS.md` is the running list of what it still cannot do, and it is kept from building
+things rather than from reading code. Five rules across the four scenarios are still missed by
+nobody; each is pinned in `discrimination.test.ts` with a comment saying whether that is a finding
+about the scenario or a blind spot in the headless driver.
 
 ## Scoring, briefly
 

@@ -8,7 +8,7 @@
  */
 import type { Obstruction } from '../../sim/validate';
 import type { ActorSpec, Vec2 } from '../../sim/types';
-import type { Reveal } from '../../sim/referenceRide';
+import type { Reveal, RuleDiscrimination } from '../../sim/referenceRide';
 import type { RunRecord } from '../../sim/types';
 
 export interface Validation {
@@ -22,10 +22,60 @@ export interface Validation {
   /** The scenario this one derives from, whose reeks it is still being judged by. */
   inheritedFrom: string | null;
   reveals: Reveal[];
+  /** Which rules any deliberately sloppy rider actually missed. Empty when nothing could be ridden. */
+  discrimination: RuleDiscrimination[];
 }
 
 function seconds(v: number | null): string {
   return v === null ? '—' : `${v.toFixed(1).replace('.', ',')}s`;
+}
+
+/**
+ * What this row's three numbers actually say — read off them, not asserted at them.
+ *
+ * The note used to tell every scenario that equal mirror columns meant the traffic was in the wrong
+ * place. That is true on a motorway, where the hazard comes up behind you and the mirror is the
+ * only thing that can find it. It is nonsense at a crossroads: a car arriving from the right comes
+ * in through the windscreen, the mirror columns *should* read the same, and the panel was telling
+ * the author to fix a scenario that was correct. Worse, it stayed silent about the column that
+ * matters there.
+ *
+ * The real warning is narrower and never wrong: when no way of riding changes when you see
+ * somebody, no rule about looking at them can teach anything.
+ */
+function readRow(r: Reveal, allFlat: boolean): { tone: 'warn' | 'note'; text: string } | null {
+  if (r.full === null) {
+    return { tone: 'warn', text: 'komt nooit in beeld — ook niet als je alles goed doet.' };
+  }
+  const same = (a: number | null, b: number | null) => a !== null && b !== null && Math.abs(a - b) < 0.15;
+
+  if (r.noLooks === null) {
+    return { tone: 'note', text: 'zonder kijken zie je hem helemaal niet. Daar zit de les.' };
+  }
+  if (same(r.full, r.noMirrors) && same(r.full, r.noLooks)) {
+    // One flat row among several that are not is a road user in the wrong place. *Every* row flat
+    // is a fact about the road: on an open stretch everything is ahead of you or comes past you, so
+    // nothing you do with your head changes when you first see it. Saying that once, calmly, beats
+    // four warnings that push an author to fix a scenario that is right. It is said above instead.
+    if (allFlat) return null;
+    return {
+      tone: 'warn',
+      text: 'even vroeg gezien, hoe je ook rijdt — een kijkregel hierover leert dus niets.',
+    };
+  }
+  const gain = r.noLooks - r.full;
+  if (same(r.full, r.noMirrors)) {
+    return {
+      tone: 'note',
+      text: `de spiegels voegen hier niets toe; hij komt door de voorruit binnen. Kijken levert ${gain
+        .toFixed(1)
+        .replace('.', ',')}s op.`,
+    };
+  }
+  return {
+    tone: 'note',
+    text: `kijken levert ${gain.toFixed(1).replace('.', ',')}s op.`,
+  };
 }
 
 export function ValidationPanel({
@@ -36,6 +86,7 @@ export function ValidationPanel({
   unscored,
   inheritedFrom,
   reveals,
+  discrimination,
 }: Validation) {
   if (error) {
     return (
@@ -48,6 +99,18 @@ export function ValidationPanel({
   }
 
   const passed = record?.verdict === 'geslaagd' && record.counts.fout === 0 && record.counts.kritiek === 0;
+
+  // Every road user seen at the same moment however you ride. A property of the road, not a fault.
+  const allFlat =
+    reveals.length > 0 &&
+    reveals.every(
+      (r) =>
+        r.full !== null &&
+        r.noMirrors !== null &&
+        r.noLooks !== null &&
+        Math.abs(r.full - r.noMirrors) < 0.15 &&
+        Math.abs(r.full - r.noLooks) < 0.15,
+    );
 
   return (
     <>
@@ -128,6 +191,50 @@ export function ValidationPanel({
         </section>
       )}
 
+      {discrimination.length > 0 && (() => {
+        const toothless = discrimination.filter((r) => r.failedBy.length === 0);
+        if (toothless.length === 0) {
+          return (
+            <section className="builder-panel builder-panel-good">
+              <h3>Elke regel vangt iets</h3>
+              <p className="builder-note">
+                Voor elke regel is er een slordige rit die hem mist. De oefening meet dus echt wat
+                je erin gestopt hebt.
+              </p>
+              <ul className="builder-reeks-check">
+                {discrimination.map((r) => (
+                  <li key={r.expectedId}>
+                    <strong>{r.label}</strong>
+                    <span>gemist door {r.failedBy.join(', ')}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        }
+        return (
+          <section className="builder-panel builder-panel-bad">
+            <h3>{toothless.length === 1 ? 'Deze regel onderscheidt niets' : 'Deze regels onderscheiden niets'}</h3>
+            <p>
+              Er is geen enkele manier van slecht rijden die {toothless.length === 1 ? 'hem' : 'ze'}{' '}
+              mist:
+            </p>
+            <ul className="builder-faults">
+              {toothless.map((r) => (
+                <li key={r.expectedId}>
+                  <strong>{r.label}</strong>
+                  <span>ook een slordige rijder haalt dit</span>
+                </li>
+              ))}
+            </ul>
+            <p className="builder-note">
+              Een regel die iedereen haalt, leert niemand iets — hij kleurt groen en zegt niets.
+              Verscherp het venster of de grens, of haal hem weg.
+            </p>
+          </section>
+        );
+      })()}
+
       {obstructions.length > 0 && (
         <section className="builder-panel builder-panel-bad">
           <h3>Er staat iets in de weg</h3>
@@ -145,10 +252,7 @@ export function ValidationPanel({
 
       <section className="builder-panel">
         <h3>Wanneer zie je ze?</h3>
-        <p className="builder-note">
-          Het verschil tussen de kolommen ís de les. Wordt iemand even vroeg gezien mét en zónder
-          spiegels, dan leert die spiegel niets en staat het verkeer op de verkeerde plek.
-        </p>
+        <p className="builder-note">Het verschil tussen de kolommen ís de les.</p>
         <table className="builder-reveals">
           <thead>
             <tr>
@@ -169,6 +273,24 @@ export function ValidationPanel({
             ))}
           </tbody>
         </table>
+        {allFlat && (
+          <p className="builder-note">
+            Hier verschilt geen enkele kolom: alles rijdt vóór je of komt langs je heen, dus wanneer
+            je het ziet hangt niet van je hoofd af. Niet fout — maar de les zit dan in de manoeuvre,
+            niet in het kijken, en de regels moeten daarover gaan.
+          </p>
+        )}
+        <ul className="builder-reveal-notes">
+          {reveals.map((r) => {
+            const read = readRow(r, allFlat);
+            if (!read) return null;
+            return (
+              <li key={r.actorId} className={read.tone === 'warn' ? 'warn' : undefined}>
+                <strong>{r.label}</strong> {read.text}
+              </li>
+            );
+          })}
+        </ul>
       </section>
     </>
   );

@@ -109,6 +109,34 @@ const RECIPES: {
   },
 ];
 
+/**
+ * What each rule actually looks at, in one sentence.
+ *
+ * Not the same thing as the recipe hints below, which say when to reach for a rule. These say how
+ * it is *measured*, because that is the part you cannot guess and the part that costs you an
+ * afternoon. `speedAtMost` and `speedAtLeast` are mirror images in name and are not measured alike
+ * at all — one is a state you have to be in, the other an event you either managed or did not — and
+ * a window authored on the wrong assumption fails a model rider for doing the right thing.
+ *
+ * All nine kinds, not just the four you can add from the menu: a derived scenario inherits rules of
+ * kinds the menu does not offer, and those are exactly the ones nobody can reason about.
+ *
+ * These must match `sim/scoring.ts`. Where a sentence and the code disagree, the code is the bug.
+ */
+const MEASURES: Record<ExpectedKind['type'], string> = {
+  control: 'De knop moet één keer binnen het venster ingedrukt zijn.',
+  speedAtMost:
+    'De laagste snelheid die je een halve seconde lang vasthoudt binnen het venster. Even ' +
+    'aantikken telt niet.',
+  speedAtLeast: 'Ergens binnen het venster moet je deze snelheid halen — één moment is genoeg.',
+  gearAtMost: 'De versnelling op het punt waar het venster eindigt.',
+  afterTurn: 'De knop moet binnen zoveel seconden ná de manoeuvre komen.',
+  headway: 'De kleinste volgafstand die je een halve seconde lang vasthoudt.',
+  laneChange: 'Of je die kant op één keer van rijstrook wisselt. Geen venster.',
+  beforeLaneChange: 'De knop moet binnen zoveel seconden vóór de strookwissel komen. Geen venster.',
+  speedBand: 'De snelheid die je binnen het venster vasthoudt, tegen een reeks bandbreedtes.',
+};
+
 const GROUPS: { id: ExpectedAction['group']; label: string }[] = [
   { id: 'kijken', label: 'Kijken' },
   { id: 'richting', label: 'Richting' },
@@ -301,6 +329,7 @@ export function ReeksEditor({ expected, actors, manoeuvre, onChange }: Props) {
             onChange={(v) => patch(i, { group: v })}
           />
           <KindFields kind={e.kind} actors={actors} onChange={(kind) => patch(i, { kind })} />
+          <p className="builder-note builder-measures">{MEASURES[e.kind.type]}</p>
 
           {e.window && e.kind.type !== 'afterTurn' && (
             <>

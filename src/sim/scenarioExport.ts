@@ -56,11 +56,83 @@ export function toSource(value: unknown, indent = 0): string {
     const keys = Object.keys(value).filter((k) => value[k] !== undefined);
     if (keys.length === 0) return '{}';
     const body = keys
-      .map((k) => `${inner}${IDENT.test(k) ? k : `'${k}'`}: ${toSource(value[k], indent + 1)}`)
+      .map((k) => `${inner}${IDENT.test(k) ? k : `'${k}'`}: ${valueSource(k, value[k], indent + 1)}`)
       .join(',\n');
     return `{\n${body},\n${pad}}`;
   }
   return 'undefined';
+}
+
+/** Fields that hold m/s and are read, thought about and argued over in km/h. */
+const SPEED_KEYS = new Set(['speed', 'minSpeed', 'maxSpeed']);
+
+/**
+ * A speed as the km/h division that produced it, when that is exactly the same double.
+ *
+ * `19.444444444444443` is seventy kilometres an hour and nothing in the file says so. Every
+ * hand-written scenario spells these `70 / 3.6`, and a generated one that does not reads like
+ * output rather than source.
+ *
+ * This rounds nothing: the equality is the whole guarantee. If `k / 3.6` is not bit-for-bit the
+ * value we hold, the literal goes out unchanged — which is what the warning above `toSource`
+ * insists on, and it is right to. In practice every speed anyone types survives the round trip;
+ * the ones that would not are floats nobody chose.
+ */
+function valueSource(key: string, value: unknown, indent: number): string {
+  if (SPEED_KEYS.has(key) && typeof value === 'number' && value !== 0) {
+    const kmh = Math.round(value * 3.6 * 100) / 100;
+    if (kmh / 3.6 === value) return `${kmh} / 3.6`;
+  }
+  return toSource(value, indent);
+}
+
+/**
+ * The order a scenario reads best in: who it is, then what it says, then the road, then the traffic.
+ *
+ * Without this a scenario built from a starter emits `id` and `title` *after* the whole reeks,
+ * because the starter spreads its COMMON block first and `Object.keys` is insertion-ordered. The
+ * file opens on look-discipline thresholds and you scroll past everything to find out which
+ * exercise you are reading.
+ */
+const KEY_ORDER = [
+  'id',
+  'title',
+  'briefing',
+  'world',
+  'speedLimitKmh',
+  'startSpeedKmh',
+  'maxSpeedKmh',
+  'startGear',
+  'throttleStepKmh',
+  'steering',
+  'actors',
+  'expected',
+  'sequence',
+];
+
+function ordered(value: object): Record<string, unknown> {
+  const rank = (k: string) => {
+    const i = KEY_ORDER.indexOf(k);
+    return i === -1 ? KEY_ORDER.length : i;
+  };
+  const entries = Object.entries(value).sort(([a], [b]) => rank(a) - rank(b));
+  return Object.fromEntries(entries);
+}
+
+/**
+ * A road user with nothing to say about the blind spot should not say anything about it.
+ *
+ * The field is optional, so a disabled block is six numbers that do nothing — and in a generated
+ * file they read exactly like six numbers somebody chose.
+ */
+function tidyActors(scenario: Scenario): Scenario {
+  if (!scenario.actors.some((a) => a.keepInBlindSpot && !a.keepInBlindSpot.enabled)) return scenario;
+  return {
+    ...scenario,
+    actors: scenario.actors.map((a) =>
+      a.keepInBlindSpot && !a.keepInBlindSpot.enabled ? { ...a, keepInBlindSpot: undefined } : a,
+    ),
+  };
 }
 
 /** Every top-level field of `draft` that differs from `base`. */
@@ -105,6 +177,7 @@ export function exportScenario(
 ): ExportedScenario {
   const binding = camel(draft.id);
   const filename = `scenario.${draft.id.replace(/-v\d+$/, '')}.ts`;
+  draft = tidyActors(draft);
 
   if (!base || !baseModule || !baseBinding) {
     const source = `/**
@@ -114,14 +187,14 @@ export function exportScenario(
  */
 import type { Scenario } from './types';
 
-export const ${binding}: Scenario = ${toSource(draft, 0)};
+export const ${binding}: Scenario = ${toSource(ordered(draft), 0)};
 `;
     return { filename, binding, source };
   }
 
-  const overrides = overridesOf(draft, base);
+  const overrides = ordered(overridesOf(draft, base));
   const body = Object.entries(overrides)
-    .map(([k, v]) => `  ${k}: ${toSource(v, 1)},`)
+    .map(([k, v]) => `  ${k}: ${valueSource(k, v, 1)},`)
     .join('\n');
 
   const source = `/**

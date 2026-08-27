@@ -901,6 +901,57 @@ kbd {
   opacity: 0.75;
 }
 
+.builder-reveal-notes {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.builder-reveal-notes strong {
+  font-weight: 600;
+}
+
+/* A row where no way of riding changes anything is the one thing here worth colouring. */
+.builder-reveal-notes li.warn {
+  opacity: 1;
+  color: #f0b354;
+}
+
+/* Set apart from the surrounding notes: this one is a definition, not an aside. */
+.builder-measures {
+  border-left: 2px solid rgba(255, 255, 255, 0.16);
+  padding-left: 7px;
+  margin-top: 4px;
+}
+
+/*
+ * The reeks-with-teeth list. Quieter than .builder-faults on purpose: this one is confirmation
+ * rather than a complaint, and a green panel that shouts reads like a red one at a glance.
+ */
+.builder-reeks-check {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.builder-reeks-check li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.builder-reeks-check span {
+  opacity: 0.6;
+  text-align: right;
+}
+
 .builder-note {
   font-size: 11px;
   line-height: 1.5;

@@ -7,13 +7,41 @@
  *
  * **This file is the scenario builder's output, unedited apart from this comment.** It is the
  * proof that the builder can produce a shipping scenario without anyone opening an editor: it was
- * built in the browser, validated against the model rider there, exported, and dropped in. The
- * hand-written scenarios next door read better — see `BUILDER-GAPS.md` — but nothing here needed a
- * human to write it.
+ * built in the browser, validated against the model rider there, exported, and dropped in.
+ *
+ * Re-exported once since, when the exporter learned to write a speed as the km/h it came from and
+ * to leave out a blind-spot block nobody enabled. Same scenario, and it now reads like the
+ * hand-written ones beside it rather than like output — which was the point of fixing the exporter.
  */
+
 import type { Scenario } from './types';
 
 export const autoVanRechts: Scenario = {
+  id: 'auto-van-rechts-v1',
+  title: 'Auto van rechts remt',
+  briefing: {
+    situation: 'Je rijdt met 50 km/u op een voorrangsweg binnen de bebouwde kom. Je nadert een kruispunt met een zijweg; op die zijweg staan haaientanden, dus verkeer daarvandaan moet jou voor laten gaan. Van rechts komt een auto aanrijden die daar veel te hard voor gaat.',
+    assignment: 'Rijd rechtdoor over het kruispunt.',
+    hints: [
+      'Jij hebt voorrang. Dat is iets anders dan voorrang krijgen: kijk of hij ook echt afremt voordat je ervan uitgaat.',
+    ],
+  },
+  world: {
+    kind: 'junction',
+    road: {
+      halfWidth: 3,
+      sideHalfWidth: 3,
+      vergeTo: 11,
+    },
+    startY: -120,
+    runOutM: 55,
+    manoeuvre: 'straight',
+    turnRadius: 6,
+    giveWay: 'side',
+  },
+  speedLimitKmh: 50,
+  startSpeedKmh: 50,
+  maxSpeedKmh: 80,
   startGear: 3,
   throttleStepKmh: 5,
   steering: 'branch',
@@ -30,15 +58,8 @@ export const autoVanRechts: Scenario = {
         x: -40,
         y: 1.5,
       },
-      speed: 19.444444444444446,
+      speed: 70 / 3.6,
       length: 4.4,
-      keepInBlindSpot: {
-        enabled: false,
-        minSpeed: 13.88888888888889,
-        maxSpeed: 13.88888888888889,
-        targetGap: 0,
-        releaseAt: 0,
-      },
       cues: [
         {
           atDist: 126,
@@ -113,29 +134,4 @@ export const autoVanRechts: Scenario = {
   verdictRule: {
     faultLimit: 3,
   },
-  id: 'auto-van-rechts-v1',
-  title: 'Auto van rechts remt',
-  briefing: {
-    situation: 'Je rijdt met 50 km/u op een voorrangsweg binnen de bebouwde kom. Je nadert een kruispunt met een zijweg; op die zijweg staan haaientanden, dus verkeer daarvandaan moet jou voor laten gaan. Van rechts komt een auto aanrijden die daar veel te hard voor gaat.',
-    assignment: 'Rijd rechtdoor over het kruispunt.',
-    hints: [
-      'Jij hebt voorrang. Dat is iets anders dan voorrang krijgen: kijk of hij ook echt afremt voordat je ervan uitgaat.',
-    ],
-  },
-  world: {
-    kind: 'junction',
-    road: {
-      halfWidth: 3,
-      sideHalfWidth: 3,
-      vergeTo: 11,
-    },
-    startY: -120,
-    runOutM: 55,
-    manoeuvre: 'straight',
-    turnRadius: 6,
-    giveWay: 'side',
-  },
-  speedLimitKmh: 50,
-  startSpeedKmh: 50,
-  maxSpeedKmh: 80,
 };

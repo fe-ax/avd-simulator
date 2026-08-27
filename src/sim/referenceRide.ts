@@ -104,6 +104,29 @@ export function referenceRide(
   }
 }
 
+/** No mirrors, on any road: the two worlds spell the flag differently. */
+const REVEAL_NO_MIRRORS: RidePlan & MergePlan & OvertakePlan = { mirrors: false, mirror: false };
+
+const REVEAL_NO_LOOKS: RidePlan & MergePlan & OvertakePlan = {
+  mirrors: false,
+  mirror: false,
+  eyes: false,
+  shoulder: false,
+  shoulderPrep: false,
+};
+
+/**
+ * Rides bad enough to make the traffic react, for finding out whether a road user is scenery.
+ *
+ * Two of them, because one is self-defeating: a rider who checks nothing has their lane change
+ * refused by the prerequisite, so they never pull out and never provoke the traffic they were
+ * supposed to provoke. The second looks properly and then goes anyway.
+ */
+const PROVOKING_RIDES: Array<RidePlan & MergePlan & OvertakePlan> = [
+  { ...REVEAL_NO_LOOKS, yieldToActor: false },
+  { ignoreTraffic: true, yieldToActor: false },
+];
+
 export interface Reveal {
   actorId: string;
   label: string;
@@ -123,10 +146,18 @@ export interface Reveal {
  * writing a briefing that claims otherwise.
  */
 export function revealTimeline(scenario: Scenario): Reveal[] {
+  return revealsFrom(scenario, (plan) => referenceRide(scenario, plan));
+}
+
+/** The three reveal columns, given some way of getting a ride for a plan. */
+function revealsFrom(
+  scenario: Scenario,
+  ride: (plan: RidePlan & MergePlan & OvertakePlan) => ReferenceRide,
+): Reveal[] {
   const plans: Array<[keyof Omit<Reveal, 'actorId' | 'label'>, RidePlan & MergePlan & OvertakePlan]> = [
     ['full', {}],
-    ['noMirrors', { mirrors: false, mirror: false }],
-    ['noLooks', { mirrors: false, mirror: false, eyes: false, shoulder: false, shoulderPrep: false }],
+    ['noMirrors', REVEAL_NO_MIRRORS],
+    ['noLooks', REVEAL_NO_LOOKS],
   ];
 
   const rows = new Map<string, Reveal>(
@@ -134,7 +165,7 @@ export function revealTimeline(scenario: Scenario): Reveal[] {
   );
 
   for (const [column, plan] of plans) {
-    const { record, error } = referenceRide(scenario, plan);
+    const { record, error } = ride(plan);
     if (error) continue;
     for (const [id, track] of Object.entries(record.actorTracks)) {
       const row = rows.get(id);
@@ -156,7 +187,12 @@ export function revealTimeline(scenario: Scenario): Reveal[] {
  * An actor counts as involved if some rule names it, or if it ever has to react to the rider. The
  * second half needs a deliberately bad ride to find out: a hazard nobody can provoke is scenery.
  */
-export function unscoredActors(scenario: Scenario, record: RunRecord): ActorSpec[] {
+export function unscoredActors(
+  scenario: Scenario,
+  record: RunRecord,
+  ride: (plan: RidePlan & MergePlan & OvertakePlan) => ReferenceRide = (plan) =>
+    referenceRide(scenario, plan),
+): ActorSpec[] {
   const involved = new Set<string>();
 
   for (const expected of scenario.expected) {
@@ -174,19 +210,154 @@ export function unscoredActors(scenario: Scenario, record: RunRecord): ActorSpec
 
   // Ride it badly on purpose, more than one way. Anything that brakes for a bad rider is part of
   // the exercise even when a clean ride never disturbs it.
-  //
-  // Two rides, because one is self-defeating: a rider who checks nothing has their lane change
-  // refused by the prerequisite, so they never pull out and never provoke the traffic they were
-  // supposed to provoke. The second looks properly and then goes anyway.
-  const badRides: Array<RidePlan & MergePlan & OvertakePlan> = [
-    { mirrors: false, mirror: false, eyes: false, shoulder: false, shoulderPrep: false, yieldToActor: false },
-    { ignoreTraffic: true, yieldToActor: false },
-  ];
-  for (const plan of badRides) {
-    const bad = referenceRide(scenario, plan);
+  for (const plan of PROVOKING_RIDES) {
+    const bad = ride(plan);
     if (bad.error) continue;
     for (const incident of bad.record.incidents) involved.add(incident.actorId);
   }
 
   return scenario.actors.filter((a) => !involved.has(a.id));
+}
+
+/**
+ * A rider who gets one thing wrong on purpose.
+ *
+ * Named in Dutch because the name appears in the panel an instructor reads, and one mistake at a
+ * time on purpose: a rider who is careless in every dimension at once fails nearly everything, and
+ * a report where every rule is missed says no more than one where none is.
+ */
+interface SloppyRider {
+  label: string;
+  plan: RidePlan & MergePlan & OvertakePlan;
+}
+
+/**
+ * The ways there are to ride this particular road badly.
+ *
+ * Every one of these is flags the headless driver already has. That is the point: if a world needs
+ * a mistake the driver cannot make, the honest answer is that this check has a blind spot there,
+ * not that the rule is fine.
+ */
+function sloppyRiders(scenario: Scenario): SloppyRider[] {
+  if (scenario.world.kind === 'motorway') {
+    // The mirror and the schouderblik are deliberately *separate* riders. Turned off together the
+    // richtingaanwijzer prerequisite refuses the manoeuvre, so the rider never changes lane at all
+    // and every rule about how they did it produces no row — the two mistakes mask each other, and
+    // the reeks reads as un-missable when it is nothing of the kind. One mistake at a time.
+    return scenario.world.stretch.kind === 'doorgaand'
+      ? [
+          { label: 'wie niet inhaalt', plan: { neverOvertake: true } },
+          { label: 'wie ertussen duikt', plan: { cutInEarly: true } },
+          { label: 'wie links blijft hangen', plan: { stayLeft: true } },
+          { label: 'wie niet in de spiegel kijkt', plan: { mirror: false } },
+          { label: 'wie geen schouderblik doet', plan: { shoulder: false } },
+          { label: 'wie niet aangeeft', plan: { indicator: false } },
+          { label: 'wie te langzaam aankomt', plan: { cruiseKmh: 80 } },
+        ]
+      : [
+          { label: 'wie niet in de spiegel kijkt', plan: { mirror: false } },
+          { label: 'wie geen schouderblik doet', plan: { shoulder: false } },
+          { label: 'wie niet op snelheid komt', plan: { throttlePresses: 0 } },
+          { label: 'wie erop gaat plakken', plan: { chaseAfterMerge: true } },
+          { label: 'wie niet aangeeft', plan: { indicator: false } },
+          { label: 'wie de richtingaanwijzer laat staan', plan: { cancelIndicator: false } },
+        ];
+  }
+  return [
+    { label: 'wie niet anticipeert', plan: { anticipate: false } },
+    { label: 'wie niet kijkt', plan: REVEAL_NO_LOOKS },
+    { label: 'wie niet afremt', plan: { slowDown: false, gear: false } },
+    { label: 'wie geen voorrang geeft', plan: { yieldToActor: false } },
+    // Rides straight on past the turn. Nothing on a scenario whose opdracht *is* straight on —
+    // which is right: there the manoeuvre is not a thing you can get wrong.
+    { label: 'wie de bocht mist', plan: { steer: false } },
+    { label: 'wie de richtingaanwijzer laat staan', plan: { indicatorOff: 'nooit' } },
+    { label: 'wie blijft treuzelen', plan: { pullAway: false } },
+  ];
+}
+
+export interface RuleDiscrimination {
+  expectedId: string;
+  label: string;
+  modelPasses: boolean;
+  /** Names of the sloppy riders that missed this rule. Empty means nothing here can fail it. */
+  failedBy: string[];
+}
+
+/**
+ * Which rules would actually catch somebody — mutation testing, pointed at an exercise.
+ *
+ * The model rider answers "is this possible?" and stops there. It cannot answer the question that
+ * matters, which is whether the reeks is *about* anything: a rule with a window wide enough or a
+ * threshold soft enough that no rider can miss it goes green exactly like a rule that teaches the
+ * lesson, and the panel cannot tell you which one you built.
+ *
+ * So ride it wrong, one mistake at a time, and ask of each rule which of those mistakes it caught.
+ * A rule nothing catches is a rule to sharpen or to delete.
+ */
+function discriminationOf(
+  scenario: Scenario,
+  model: ReferenceRide,
+  ride: (plan: RidePlan & MergePlan & OvertakePlan) => ReferenceRide,
+): RuleDiscrimination[] {
+  const missedBy = new Map<string, string[]>(scenario.expected.map((e) => [e.id, []]));
+  let anyRode = false;
+
+  for (const rider of sloppyRiders(scenario)) {
+    const { record, error } = ride(rider.plan);
+    if (error) continue;
+    anyRode = true;
+    for (const result of record.results) {
+      // Anything that is not 'goed' is a rider who did not satisfy the rule — missed it, was late,
+      // was early. All of those are the rule doing its job.
+      if (result.status === 'goed') continue;
+      missedBy.get(result.expectedId)?.push(rider.label);
+    }
+  }
+
+  // With nothing to compare against, saying "no sloppy rider fails this" would be an accusation
+  // made out of an absence. Report nothing instead.
+  if (!anyRode) return [];
+
+  return scenario.expected.map((e) => ({
+    expectedId: e.id,
+    label: e.label,
+    modelPasses: model.error === null && model.record.results.find((r) => r.expectedId === e.id)?.status === 'goed',
+    failedBy: missedBy.get(e.id) ?? [],
+  }));
+}
+
+export interface ScenarioAnalysis {
+  model: ReferenceRide;
+  reveals: Reveal[];
+  unscored: ActorSpec[];
+  discrimination: RuleDiscrimination[];
+}
+
+/**
+ * Everything the builder wants to know, riding each way exactly once.
+ *
+ * The three questions overlap heavily — the model ride is the reveal table's first column, and the
+ * rides that provoke the traffic are two of the sloppy riders — so asking them separately rode the
+ * same scenario the same way several times per keystroke. Here one cache serves all of them.
+ */
+export function analyseScenario(scenario: Scenario): ScenarioAnalysis {
+  const cache = new Map<string, ReferenceRide>();
+  const ride = (plan: RidePlan & MergePlan & OvertakePlan): ReferenceRide => {
+    const key = JSON.stringify(plan);
+    let hit = cache.get(key);
+    if (!hit) {
+      hit = referenceRide(scenario, plan);
+      cache.set(key, hit);
+    }
+    return hit;
+  };
+
+  const model = ride({});
+  return {
+    model,
+    reveals: revealsFrom(scenario, ride),
+    unscored: model.error ? [] : unscoredActors(scenario, model.record, ride),
+    discrimination: model.error ? [] : discriminationOf(scenario, model, ride),
+  };
 }
