@@ -10,7 +10,7 @@
  * analysis says so — which is the whole feature, and the thing a green panel used to hide.
  */
 import { describe, expect, it } from 'vitest';
-import { analyseScenario } from '../referenceRide';
+import { analyseScenario, referenceRide } from '../referenceRide';
 import { autoVanRechts } from '../scenario.auto-van-rechts';
 import { rechtsafFietspad } from '../scenario.rechtsaf-fietspad';
 import { inhalenSnelweg } from '../scenario.inhalen-snelweg';
@@ -23,6 +23,22 @@ const byId = (s: Scenario, id: string) => {
   if (!hit) throw new Error(`Geen regel "${id}" — wel: ${rows.map((r) => r.expectedId).join(', ')}`);
   return hit;
 };
+
+describe('de anticiperende rijder remt als een mens', () => {
+  it('gebruikt de rem een handvol keer, niet honderden keren', () => {
+    // Both times shift every frame — the rider's because it is slowing, the car's because it is
+    // braking — so a single threshold had the difference crossing it back and forth and the brake
+    // going on and off twenty-five times a second. One approach left 214 brake events in the
+    // record for a debrief to draw. The average deceleration was about right, which is why it went
+    // unnoticed for as long as nobody looked at the events.
+    const { record } = referenceRide(autoVanRechts);
+    const brakes = record.events.filter((e) => e.control === 'BRAKE');
+    expect(brakes.length).toBeLessThan(20);
+    // And it still does the thing it is there to do.
+    expect(brakes.length).toBeGreaterThan(0);
+    expect(record.counts).toEqual({ opmerking: 0, fout: 0, kritiek: 0 });
+  });
+});
 
 describe('welke regels vangen iets', () => {
   it('de remregel wordt gemist door wie niet anticipeert', () => {
@@ -49,23 +65,30 @@ describe('welke regels vangen iets', () => {
   });
 
   /**
-   * Rules that no sloppy rider currently misses, and why. Each one is either a real finding about
-   * the scenario or a real blind spot in the headless driver — never a shrug. Shrinking this list
-   * is the work; growing it silently is the thing the test exists to prevent.
+   * Rules no sloppy rider misses, and why each one is like that.
+   *
+   * Every entry is either a finding about the scenario or a understood property of the exercise —
+   * never a shrug. Three of the four scenarios have none. Shrinking this list is the work; growing
+   * it in silence is what the test exists to prevent.
    */
   const KNOWN_OPEN: Record<string, string[]> = {
-    // A genuine finding, and the first one this check produced: an `opmerking` for riding on after
-    // the junction that a rider who does nothing right still earns, because nothing available
-    // dawdles away from a straight-through crossing.
-    'auto-van-rechts-v1': ['regel-2'],
-    // No rider closes up on the vehicle ahead. `chaseAfterMerge` shuts the gap to the truck behind,
-    // not to the car in front, so this headway band has never been tested by a bad ride.
-    'invoegen-snelweg-v1': ['volgafstand-auto'],
-    // The schouderblik rules cannot be missed by omission: `controlPrerequisites` refuses the
-    // richtingaanwijzer without one, so a rider who skips it never changes lane and the rule
-    // produces no row at all. They are belt-and-braces over the prerequisite, which is a defensible
-    // thing to be — but this check cannot confirm they do any work.
-    // The truck headway is the same gap as the merge's: nothing tailgates.
+    'rechtsaf-fietspad-v1': [],
+    'auto-van-rechts-v1': [],
+    'invoegen-snelweg-v1': [],
+    // The two schouderblik rules are belt-and-braces over `controlPrerequisites`, and cannot be
+    // missed by omission: skip the schouderblik and the richtingaanwijzer is refused, so the rider
+    // never changes lane and the rule produces no row at all. The rider who skips only the mirror
+    // does change lane, does look over their shoulder, and passes. Both are true at once, so the
+    // rules are measured and never failed. Defensible — the omission is punished by the
+    // prerequisite — but this check cannot confirm they do any work of their own.
+    //
+    // `afstand-vrachtwagen-1` is measured from the *first* lane change, by which point the rider
+    // is already left of that lorry. The ride it was written to catch — tucking in between the two
+    // — is caught, and hard: `cutInEarly` scores gezakt on an incident plus
+    // `afstand-vrachtwagen-2`, because cutting in puts you close in front of the lorry *behind*,
+    // not close behind the one ahead. Measuring from the last lane change instead would fix the
+    // anchor, and would change scoring for the merge scenario too, so it is not a change to make
+    // in passing.
     'inhalen-snelweg-v1': ['schouderblik-links', 'schouderblik-rechts', 'afstand-vrachtwagen-1'],
   };
 

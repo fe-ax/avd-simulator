@@ -75,7 +75,7 @@ scenario 1        full reeks        snorfiets first seen at   8.1s   (right mirr
 
 scenario 2        full reeks        car from the right at      3.4s   (through the windscreen)
                   no mirrors                                  3.4s   (mirrors cannot see it)
-                  no looks at all                             7.9s   (as it arrives)
+                  no looks at all                             7.8s   (as it arrives)
 
 scenario 3        full reeks        truck first seen at        3.8s   (left mirror)
                   no mirror                                   never   (see below)
@@ -389,10 +389,15 @@ schouderblik made the whole overtake reeks look un-missable, because without the
 richtingaanwijzer prerequisite refuses the manoeuvre — so the rider never changes lane and every
 rule about how they did it produces no row at all. Two mistakes hide each other.
 
+**Missed and measured are different questions.** A rule no sloppy rider *failed* is soft — the
+threshold or the window is too kind. A rule no sloppy rider was *measured against* is one whose
+mistake removes the rider from its scope: skip the schouderblik on the overtake and the
+richtingaanwijzer prerequisite refuses the manoeuvre, so there is no lane change and every rule
+about the lane change returns no row rather than a miss. Sharpening the second kind changes nothing.
+
 `BUILDER-GAPS.md` is the running list of what it still cannot do, and it is kept from building
-things rather than from reading code. Five rules across the four scenarios are still missed by
-nobody; each is pinned in `discrimination.test.ts` with a comment saying whether that is a finding
-about the scenario or a blind spot in the headless driver.
+things rather than from reading code. Three of the four scenarios now have every rule caught by
+some sloppy rider; the overtake's three are pinned in `discrimination.test.ts` with the reason.
 
 ## Scoring, briefly
 

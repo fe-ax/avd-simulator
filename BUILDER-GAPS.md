@@ -260,57 +260,101 @@ one, so there is no cheat to refuse.
 
 ---
 
-# What the check found the moment it existed
+# What the check found the moment it existed, and what came of it
 
-Five rules across the four shipped scenarios that no sloppy rider misses. They are pinned in
-`discrimination.test.ts` with a comment each, so the list cannot grow in silence.
+Five rules that no sloppy rider missed. Four are closed; the score is now **13/13, 2/2, 8/8 and
+8/11**, and the remainder are pinned in `discrimination.test.ts` with the reason.
 
-### 31. ~~A scenario you built could not be used~~
+### 26. ~~My own "ride on afterwards" rule teaches nothing~~
 
-Not found by the discrimination check, and not on any earlier list — because every earlier list was
-written by the only person using the builder, who had the repository checked out. The builder's
-closing instruction was *"Zet dit in `src/sim/` en voeg één regel toe aan `ALL_SCENARIOS`"*. For a
-riding instructor that is not an instruction, it is a wall. `drafts.ts` also held exactly one draft,
-so building a second overwrote the first, and nothing let you ride what you had made.
+`auto-van-rechts-v1 / regel-2`, and it was mine, written the week before and shipped. Closed by
+giving the crossroads driver a rider who genuinely dawdles.
 
-Fixed: a library in the browser, `.avd.json` files for sending one to a colleague, rides that
-export with their scenario embedded, and `Rijd` straight out of the builder. The TypeScript export
-stays, as the way a scenario graduates into the repo.
+That took two goes and both are worth recording. `pullAway: false` withheld a throttle press, which
+does nothing at a straight-through crossing because the machine climbs back to its set speed by
+itself — there is no press to withhold. Modelled as *staying on the brake* it works. But without a
+speed floor that rider brakes through the Kerkstraat's turn, never completes the manoeuvre, and
+every rule anchored to the manoeuvre vanishes rather than failing — so the check reported those
+rules as untestable when the truth was that the harness had fallen over. **A sloppy rider has to be
+sloppy in one specific way and otherwise competent**, or it stops being a measurement.
 
-**The lesson worth keeping:** the gap was invisible for as long as the author and the user were the
-same person. Everything on this list before it is about whether an exercise is any *good*; none of
-it noticed that an exercise could not be *used*.
+### 27. ~~Nothing tailgates~~
 
-### 26. My own "ride on afterwards" rule teaches nothing
+Closed for the merge by a `tailgate` flag: a rider who sits at about half a second and stays there.
+`invoegen-snelweg-v1 / volgafstand-auto` is caught now.
 
-`auto-van-rechts-v1 / regel-2`. An *opmerking* for getting going again after the junction, which a
-rider who does everything else wrong still earns — nothing available dawdles away from a
-straight-through crossing. **This is the tool working**: I wrote that rule last week, shipped it,
-and would not otherwise have known. Either the rule wants sharpening or the driver wants a rider
-who sits there.
+It did **not** close `inhalen-snelweg-v1 / afstand-vrachtwagen-1`, and the reason is worth having
+found. `scoreHeadway` measures from `manoeuvreCompletedAt` — the *first* lane change — by which
+point the rider is already left of that lorry. The ride the rule was written to catch is caught
+anyway, and hard: `cutInEarly` scores gezakt on an incident plus `afstand-vrachtwagen-2`, because
+tucking in between two lorries puts you close in front of the one *behind*, not close behind the one
+ahead. Anchoring the measurement to the last lane change instead would be the real fix and would
+change scoring for the merge too, so it is not a change to make in passing.
 
-### 27. Nothing tailgates
+### 28. ~~Measured is not the same as failed~~
 
-`invoegen-snelweg-v1 / volgafstand-auto` and `inhalen-snelweg-v1 / afstand-vrachtwagen-1`.
-`chaseAfterMerge` shuts the gap to the vehicle *behind*, so the headway bands against the vehicle
-ahead have never been tested by a bad ride. A `tailgate` flag on the two motorway drivers would
-close both.
+`RuleDiscrimination` carries `testedBy` as well as `failedBy`, and the panel says two different
+things. Soft: *"ook een slordige rijder haalt dit — de grens of het venster is te ruim."* Untested:
+*"geen enkele slordige rit werd hierop gemeten — wie de fout maakt, komt niet eens aan deze regel
+toe."* The first wants sharpening; the second cannot be sharpened into usefulness at all, and is
+usually a rule that is doubling up on a prerequisite.
 
-### 28. The schouderblik rules cannot be missed
+### 29. ~~The recipe menu still offers four kinds of nine~~
 
-`inhalen-snelweg-v1`, both of them. `controlPrerequisites` refuses the richtingaanwijzer without a
-schouderblik, so a rider who skips it never changes lane and the rule produces no row rather than a
-miss. They are belt-and-braces over the prerequisite — a defensible thing to be, but this check
-cannot confirm they do any work, and it should be able to distinguish *"nobody failed it"* from
-*"nobody was measured against it"*.
+All nine now, with editors for `laneChange`, `beforeLaneChange` and `speedBand`. A scenario built
+from a blank motorway can express its own reeks.
 
-### 29. The recipe menu still offers four kinds of nine
+### 30. ~~A rule cannot be pointed at a different actor~~
 
-`laneChange`, `beforeLaneChange`, `speedBand`, `gearAtMost` and `afterTurn` can be inherited and
-edited but not added. Every motorway exercise needs the first three, so a scenario built from a
-blank motorway cannot express its own reeks.
+Mostly a misreading of my own: `headway` is the only kind that names an actor, and it always had a
+picker. The real hole underneath was a headway rule pointing at *nobody* — added before there was
+any traffic, scoring silently returns no row, and it sits in the list looking like a rule for ever.
+It says so now.
 
-### 30. A rule cannot be pointed at a different actor without retyping it
+---
 
-`headway` has an actor picker; nothing else does. Not blocking, but it is the field an author
-changes most often after dragging traffic around.
+# Found while closing those
+
+### 32. ~~The anticipating rider strobed its brake twenty-five times a second~~
+
+Both times in the closing test shift every frame — the rider's because it is slowing, the other's
+because it is braking — so a single threshold had the difference crossing it back and forth. One
+approach left **214 brake events** in the record. The average deceleration was about right, which is
+why it survived: nobody had looked at the events, only at the speed. Hysteresis, and it is 10 now.
+
+Every saved run of that scenario carries those events, and a debrief timeline would draw them.
+
+### 33. ~~The builder told you the road ran out when it had not~~
+
+`extentOf` frames the *picture*: the conflict point and a stretch either side. The validator asked
+"is there road under the whole ride?" with those bounds, so any ride longer than the frame reported
+its own tail as verge. A blank motorway — nine hundred metres of ride, a hundred and seventy metres
+of frame — opened with **"de weg houdt op, 383 punten"**, which is the first thing anybody starting
+a motorway scenario would have seen.
+
+The shipped motorways hid it: their traffic starts far enough up the road to stretch the frame past
+the ride. It only ever showed on the empty starter, which is the one case nobody had looked at.
+
+The road is generated over everywhere the machine actually went now. `starters.test.ts` asks about
+the ridden line as well as the route, which is the check that would have caught it.
+
+---
+
+# Still open
+
+### 34. The overtake's three soft rules
+
+Both `schouderblik` rules are belt-and-braces over `controlPrerequisites` and cannot be missed by
+omission; `afstand-vrachtwagen-1` is anchored to the wrong lane change (see 27). All three are
+understood, pinned, and defensible — but none of them is confirmed to do work of its own.
+
+### 35. A speedBand's middle rungs cannot be edited
+
+The recipe writes two bands and the editor exposes the outer edges. The Dutch on each rung, and any
+third rung, still needs a text editor.
+
+### 36. Instructors have no URL
+
+Not a builder gap, and the largest thing between this tool and the people it is for. There is no CI
+and no deploy: using it means cloning the repository and running `npm install`. Everything else on
+this list is about making a good exercise; this one is about whether anybody gets to make one at all.
