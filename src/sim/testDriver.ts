@@ -5,6 +5,7 @@
  */
 import { SimEngine } from './engine';
 import { GAZE_DURATION_S, isLookControl, LOOK_DIRECTIONS } from './perception';
+import { poseAt } from './route';
 import { scoreRun } from './scoring';
 import type { ActorState, RunRecord, Scenario } from './types';
 
@@ -105,6 +106,14 @@ const SCAN_CYCLE = [
  * perfectly good scenario that simply has nothing on it yet, and the model rider used to fall over
  * reading the first actor's position on a road where there was no first actor.
  */
+/** Metres the actor has travelled past the point where its path crosses the rider's. */
+function clearedConflict(engine: SimEngine, actor: ActorState): boolean {
+  const meeting = poseAt(engine.routes.turn, engine.routes.conflictS);
+  const along =
+    (actor.x - meeting.x) * Math.cos(actor.heading) + (actor.y - meeting.y) * Math.sin(actor.heading);
+  return along > (actor.spec.length ?? 1.8) / 2 + 1.5;
+}
+
 function probe(engine: SimEngine): Probe {
   const actor: ActorState | undefined = engine.actors[0];
   const pose = engine.bike.pose;
@@ -244,9 +253,14 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
     if (p.shoulder && d <= 14) once('shoulder', () => dispatch('SHOULDER_RIGHT'));
     if (p.steer && d <= 11) once('steer', () => dispatch('STEER_RIGHT'));
 
-    const actorPast =
-      !actor ||
-      (engine.routes.kind === 'urbanCrossing' && actor.y > engine.routes.crossYSpan[1] + 1.5);
+    // Has the hazard gone by yet?
+    //
+    // Measured along the actor's own direction of travel, past the point where the two paths
+    // cross. It used to ask whether the actor's y had climbed past the swept strip, which is only
+    // "past" for something coming up the fietspad beside you: a car crossing east to west holds
+    // its y for the whole ride, so the rider waited for it forever and every such scenario ran
+    // into the ninety-second cap with the machine sitting still.
+    const actorPast = !actor || clearedConflict(engine, actor);
     const wantStop = p.yieldToActor && d <= 12 && !actorPast;
     if (wantStop !== braking) {
       braking = wantStop;

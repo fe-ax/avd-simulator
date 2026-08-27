@@ -156,14 +156,14 @@ export function Builder({ onExit }: { onExit: () => void }) {
         obstructions: routes ? findObstructions(draft.world, routes, bounds) : [],
         offRoad: findOffRoad(draft.world, riddenPath(record.samples), bounds),
         unscored: unscoredActors(draft, record),
-        // The reeks always comes from the base until there is a way to edit it, and a green
-        // verdict about somebody else's reeks is the easiest thing in here to misread.
-        inheritedFrom: base.title,
+        // Only when there is genuinely somebody else's reeks in play. A starter brings none, and
+        // warning about an inherited reeks that does not exist is its own kind of lying.
+        inheritedFrom: starter ? null : base.title,
         reveals: revealTimeline(draft),
       });
     }, SETTLE_MS);
     return () => clearTimeout(id);
-  }, [draft, routes, base.title]);
+  }, [draft, routes, base.title, starter]);
 
   useEffect(() => {
     const id = setTimeout(() => saveDraft(draft, baseId), 500);
