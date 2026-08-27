@@ -30,6 +30,49 @@ function seconds(v: number | null): string {
   return v === null ? '—' : `${v.toFixed(1).replace('.', ',')}s`;
 }
 
+/**
+ * What this row's three numbers actually say — read off them, not asserted at them.
+ *
+ * The note used to tell every scenario that equal mirror columns meant the traffic was in the wrong
+ * place. That is true on a motorway, where the hazard comes up behind you and the mirror is the
+ * only thing that can find it. It is nonsense at a crossroads: a car arriving from the right comes
+ * in through the windscreen, the mirror columns *should* read the same, and the panel was telling
+ * the author to fix a scenario that was correct. Worse, it stayed silent about the column that
+ * matters there.
+ *
+ * The real warning is narrower and never wrong: when no way of riding changes when you see
+ * somebody, no rule about looking at them can teach anything.
+ */
+function readRow(r: Reveal): { tone: 'warn' | 'note'; text: string } | null {
+  if (r.full === null) {
+    return { tone: 'warn', text: 'komt nooit in beeld — ook niet als je alles goed doet.' };
+  }
+  const same = (a: number | null, b: number | null) => a !== null && b !== null && Math.abs(a - b) < 0.15;
+
+  if (r.noLooks === null) {
+    return { tone: 'note', text: 'zonder kijken zie je hem helemaal niet. Daar zit de les.' };
+  }
+  if (same(r.full, r.noMirrors) && same(r.full, r.noLooks)) {
+    return {
+      tone: 'warn',
+      text: 'even vroeg gezien, hoe je ook rijdt — een kijkregel hierover leert dus niets.',
+    };
+  }
+  const gain = r.noLooks - r.full;
+  if (same(r.full, r.noMirrors)) {
+    return {
+      tone: 'note',
+      text: `de spiegels voegen hier niets toe; hij komt door de voorruit binnen. Kijken levert ${gain
+        .toFixed(1)
+        .replace('.', ',')}s op.`,
+    };
+  }
+  return {
+    tone: 'note',
+    text: `kijken levert ${gain.toFixed(1).replace('.', ',')}s op.`,
+  };
+}
+
 export function ValidationPanel({
   record,
   error,
@@ -192,10 +235,7 @@ export function ValidationPanel({
 
       <section className="builder-panel">
         <h3>Wanneer zie je ze?</h3>
-        <p className="builder-note">
-          Het verschil tussen de kolommen ís de les. Wordt iemand even vroeg gezien mét en zónder
-          spiegels, dan leert die spiegel niets en staat het verkeer op de verkeerde plek.
-        </p>
+        <p className="builder-note">Het verschil tussen de kolommen ís de les.</p>
         <table className="builder-reveals">
           <thead>
             <tr>
@@ -216,6 +256,17 @@ export function ValidationPanel({
             ))}
           </tbody>
         </table>
+        <ul className="builder-reveal-notes">
+          {reveals.map((r) => {
+            const read = readRow(r);
+            if (!read) return null;
+            return (
+              <li key={r.actorId} className={read.tone === 'warn' ? 'warn' : undefined}>
+                <strong>{r.label}</strong> {read.text}
+              </li>
+            );
+          })}
+        </ul>
       </section>
     </>
   );
