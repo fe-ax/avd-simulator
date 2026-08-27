@@ -144,7 +144,9 @@ src/
     route.ts               the racing line, as arcs and straights
     roadSurfaces.ts        the vocabulary, and dispatch on the kind of world
     surfaces/              one generator per kind of road; pure (layout, extent) -> Surface[]
-    scenarios.ts           the registry, keyed by the id a RunRecord stores
+    scenarios.ts           the registry: the ones that ship, plus whatever this browser saved
+    library.ts             scenarios somebody made, in localStorage
+    scenarioFile.ts        a scenario or a ride as a file you can email
     starters.ts            empty scenarios, one per kind of road; what the builder derives from
     steering.ts            what the sturen controls mean; ONE body of that rule
     scenario.*.ts          pure data
@@ -170,6 +172,7 @@ src/
     planCamera.ts          flat, north-up, invertible: the one the builder edits through
     builderOverlay.ts      route line, actor paths, drag handles
   ui/           React. RideView hosts three.js; MapView hosts the canvas
+    files.ts               Blob out, file input in — the DOM half of scenarioFile.ts
     builder/               the scenario builder: plan view, forms, validator, export
 public/dev-driver.js       dev-only scripted rider, loaded by hand from the console
 ```
@@ -200,6 +203,13 @@ public/dev-driver.js       dev-only scripted rider, loaded by hand from the cons
 7. **A saved run outlives the code that made it.** `RunRecord` is persisted to localStorage, so a
    renamed field needs a migration in `recorder.ts` (there is one) and every replay must resolve
    its scenario through `scenarios.ts` by `record.scenarioId`, never from whatever is on screen.
+8. **A scenario can also arrive from storage or from a file, and the ones that ship always win.**
+   `scenarioById` looks in `ALL_SCENARIOS` before the library, so nothing a user saved or imported
+   can redefine `rechtsaf-fietspad-v1` — a student's run of the real Kerkstraat replays against the
+   real Kerkstraat whatever is in localStorage. `library.ts` refuses to save a shipped id, but a
+   hand-edited file does not go through that door, so the ordering is the actual guarantee.
+   Anything arriving from outside is checked with `isRideable()`, which answers by *building* the
+   thing rather than by validating a schema that would go stale.
 
 ---
 
@@ -360,6 +370,14 @@ The reeks, the briefing and the traffic are all editable, and a scripted actor c
 or stop at a given distance along **its own** path — so the hazard is the other driver's mistake
 rather than a reaction to yours. *Auto van rechts remt* was built this way start to finish and
 ships unedited; it is the proof that the loop closes.
+
+**And the loop now closes without a compiler.** `Bewaar` puts a scenario in the browser's library,
+where it appears in the ride picker beside the four that ship, marked as your own. `Download` writes
+a small `.avd.json` you can email to another instructor; `Open bestand` reads one back. A ride
+exports the same way and **carries its scenario inside it**, because a `RunRecord` stores only
+`scenarioId` and the whole reason to send somebody a ride is that they were not there. The
+TypeScript export is still how a scenario graduates into this repo; it is no longer the only door
+out of the builder, which it was for as long as the only user had a checkout.
 
 **It rides the wrong line too.** `analyseScenario` rides the exercise several deliberately sloppy
 ways — one mistake at a time — and reports which rules caught which mistake. A rule no sloppy rider

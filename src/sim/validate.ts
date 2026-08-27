@@ -5,9 +5,32 @@
  * live, and two implementations of "does anything stand in the road" would eventually disagree —
  * so the test imports this too, and there is one.
  */
-import { poseAt, type ScenarioRoutes } from './route';
+import { buildRoutes, poseAt, type ScenarioRoutes } from './route';
 import { roadSurfaces, type RoadExtent, type Surface } from './roadSurfaces';
-import type { ScenarioWorld, Vec2 } from './types';
+import type { Scenario, ScenarioWorld, Vec2 } from './types';
+
+/**
+ * Can this build still use this scenario at all?
+ *
+ * Answered by *using* it — build its route and its road — rather than by checking it against a
+ * schema. A schema is a second description of the shape and goes stale the moment the first one
+ * moves; actually running the thing cannot.
+ *
+ * This exists because a draft saved before `world.stretch` was introduced took the whole builder
+ * down to a white screen. Nothing rendered, so nothing could clear it, and the only way back was
+ * devtools. Now that scenarios arrive from a saved library and from files other people made, the
+ * same question gets asked in three places, and one of them is asking it about data this build has
+ * never seen.
+ */
+export function isRideable(scenario: Scenario): boolean {
+  try {
+    buildRoutes(scenario);
+    roadSurfaces(scenario.world, { minX: -50, maxX: 50, minY: -50, maxY: 50 });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Half the width of the machine. Its body blocks a road, not its centreline. */
 const HALF_WIDTH = 0.5;

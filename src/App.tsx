@@ -4,7 +4,7 @@ import { useEngine } from './hooks/useEngine';
 import { poseAt } from './sim/route';
 import { listRuns, saveRun } from './sim/recorder';
 import { ReplayPlayer } from './sim/replay';
-import { ALL_SCENARIOS, DEFAULT_SCENARIO, scenarioById } from './sim/scenarios';
+import { allScenarios, DEFAULT_SCENARIO, scenarioById } from './sim/scenarios';
 import { scoreRun } from './sim/scoring';
 import type { RunRecord, Scenario, WorldView } from './sim/types';
 import { HeadController } from './scene/head';
@@ -102,7 +102,13 @@ export default function App() {
           setBuilderAttempt((n) => n + 1);
         }}
       >
-        <Builder onExit={() => setMode(false)} />
+        <Builder
+          onExit={() => setMode(false)}
+          onRide={(id) => {
+            chooseScenario(id);
+            setMode(false);
+          }}
+        />
       </ErrorBoundary>
     );
   }
@@ -157,6 +163,8 @@ function Session({
    */
   const [replayScenario, setReplayScenario] = useState<Scenario | null>(null);
   const [runs, setRuns] = useState<RunRecord[]>(() => listRuns());
+  /** What opening a ride from a file did, or why it could not. Cleared on the next attempt. */
+  const [runNotice, setRunNotice] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [replayTime, setReplayTime] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -290,7 +298,7 @@ function Session({
         routes: engine.routes,
         player: playerRef.current,
         replayScenario,
-        scenarios: ALL_SCENARIOS,
+        scenarios: allScenarios(),
         scenarioById,
       },
     });
@@ -412,7 +420,7 @@ function Session({
           {record === null && snapshot.phase !== 'riding' && (
             <BriefingModal
               scenario={scenario}
-              scenarios={ALL_SCENARIOS}
+              scenarios={allScenarios()}
               onScenarioChange={onScenarioChange}
               onStart={handleStart}
               countdown={snapshot.phase === 'countdown' ? snapshot.countdown : null}
@@ -552,7 +560,9 @@ function Session({
             currentId={record?.id ?? null}
             onOpen={onOpenRun}
             onChange={setRuns}
+            onNotice={setRunNotice}
           />
+          {runNotice && <p className="builder-note builder-notice">{runNotice}</p>}
         </section>
 
         <footer className="sidebar-footer">

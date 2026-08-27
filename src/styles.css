@@ -901,6 +901,59 @@ kbd {
   opacity: 0.75;
 }
 
+/* A scenario nobody has checked but its author. Marked, not hidden. */
+.scenario-own {
+  opacity: 0.55;
+  font-size: 0.85em;
+}
+
+.builder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* Loud enough to notice next to the button you just pressed, quiet enough not to be a panel. */
+.builder-notice {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  opacity: 1;
+}
+
+.builder-notice.good {
+  background: rgba(63, 191, 118, 0.12);
+  color: #7bd9a2;
+}
+
+.builder-notice.bad {
+  background: rgba(240, 106, 92, 0.12);
+  color: #f0897e;
+}
+
+.builder-saved {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.builder-saved li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.builder-saved-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .builder-reveal-notes {
   list-style: none;
   margin: 8px 0 0;
