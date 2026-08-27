@@ -8,19 +8,15 @@
  * which is the same move that took the mirror tilt out of a hand-picked constant.
  */
 import type {
-  ActorSpec,
   Manoeuvre,
   MotorwayStretch,
   Scenario,
   ScenarioWorld,
 } from '../../sim/types';
 
-const KMH = 1 / 3.6;
-
 interface Props {
   draft: Scenario;
   onChange: (next: Scenario) => void;
-  onPatchActor: (id: string, patch: Partial<ActorSpec>) => void;
 }
 
 function Num({
@@ -53,7 +49,7 @@ function Num({
   );
 }
 
-export function WorldForm({ draft, onChange, onPatchActor }: Props) {
+export function WorldForm({ draft, onChange }: Props) {
   const world = draft.world;
 
   const setWorld = (next: ScenarioWorld) => onChange({ ...draft, world: next });
@@ -226,32 +222,6 @@ export function WorldForm({ draft, onChange, onPatchActor }: Props) {
         </section>
       )}
 
-      <section className="sidebar-section">
-        <h3>Verkeer</h3>
-        <p className="builder-note">Sleep de stippen in beeld om te verzetten waar iemand vandaan komt.</p>
-        {draft.actors.map((a) => (
-          <div key={a.id} className="builder-actor">
-            <h4>{a.label}</h4>
-            <Num
-              label="Snelheid"
-              unit="km/u"
-              step={5}
-              value={a.speed / KMH}
-              onChange={(v) => onPatchActor(a.id, { speed: v * KMH })}
-            />
-            <Num
-              label="Lengte"
-              unit="m"
-              value={a.length ?? 1.8}
-              onChange={(v) => onPatchActor(a.id, { length: v })}
-            />
-            <p className="builder-coords">
-              van ({a.from.x.toFixed(1)}, {a.from.y.toFixed(1)}) naar ({a.to.x.toFixed(1)},{' '}
-              {a.to.y.toFixed(1)})
-            </p>
-          </div>
-        ))}
-      </section>
     </>
   );
 }

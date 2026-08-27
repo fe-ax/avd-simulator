@@ -89,13 +89,36 @@ export interface ExportedScenario {
   source: string;
 }
 
+/**
+ * A built scenario as a file.
+ *
+ * With a base, it emits a derivation and only the fields that differ. Without one — a scenario
+ * started from a blank road rather than from an exercise — there is nothing to spread, so it emits
+ * the whole thing. A "base" that was an empty template would be worse than none: every field would
+ * differ, the spread would carry nothing, and the file would claim a parent it owes nothing to.
+ */
 export function exportScenario(
   draft: Scenario,
-  base: Scenario,
-  baseModule: string,
-  baseBinding: string,
+  base: Scenario | null,
+  baseModule?: string,
+  baseBinding?: string,
 ): ExportedScenario {
   const binding = camel(draft.id);
+  const filename = `scenario.${draft.id.replace(/-v\d+$/, '')}.ts`;
+
+  if (!base || !baseModule || !baseBinding) {
+    const source = `/**
+ * ${draft.title}
+ *
+ * Gebouwd met de scenario-bouwer.
+ */
+import type { Scenario } from './types';
+
+export const ${binding}: Scenario = ${toSource(draft, 0)};
+`;
+    return { filename, binding, source };
+  }
+
   const overrides = overridesOf(draft, base);
   const body = Object.entries(overrides)
     .map(([k, v]) => `  ${k}: ${toSource(v, 1)},`)
@@ -116,5 +139,5 @@ ${body}
 };
 `;
 
-  return { filename: `scenario.${draft.id.replace(/-v\d+$/, '')}.ts`, binding, source };
+  return { filename, binding, source };
 }

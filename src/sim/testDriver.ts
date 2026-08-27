@@ -6,7 +6,7 @@
 import { SimEngine } from './engine';
 import { GAZE_DURATION_S, isLookControl, LOOK_DIRECTIONS } from './perception';
 import { scoreRun } from './scoring';
-import type { RunRecord, Scenario } from './types';
+import type { ActorState, RunRecord, Scenario } from './types';
 
 export interface RidePlan {
   mirrors?: boolean;
@@ -98,9 +98,28 @@ const SCAN_CYCLE = [
   'SHOULDER_RIGHT',
 ] as const;
 
+/**
+ * A snapshot of the ride, for tuning.
+ *
+ * Everything about the traffic is optional, because a road can have none: an empty starter is a
+ * perfectly good scenario that simply has nothing on it yet, and the model rider used to fall over
+ * reading the first actor's position on a road where there was no first actor.
+ */
 function probe(engine: SimEngine): Probe {
-  const actor = engine.actors[0];
+  const actor: ActorState | undefined = engine.actors[0];
   const pose = engine.bike.pose;
+  if (!actor) {
+    return {
+      t: engine.t,
+      d: engine.distanceToConflict(),
+      speedKmh: engine.bike.speed * 3.6,
+      gap: Infinity,
+      bearing: 0,
+      dist: Infinity,
+      mode: 'cruise',
+      perceived: false,
+    };
+  }
   const dx = actor.x - pose.x;
   const dy = actor.y - pose.y;
   let bearing = ((Math.atan2(dy, dx) - pose.heading) * 180) / Math.PI;
@@ -170,7 +189,7 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
     }
 
     const d = engine.distanceToConflict();
-    const actor = engine.actors[0];
+    const actor: ActorState | undefined = engine.actors[0];
     plan.onSample?.(probe(engine));
 
     once('startSlow', () => {
@@ -226,7 +245,8 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
     if (p.steer && d <= 11) once('steer', () => dispatch('STEER_RIGHT'));
 
     const actorPast =
-      engine.routes.kind === 'urbanCrossing' && actor.y > engine.routes.crossYSpan[1] + 1.5;
+      !actor ||
+      (engine.routes.kind === 'urbanCrossing' && actor.y > engine.routes.crossYSpan[1] + 1.5);
     const wantStop = p.yieldToActor && d <= 12 && !actorPast;
     if (wantStop !== braking) {
       braking = wantStop;
