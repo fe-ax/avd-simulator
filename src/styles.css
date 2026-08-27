@@ -901,6 +901,30 @@ kbd {
   opacity: 0.75;
 }
 
+/*
+ * The reeks-with-teeth list. Quieter than .builder-faults on purpose: this one is confirmation
+ * rather than a complaint, and a green panel that shouts reads like a red one at a glance.
+ */
+.builder-reeks-check {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.builder-reeks-check li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.builder-reeks-check span {
+  opacity: 0.6;
+  text-align: right;
+}
+
 .builder-note {
   font-size: 11px;
   line-height: 1.5;

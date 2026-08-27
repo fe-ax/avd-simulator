@@ -37,8 +37,11 @@ function rideWhere(speedKmhAt: (d: number) => number): RunRecord {
       brake: false,
       indicator: 'off',
       branch: 'straight',
-      head: { yaw: 0, pitch: 0 },
-    } as BikeSample);
+      headYaw: 0,
+      headPitch: 0,
+      laneOffset: 0,
+      targetSpeedKmh: 50,
+    });
     s += speed / HZ;
   }
   return {

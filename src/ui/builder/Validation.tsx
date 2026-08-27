@@ -8,7 +8,7 @@
  */
 import type { Obstruction } from '../../sim/validate';
 import type { ActorSpec, Vec2 } from '../../sim/types';
-import type { Reveal } from '../../sim/referenceRide';
+import type { Reveal, RuleDiscrimination } from '../../sim/referenceRide';
 import type { RunRecord } from '../../sim/types';
 
 export interface Validation {
@@ -22,6 +22,8 @@ export interface Validation {
   /** The scenario this one derives from, whose reeks it is still being judged by. */
   inheritedFrom: string | null;
   reveals: Reveal[];
+  /** Which rules any deliberately sloppy rider actually missed. Empty when nothing could be ridden. */
+  discrimination: RuleDiscrimination[];
 }
 
 function seconds(v: number | null): string {
@@ -36,6 +38,7 @@ export function ValidationPanel({
   unscored,
   inheritedFrom,
   reveals,
+  discrimination,
 }: Validation) {
   if (error) {
     return (
@@ -127,6 +130,50 @@ export function ValidationPanel({
           </p>
         </section>
       )}
+
+      {discrimination.length > 0 && (() => {
+        const toothless = discrimination.filter((r) => r.failedBy.length === 0);
+        if (toothless.length === 0) {
+          return (
+            <section className="builder-panel builder-panel-good">
+              <h3>Elke regel vangt iets</h3>
+              <p className="builder-note">
+                Voor elke regel is er een slordige rit die hem mist. De oefening meet dus echt wat
+                je erin gestopt hebt.
+              </p>
+              <ul className="builder-reeks-check">
+                {discrimination.map((r) => (
+                  <li key={r.expectedId}>
+                    <strong>{r.label}</strong>
+                    <span>gemist door {r.failedBy.join(', ')}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        }
+        return (
+          <section className="builder-panel builder-panel-bad">
+            <h3>{toothless.length === 1 ? 'Deze regel onderscheidt niets' : 'Deze regels onderscheiden niets'}</h3>
+            <p>
+              Er is geen enkele manier van slecht rijden die {toothless.length === 1 ? 'hem' : 'ze'}{' '}
+              mist:
+            </p>
+            <ul className="builder-faults">
+              {toothless.map((r) => (
+                <li key={r.expectedId}>
+                  <strong>{r.label}</strong>
+                  <span>ook een slordige rijder haalt dit</span>
+                </li>
+              ))}
+            </ul>
+            <p className="builder-note">
+              Een regel die iedereen haalt, leert niemand iets — hij kleurt groen en zegt niets.
+              Verscherp het venster of de grens, of haal hem weg.
+            </p>
+          </section>
+        );
+      })()}
 
       {obstructions.length > 0 && (
         <section className="builder-panel builder-panel-bad">

@@ -46,6 +46,8 @@ export interface RidePlan {
   gear?: boolean;
   slowDown?: boolean;
   indicatorOff?: 'direct' | 'laat' | 'nooit';
+  /** Get going again after the manoeuvre. Off is the rider who dawdles away from the junction. */
+  pullAway?: boolean;
   /** Extra sloppiness: shift without pulling the clutch. */
   clutchless?: boolean;
   indicatorWrongSide?: boolean;
@@ -90,6 +92,7 @@ const DEFAULTS: Required<Omit<RidePlan, 'onSample'>> = {
   gear: true,
   slowDown: true,
   indicatorOff: 'direct',
+  pullAway: true,
   clutchless: false,
   indicatorWrongSide: false,
   startSlowPresses: 0,
@@ -301,10 +304,12 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
       else if (p.indicatorOff === 'laat' && engine.t > turnedAt + 4.5) {
         once('off', () => dispatch('INDICATOR_OFF'));
       }
-      once('accelerate', () => {
-        dispatch('THROTTLE_UP');
-        dispatch('THROTTLE_UP');
-      });
+      if (p.pullAway) {
+        once('accelerate', () => {
+          dispatch('THROTTLE_UP');
+          dispatch('THROTTLE_UP');
+        });
+      }
     }
   }
 
@@ -340,7 +345,15 @@ export interface MergePlan {
   signalBeforeLooking?: boolean;
   /** Do the schouderblik over the wrong shoulder: it reveals nothing. */
   shoulderWrongSide?: boolean;
-  indicatorOff?: boolean;
+  /**
+   * Cancel the richtingaanwijzer once settled in the lane.
+   *
+   * Not called `indicatorOff` like the crossroads plan's three-way version: the two plan types are
+   * intersected wherever a ride is described generically, and two fields of the same name with
+   * different types intersect to `undefined` — a field neither plan can then set. That collision
+   * was invisible until something tried to use it.
+   */
+  cancelIndicator?: boolean;
   /** Ease off once settled in the lane, which is what the road asks of you behind a truck. */
   matchSpeedAfterMerge?: boolean;
   /**
@@ -369,7 +382,7 @@ const MERGE_DEFAULTS: Required<MergePlan> = {
   mergeAtD: 60,
   signalBeforeLooking: false,
   shoulderWrongSide: false,
-  indicatorOff: true,
+  cancelIndicator: true,
   matchSpeedAfterMerge: false,
   chaseAfterMerge: false,
   keepDistance: true,
@@ -463,7 +476,7 @@ export function driveMerge(scenario: Scenario, plan: MergePlan = {}): RunRecord 
     if (d <= p.mergeAtD) once('merge', () => dispatch('STEER_LEFT'));
 
     const settled = engine.getManoeuvreCompletedAt() !== null;
-    if (settled && p.indicatorOff) once('indicatorOff', () => dispatch('INDICATOR_OFF'));
+    if (settled && p.cancelIndicator) once('indicatorOff', () => dispatch('INDICATOR_OFF'));
     if (settled && p.chaseAfterMerge && !eased) {
       eased = true;
       for (let i = 0; i < 3; i++) dispatch('THROTTLE_UP');

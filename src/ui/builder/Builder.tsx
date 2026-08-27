@@ -15,7 +15,7 @@ import { buildRoutes, poseAt } from '../../sim/route';
 import { ReplayPlayer } from '../../sim/replay';
 import { ALL_SCENARIOS, scenarioById } from '../../sim/scenarios';
 import { STARTERS } from '../../sim/starters';
-import { referenceRide, revealTimeline, unscoredActors } from '../../sim/referenceRide';
+import { analyseScenario } from '../../sim/referenceRide';
 import { findObstructions, findOffRoad, riddenPath } from '../../sim/validate';
 import { exportScenario } from '../../sim/scenarioExport';
 import { clearDraft, loadDraft, saveDraft } from '../../sim/drafts';
@@ -39,6 +39,7 @@ const EMPTY: Validation = {
   unscored: [],
   inheritedFrom: null,
   reveals: [],
+  discrimination: [],
 };
 
 /** Which module each shipped scenario lives in, so an export can import its base. */
@@ -137,7 +138,8 @@ export function Builder({ onExit }: { onExit: () => void }) {
   // is a courtesy to the drag rather than a necessity.
   useEffect(() => {
     const id = setTimeout(() => {
-      const { record, error } = referenceRide(draft);
+      const { model, reveals, unscored, discrimination } = analyseScenario(draft);
+      const { record, error } = model;
       if (error) {
         setValidation({ ...EMPTY, error });
         return;
@@ -155,11 +157,12 @@ export function Builder({ onExit }: { onExit: () => void }) {
         error: null,
         obstructions: routes ? findObstructions(draft.world, routes, bounds) : [],
         offRoad: findOffRoad(draft.world, riddenPath(record.samples), bounds),
-        unscored: unscoredActors(draft, record),
+        unscored,
         // Only when there is genuinely somebody else's reeks in play. A starter brings none, and
         // warning about an inherited reeks that does not exist is its own kind of lying.
         inheritedFrom: starter ? null : base.title,
-        reveals: revealTimeline(draft),
+        reveals,
+        discrimination,
       });
     }, SETTLE_MS);
     return () => clearTimeout(id);
