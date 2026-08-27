@@ -4,27 +4,20 @@ A running list, kept from actually trying to build things with it rather than fr
 That is the whole method: every item here was found by sitting down to build an exercise and being
 unable to, and not one of them was found by reading a file.
 
-One thing is open. Everything else that was ever on this list is closed — the history is in
-`git log` and in pull requests #6 to #12, which is a better home for it than a document whose job is
-to say what is still wrong.
+**Nothing is open.** Everything that was ever on this list is closed — the history is in `git log`
+and in pull requests #6 to #14, which is a better home for it than a document whose job is to say
+what is still wrong.
 
-Every rule in every shipped scenario is now missed by at least one deliberately sloppy rider, and
-`discrimination.test.ts` asserts it with no exceptions list.
+That is a statement about this list, not about the builder. It means the way these were found has
+stopped finding things, not that there is nothing left to find. **The list refills by building
+something with it**, which is how every item on it arrived: sit down to make an exercise you have
+not made before — a roundabout, a pedestrian crossing, something at night — and write down what you
+could not do. Reading the code will not produce the next entry, and neither will thinking about it.
+
+Every rule in every shipped scenario is missed by at least one deliberately sloppy rider, and
+`discrimination.test.ts` asserts that with no exceptions list.
 
 ---
-
-## Open
-
-### The approach headway is not measured on the motorway
-
-`scoreHeadway` only measures once the rider has changed lane, because before that "the gap is not a
-following distance, it is just two vehicles on different bits of road" — true on the oprit, where
-the traffic is on a different carriageway. On the open motorway it is false: sitting on the bumper
-of the lorry you are waiting to pass is a real fault, the exam looks for it, and there is a
-`tailgate` rider ready to catch it. Nothing measures it.
-
-Making the gate scenario-controlled rather than universal would fix it. That is a scoring change
-affecting both motorways and wants its own before-and-after.
 
 ## What this list has taught
 
@@ -53,6 +46,13 @@ every shipped motorway has traffic far enough up the road to stretch the frame p
 showed only on the empty starter — the first thing a new author sees and the last thing anybody
 tests. Same shape as the reveal table in `CLAUDE.md` having gone stale for exactly one scenario: the
 interesting case is the one that is not like the others.
+
+**Two checks that agree are one check and a trap.** The headway rule had a temporal gate — measure
+only after the manoeuvre — and a lateral one, refuse anything more than half a lane off your line.
+They were saying the same thing about the oprit, so the temporal one looked free. It was not: on an
+open motorway there is no manoeuvre to wait for, so sitting on the bumper of the lorry you are
+waiting to pass went unmeasured entirely. Removing it left every row on the merge scenario
+identical, which is the proof it had never been doing anything there.
 
 **A rule that cannot be failed is more often a missing rider than a bad rule.** Three rules on the
 A12 sat on this list for two rounds under a confident explanation of why they were unfixable — the

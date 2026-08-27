@@ -561,27 +561,36 @@ function scoreHeadway(
   const actorLength = scenario.actors.find((a) => a.id === kind.actorId)?.length ?? 1.8;
   const byT = new Map(track.map((a) => [Math.round(a.t * 20), a]));
 
-  // Only once the rider is actually in the lane: before that the gap is not a following distance,
-  // it is just two vehicles on different bits of road.
-  const from = record.manoeuvreCompletedAt;
+  // Every sample in the window, from the first one.
+  //
+  // This used to start at `manoeuvreCompletedAt` — measure only once the rider is in the lane,
+  // because before that "the gap is not a following distance, it is just two vehicles on different
+  // bits of road". The intent was right and the mechanism was redundant: `headwaySeconds` already
+  // returns null for anything more than half a lane off your line, which is what being on the
+  // oprit *is*. The two gates were saying the same thing, and the temporal one said it too broadly.
+  //
+  // What it cost was the approach. On an open motorway there is no manoeuvre to wait for and the
+  // rider is behind the lorry from the first frame, so sitting on its bumper while waiting for a
+  // gap — a real fault, and one the exam looks for — was never measured at all. Dropping the gate
+  // leaves the merge scenario's rows identical, which is the proof it was doing nothing there.
   const series: { t: number; value: number }[] = [];
   let side: 'ahead' | 'behind' = 'behind';
-  if (from !== null) {
-    for (const s of samples) {
-      if (s.t < from || s.d > w.from || s.d < w.to) continue;
-      const actor = byT.get(Math.round(s.t * 20));
-      if (!actor) continue;
-      const h = headwaySeconds(s, actor, actorLength);
-      if (!h) continue;
-      side = h.side;
-      series.push({ t: s.t, value: h.seconds });
-    }
+  for (const s of samples) {
+    if (s.d > w.from || s.d < w.to) continue;
+    const actor = byT.get(Math.round(s.t * 20));
+    if (!actor) continue;
+    const h = headwaySeconds(s, actor, actorLength);
+    if (!h) continue;
+    side = h.side;
+    series.push({ t: s.t, value: h.seconds });
   }
 
   const held = heldMinimum(series);
   // Nothing to measure is not a fault, it is not applicable — the rider never spent time in the
   // same lane as this vehicle. Whatever went wrong instead (no merge, no return to the right) has
   // a row of its own, and marking the same omission twice reads as the debrief padding its case.
+  // Still reachable without the temporal gate: a rider who never leaves the oprit is never within
+  // half a lane of the carriageway, so the series stays empty on the lateral test alone.
   if (held === null) return null;
 
   // Bands are ordered generous-first in the scenario data; the first one that fits, wins.
