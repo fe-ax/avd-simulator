@@ -246,13 +246,21 @@ export interface DistanceWindow {
 export type ExpectedKind =
   /** A control must be pressed inside the window. */
   | { type: 'control'; control: ControlId }
-  /** Speed must be at or below `maxKmh` by the end of the window. */
+  /**
+   * Speed at or below `maxKmh`, **held** for half a second inside the window rather than touched.
+   * The same rule as `headway`, for the same reason: a speed you dipped to for one sample is not a
+   * speed you rode at, and reading one instant is gameable by braking exactly at the window's end.
+   */
   | { type: 'speedAtMost'; maxKmh: number }
   /** Gear must be at or below `maxGear` by the end of the window. */
   | { type: 'gearAtMost'; maxGear: number }
   /** A control must be pressed within `withinSeconds` of the manoeuvre being completed. */
   | { type: 'afterTurn'; control: ControlId; withinSeconds: number }
-  /** Speed must be at or above `minKmh` by the end of the window. */
+  /**
+   * Speed must reach `minKmh` at *some* point inside the window — not held, and not measured at
+   * its end. Deliberately looser than `speedAtMost`: getting up to speed is an event you either
+   * managed or did not, where riding slowly enough is a state you have to be in.
+   */
   | { type: 'speedAtLeast'; minKmh: number }
   /**
    * Following distance to another road user, in seconds, held across the window rather than

@@ -238,9 +238,21 @@ function scoreExpected(
     }
 
     case 'speedAtMost': {
+      // The lowest speed the rider actually *held*, not the one they happened to be doing at a
+      // single instant. Reading one sample was gameable in the obvious direction: keep 50 the
+      // whole way, stab the brake at exactly the end of the window, and pass. Same hole the
+      // headway rule closed, same fix, and deliberately the same helper.
       const max = kind.maxKmh;
-      const atEnd = sampleNearestDistance(samples, expected.window!.to);
-      const speedKmh = atEnd ? atEnd.speed * 3.6 : Infinity;
+      const w = expected.window!;
+      const held = heldMinimum(
+        samples
+          .filter((s) => s.d <= w.from && s.d >= w.to)
+          .map((s) => ({ t: s.t, value: s.speed * 3.6 })),
+      );
+      // A window too short to hold anything for half a second is an authoring choice, not a rule
+      // that does not apply — so fall back to the reading at its end rather than dropping the row.
+      const atEnd = sampleNearestDistance(samples, w.to);
+      const speedKmh = held ?? (atEnd ? atEnd.speed * 3.6 : Infinity);
       const ok = speedKmh <= max + 0.5;
       const firstBelow = samples.find((s) => s.speed * 3.6 <= max) ?? null;
       return {
@@ -507,22 +519,26 @@ const BIKE_LENGTH = 2.3;
 const HELD_FOR_S = 0.5;
 
 /**
- * The lowest headway the rider actually *held*, as opposed to touched.
+ * The lowest value the rider actually *held*, as opposed to touched.
  *
  * A single sample proves nothing — at 20 Hz and 100 km/h one sample is 1.4 m — so this takes the
  * best value inside each half-second and then the worst of those. A momentary dip is forgiven; a
  * dip you sat in is not. Sampling one instant instead (say, the moment the lane change finished)
  * would have been gameable in the obvious direction: drop in three seconds clear, bank the
  * credit, then close right up and never be measured again.
+ *
+ * Written for headway and now used for speed as well, which is why the series carries a bare
+ * `value`. The two rules are the same shape of question — *what did you sustain?* — and the
+ * gameable ride they refuse is the same ride.
  */
-function heldMinimum(series: { t: number; seconds: number }[]): number | null {
+function heldMinimum(series: { t: number; value: number }[]): number | null {
   if (series.length === 0) return null;
   let worst = Infinity;
   for (let i = 0; i < series.length; i++) {
     let best = -Infinity;
     let j = i;
     for (; j < series.length && series[j].t - series[i].t <= HELD_FOR_S; j++) {
-      best = Math.max(best, series[j].seconds);
+      best = Math.max(best, series[j].value);
     }
     // Only score full half-seconds, or the tail of the run scores itself on one sample.
     if (j >= series.length && series[series.length - 1].t - series[i].t < HELD_FOR_S) break;
@@ -548,7 +564,7 @@ function scoreHeadway(
   // Only once the rider is actually in the lane: before that the gap is not a following distance,
   // it is just two vehicles on different bits of road.
   const from = record.manoeuvreCompletedAt;
-  const series: { t: number; seconds: number }[] = [];
+  const series: { t: number; value: number }[] = [];
   let side: 'ahead' | 'behind' = 'behind';
   if (from !== null) {
     for (const s of samples) {
@@ -558,7 +574,7 @@ function scoreHeadway(
       const h = headwaySeconds(s, actor, actorLength);
       if (!h) continue;
       side = h.side;
-      series.push({ t: s.t, seconds: h.seconds });
+      series.push({ t: s.t, value: h.seconds });
     }
   }
 
