@@ -403,8 +403,16 @@ richtingaanwijzer prerequisite refuses the manoeuvre, so there is no lane change
 about the lane change returns no row rather than a miss. Sharpening the second kind changes nothing.
 
 `BUILDER-GAPS.md` is the running list of what it still cannot do, and it is kept from building
-things rather than from reading code. Three of the four scenarios now have every rule caught by
-some sloppy rider; the overtake's three are pinned in `discrimination.test.ts` with the reason.
+things rather than from reading code. Every rule in every shipped scenario is missed by at least one
+sloppy rider, and `discrimination.test.ts` asserts that with no exceptions list — so a rule going
+soft, or a rider losing the ability to make its mistake, both turn it red.
+
+**A rule nothing can fail is more often a missing rider than a bad rule.** Three rules on the A12
+sat unfixed under a confident explanation of why they could not be fixed, and all of it was wrong:
+the schouderblik rules are about looking *too early*, which no rider did, and the weaver demanded
+sixty-five metres of clearance to enter a forty-three metre gap, so it never once tucked in between
+the lorries the scenario is about. Check that the mistake is actually being made before concluding
+the rule cannot catch it.
 
 ## Scoring, briefly
 

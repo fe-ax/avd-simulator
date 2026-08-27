@@ -254,6 +254,7 @@ function sloppyRiders(scenario: Scenario): SloppyRider[] {
           { label: 'wie niet aangeeft', plan: { indicator: false } },
           { label: 'wie te langzaam aankomt', plan: { cruiseKmh: 80 } },
           { label: 'wie te dicht op zijn voorganger zit', plan: { tailgate: true } },
+          { label: 'wie te vroeg kijkt en dan wacht', plan: { lookEarly: true } },
         ]
       : [
           { label: 'wie niet in de spiegel kijkt', plan: { mirror: false } },
