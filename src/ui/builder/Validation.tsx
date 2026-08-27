@@ -109,9 +109,10 @@ export function ValidationPanel({
         <section className="builder-panel builder-panel-bad">
           <h3>Er wordt niets over ze beoordeeld</h3>
           <p>
-            {unscored.length === 1 ? 'Deze weggebruiker komt' : 'Deze weggebruikers komen'} in geen
-            enkele regel voor, en {unscored.length === 1 ? 'hoeft' : 'hoeven'} ook nooit voor de
-            rijder te remmen — hoe slecht die ook rijdt:
+            {unscored.length === 1 ? 'Deze weggebruiker doet' : 'Deze weggebruikers doen'} niets uit
+            zichzelf, {unscored.length === 1 ? 'komt' : 'komen'} in geen enkele regel voor, en
+            {unscored.length === 1 ? ' hoeft' : ' hoeven'} ook nooit voor de rijder te remmen — hoe
+            slecht die ook rijdt:
           </p>
           <ul className="builder-faults">
             {unscored.map((a) => (

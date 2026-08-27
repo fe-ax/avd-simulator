@@ -5,13 +5,16 @@ practical exam. It is not a driving game: it exists so a student can rehearse **
 looking and acting in traffic**, and then see afterwards exactly when they looked versus when they
 should have.
 
-Two scenarios:
+Four scenarios:
 
 1. *Rechtsaf de Kerkstraat in* — a right turn across a vrijliggend fietspad, with a snorfiets
    coming up the inside. Teaches the look sequence and the dode hoek.
-2. *Invoegen op de A12* — a motorway merge from an on-ramp into a gap between a car ahead and a
+2. *Auto van rechts remt* — a plain crossroads, straight on, with priority; a car arrives from the
+   right far too fast and stands on its brakes. Teaches that having priority is not the same as
+   being given it. **Built entirely in the scenario builder** — see `BUILDER-GAPS.md`.
+3. *Invoegen op de A12* — a motorway merge from an on-ramp into a gap between a car ahead and a
    truck coming up behind. Teaches speed matching and following distance.
-3. *Inhalen op de A12* — open motorway, two lorries nose to tail at 90, busy left lane. Teaches
+4. *Inhalen op de A12* — open motorway, two lorries nose to tail at 90, busy left lane. Teaches
    waiting for a gap, and **not** tucking back in between the lorries.
 
 The UI is Dutch. Code, comments and commit messages are English.
@@ -122,9 +125,14 @@ src/
     roadSurfaces.ts        the vocabulary, and dispatch on the kind of world
     surfaces/              one generator per kind of road; pure (layout, extent) -> Surface[]
     scenarios.ts           the registry, keyed by the id a RunRecord stores
+    starters.ts            empty scenarios, one per kind of road; what the builder derives from
     steering.ts            what the sturen controls mean; ONE body of that rule
     scenario.*.ts          pure data
     testDriver.ts          headless rider: drives the real engine through the real dispatch
+    referenceRide.ts       what a model rider makes of a scenario — the builder's safety net
+    validate.ts            geometry checks; shared by the tests and the builder
+    scenarioExport.ts      a built scenario, as a file you can drop back into src/sim
+    drafts.ts              builder autosave; validates a draft by trying to use it
     replay.ts / recorder.ts
     __tests__/
   scene/        three.js — the riding view
@@ -137,9 +145,6 @@ src/
     gazeOverlay.ts         the DOM dots and reticle
     instrument.ts          the binnacle: speed, gear, indicator telltales
     actors3d.ts, coords.ts
-    validate.ts            geometry checks; shared by the tests and the builder
-    referenceRide.ts       what a model rider makes of a scenario — the builder's safety net
-    scenarioExport.ts      a built scenario, as a file you can drop back into src/sim
   render/       the top-down canvas renderer — the review view, and the builder's
     camera.ts              ViewCamera (the interface) + the projective chase camera
     planCamera.ts          flat, north-up, invertible: the one the builder edits through
@@ -277,7 +282,23 @@ What has actually worked:
   several tuned numbers at once, prove the bands are separable first.
 
 **A hidden browser pane throttles `requestAnimationFrame`**, so a scene will look frozen and mirror
-cameras will read as un-aimed. Force frames with `__frames3d(n)` before measuring anything.
+cameras will read as un-aimed. Force frames with `__frames3d(n)` before measuring anything. It also
+lays the canvas out at zero height, so a ride started there stays on the countdown for ever: drive
+it with `engine.paused = true` and `engine.advance()` instead.
+
+Three things about driving the first-person view by hand, each of which looks like a bug the first
+time:
+
+- **`engine.advance(s)` is clamped per call.** Ask for 7.6 seconds and you get a fraction of it.
+  Loop until `engine.t` is where you want it.
+- **`Stage.sync` reads the head from `view.head`, not from the controller.** Mutating
+  `__head.pose.yaw` changes nothing until the engine produces a new view, so nudge the clock after
+  setting it.
+- **Yaw's sign is the opposite of the world bearing**, because `head.rotation.y` is a right-handed
+  rotation about +Y: looking *right* (towards +x) is a *negative* yaw. Do not derive it — sweep the
+  yaw, project the target with `Object3D.project`, and keep the angle that centres it. Note that
+  `camera.updateMatrixWorld(true)` will not do: the yaw lives on `stage.head`, the camera's parent,
+  so update from `stage.scene` and re-invert `camera.matrixWorldInverse` yourself.
 
 ### Dev handles (dev build only, never imported by the app)
 
@@ -315,10 +336,17 @@ Three things make it cheap, and all three are worth preserving:
   `turnInY + turnRadius !== sideLaneCenterY`, which an editor would violate on every keystroke — so
   the side road's lane centre is computed from the other two. Unrepresentable beats reported.
 
-**Not in it yet, and it matters:** you cannot edit the reeks or the briefing. A derived scenario
-inherits both, which stays coherent for the windows (they are anchored in metres before the
-conflict point) but *not* for the briefing text — a variant will describe itself as its parent. Fix
-that before shipping any built scenario to a student.
+The reeks, the briefing and the traffic are all editable, and a scripted actor can be told to brake
+or stop at a given distance along **its own** path — so the hazard is the other driver's mistake
+rather than a reaction to yours. *Auto van rechts remt* was built this way start to finish and
+ships unedited; it is the proof that the loop closes.
+
+**What it still cannot do, and it matters:** the validator only ever rides a model rider who does
+everything *right*. That answers "is this exercise possible?" but not "is it about anything?" — a
+rule a careless rider also passes goes green just the same. Ride the scenario a second time with
+`referenceRide(s, { anticipate: false })` and check the rule actually fails; there is no way to ask
+that from the browser yet. `BUILDER-GAPS.md` is the running list, and it is kept from building
+things rather than from reading code.
 
 ## Scoring, briefly
 

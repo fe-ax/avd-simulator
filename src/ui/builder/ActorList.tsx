@@ -96,7 +96,16 @@ function CueRow({
               key={a.id}
               type="button"
               className={`replay-btn tiny${a.id === cue.action ? ' active' : ''}`}
-              onClick={() => onChange({ ...cue, action: a.id })}
+              onClick={() =>
+                // `forSeconds` belongs to braking and nothing else. Its field hides when you pick
+                // another action, and a value that is invisible but still in the data is how a
+                // scenario ends up exporting a number nobody chose.
+                onChange(
+                  a.id === 'brake'
+                    ? { ...cue, action: a.id, forSeconds: cue.forSeconds ?? 2 }
+                    : { atDist: cue.atDist, action: a.id },
+                )
+              }
             >
               {a.label}
             </button>
@@ -186,10 +195,21 @@ export function ActorList({ actors, onPatch, onAdd, onRemove, selected, onSelect
               value={a.length ?? 1.8}
               onChange={(v) => onPatch(a.id, { length: v })}
             />
-            <p className="builder-coords">
-              van ({a.from.x.toFixed(1)}, {a.from.y.toFixed(1)}) naar ({a.to.x.toFixed(1)},{' '}
-              {a.to.y.toFixed(1)})
-            </p>
+            {/*
+              Numbers as well as handles. Dragging is the right way to place something you can see,
+              and useless for something a hundred and seventy metres up the road: you have to zoom
+              out until the carriageway is a thread before the handle is even on screen.
+            */}
+            <div className="builder-xy">
+              <span>Van</span>
+              <Field label="x" value={a.from.x} onChange={(v) => onPatch(a.id, { from: { ...a.from, x: v } })} />
+              <Field label="y" value={a.from.y} onChange={(v) => onPatch(a.id, { from: { ...a.from, y: v } })} />
+            </div>
+            <div className="builder-xy">
+              <span>Naar</span>
+              <Field label="x" value={a.to.x} onChange={(v) => onPatch(a.id, { to: { ...a.to, x: v } })} />
+              <Field label="y" value={a.to.y} onChange={(v) => onPatch(a.id, { to: { ...a.to, y: v } })} />
+            </div>
 
             <div className="builder-cues">
               <h5>

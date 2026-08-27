@@ -34,6 +34,15 @@ export interface RidePlan {
   shoulderTooFarBack?: boolean;
   /** Stop and let the snorfiets pass. */
   yieldToActor?: boolean;
+  /**
+   * Ease off when somebody is closing on the same piece of junction at the same moment.
+   *
+   * Not the same thing as giving way. Giving way is a rule about who goes first; this is the
+   * judgement that being entitled to go is not the same as it being safe to — and it is the whole
+   * content of a hazard exercise, where the other driver is the one making the mistake and your
+   * job is to have read it.
+   */
+  anticipate?: boolean;
   gear?: boolean;
   slowDown?: boolean;
   indicatorOff?: 'direct' | 'laat' | 'nooit';
@@ -77,6 +86,7 @@ const DEFAULTS: Required<Omit<RidePlan, 'onSample'>> = {
   scanConstantly: false,
   steer: true,
   yieldToActor: true,
+  anticipate: false,
   gear: true,
   slowDown: true,
   indicatorOff: 'direct',
@@ -261,7 +271,25 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
     // its y for the whole ride, so the rider waited for it forever and every such scenario ran
     // into the ninety-second cap with the machine sitting still.
     const actorPast = !actor || clearedConflict(engine, actor);
-    const wantStop = p.yieldToActor && d <= 12 && !actorPast;
+
+    // Somebody arriving at the same place at the same time. Compared in seconds rather than
+    // metres, because that is the question actually being asked: not "how far away is it" but
+    // "will we be there together".
+    let closing = false;
+    if (p.anticipate) {
+      const bike = engine.world(false).bike;
+      const meeting = poseAt(engine.routes.turn, engine.routes.conflictS);
+      const mine = d / Math.max(bike.speed, 0.5);
+      for (const other of engine.actors) {
+        if (other.speed < 1) continue;
+        const toMeeting =
+          (meeting.x - other.x) * Math.cos(other.heading) +
+          (meeting.y - other.y) * Math.sin(other.heading);
+        if (toMeeting <= 0) continue;
+        if (Math.abs(toMeeting / other.speed - mine) < 2.5) closing = true;
+      }
+    }
+    const wantStop = (p.yieldToActor && d <= 12 && !actorPast) || (closing && d <= 55 && d > -2);
     if (wantStop !== braking) {
       braking = wantStop;
       dispatch('BRAKE', wantStop ? 'down' : 'up');

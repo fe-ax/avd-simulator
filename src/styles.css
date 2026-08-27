@@ -1198,3 +1198,31 @@ kbd {
   gap: 4px;
   margin-top: 10px;
 }
+
+
+.builder-xy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.builder-xy > span {
+  width: 42px;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.builder-xy .builder-field {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.builder-xy .builder-field span {
+  flex: 0 0 auto;
+  opacity: 0.5;
+}
+
+.builder-xy .builder-field input {
+  width: 100%;
+}

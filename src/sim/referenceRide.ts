@@ -60,6 +60,30 @@ function mergePlanFor(scenario: Scenario): MergePlan {
   };
 }
 
+/**
+ * How a model rider handles a junction.
+ *
+ * The crossroads driver was written for the Kerkstraat, where the manoeuvre is a right turn across
+ * a fietspad — so it changes down, slows to a walking pace and gives way as a matter of course. On
+ * a junction you have priority at and are riding straight through, all of that is wrong: slowing to
+ * fifteen and staying there is not carefulness, it is dawdling, and a rule that says "get going
+ * again afterwards" would mark the model rider for it.
+ */
+function crossingPlanFor(scenario: Scenario): RidePlan {
+  if (scenario.world.kind !== 'junction') return {};
+  const turning = scenario.world.manoeuvre !== 'straight';
+  return {
+    slowDown: turning,
+    gear: turning,
+    // Yielding is for a road user who has priority over you. Whether one does is what the
+    // haaientanden say.
+    yieldToActor: scenario.world.giveWay !== 'side',
+    // Read the traffic even when it is the one that should be stopping. Having priority is not
+    // the same as being given it, and that gap is what a hazard exercise is about.
+    anticipate: true,
+  };
+}
+
 /** Ride it the way it is meant to be ridden. */
 export function referenceRide(
   scenario: Scenario,
@@ -70,7 +94,7 @@ export function referenceRide(
     // stretch has nothing to merge onto, so the only manoeuvre available is an overtake.
     const record =
       scenario.world.kind !== 'motorway'
-        ? driveRun(scenario, override)
+        ? driveRun(scenario, { ...crossingPlanFor(scenario), ...override })
         : scenario.world.stretch.kind === 'doorgaand'
           ? driveOvertake(scenario, { ...override, cruiseKmh: override.cruiseKmh ?? scenario.startSpeedKmh })
           : driveMerge(scenario, { ...mergePlanFor(scenario), ...override });
@@ -139,6 +163,14 @@ export function unscoredActors(scenario: Scenario, record: RunRecord): ActorSpec
     if (expected.kind.type === 'headway') involved.add(expected.kind.actorId);
   }
   for (const incident of record.incidents) involved.add(incident.actorId);
+
+  // A road user with cues of its own is deliberate by definition. Strictly it may still be
+  // unmeasured — the rules in a hazard exercise judge the *rider's* speed, not the car's — but
+  // somebody sat down and told this one to stand on its brakes at a particular spot, and calling
+  // that decor would be the check crying wolf at exactly the scenario it exists to help build.
+  for (const actor of scenario.actors) {
+    if (actor.cues?.length) involved.add(actor.id);
+  }
 
   // Ride it badly on purpose, more than one way. Anything that brakes for a bad rider is part of
   // the exercise even when a clean ride never disturbs it.
