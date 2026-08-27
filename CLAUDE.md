@@ -85,6 +85,14 @@ ordinary physics — this is the cruise control, not the wrist, and the brake or
 cancels it. A press with no value means the road's limit, because the keyboard cannot carry one and
 falling through to zero would stop the machine dead on a motorway.
 
+**A long vehicle is drawn corner by corner, not under one transform.** `withPose` takes the depth
+at a sprite's centre and draws the whole thing at that one scale, which is right for a snorfiets
+and wrong for a 16.5 m truck: its ends sit at different depths, so it has to come out as a
+trapezoid lying on the road rather than a rectangle pasted on it. Vehicle bodies go through
+`worldBox`, which projects each corner the way the road surfaces always have. Note the local frame
+is **x forward, y to the vehicle's *right*** — despite what the older comment said, and it is the
+axis that inverted the blinker once.
+
 **Perception tests a vehicle's nose, middle and tail, not its centre.** It tested only the centre
 until a 16.5 m truck existed, at which point a truck filling the whole of a shoulder check counted
 as unseen until the rider drew level with the middle of the trailer.

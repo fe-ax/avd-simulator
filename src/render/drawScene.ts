@@ -206,12 +206,55 @@ function withPose(
   return p;
 }
 
-/** Rounded rectangle in the local (metres) frame, x forward, y left. */
+/**
+ * Rounded rectangle in the local (metres) frame: x forward, **y to the vehicle's right**.
+ *
+ * Right, not left, however much the name suggests otherwise. `withPose` rotates by
+ * `-(heading - camYaw) - pi/2`, which sends local (0,1) to screen +x; and screen +x is decreasing
+ * `v`, which the camera measures leftward. Every sprite here happens to be symmetric about its
+ * axis so nothing has ever depended on it — but the blinker on the motorcycle does, and it was
+ * inverted once for exactly this reason.
+ */
 function box(ctx: Ctx, x: number, y: number, w: number, h: number, r: number, color: string) {
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
   ctx.fillStyle = color;
   ctx.fill();
+}
+
+/**
+ * The same box, but projected corner by corner instead of drawn under one transform.
+ *
+ * `withPose` takes the depth at a vehicle's centre and draws the whole sprite at that one scale.
+ * For a snorfiets, whose ends are ninety centimetres apart, the difference is invisible. For a
+ * trekker-oplegger it is not: sixteen and a half metres span a real slice of the perspective, so
+ * the tail should be visibly wider than the cab and the whole thing should be a trapezoid lying on
+ * the road. Drawn rigid, it reads as a rectangle pasted on top of the tarmac — which is exactly
+ * what it looked like.
+ *
+ * Projecting each corner is what the road surfaces have always done; this just lets a vehicle do
+ * it too. Corners come out square: `roundRect` has no meaning once the four corners are at four
+ * different scales, and at these sizes the radius was two pixels anyway.
+ */
+function worldBox(
+  ctx: Ctx,
+  cam: ViewCamera,
+  pose: PoseOnRoute,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: string,
+) {
+  const cos = Math.cos(pose.heading);
+  const sin = Math.sin(pose.heading);
+  // The same frame `box` uses: x forward, y to the vehicle's right. Ported over unchanged so a
+  // sprite drawn either way lands in the same place.
+  const at = (fx: number, fy: number): WorldPoint => ({
+    x: pose.x + fx * cos + fy * sin,
+    y: pose.y + fx * sin - fy * cos,
+  });
+  fillWorldPoly(ctx, cam, [at(x, y), at(x + w, y), at(x + w, y + h), at(x, y + h)], color);
 }
 
 function drawMotorcycle(
@@ -264,77 +307,75 @@ function drawMotorcycle(
 const TRUCK = { length: 16.5, width: 2.55, trailerLength: 13.6, cabLength: 2.3 };
 
 /** Snorfiets: small deck, rider sitting upright, blue plate at the back. */
-function drawSnorfietsSprite(ctx: Ctx, alarmed: boolean) {
-  box(ctx, -0.85, -0.34, 1.7, 0.68, 0.26, 'rgba(0,0,0,0.25)');
-  box(ctx, -0.7, -0.24, 1.4, 0.48, 0.2, '#d8d4cc');
-  box(ctx, -0.24, -0.28, 0.5, 0.56, 0.2, '#2c3140');
-  ctx.beginPath();
-  ctx.arc(0.06, 0, 0.17, 0, Math.PI * 2);
-  ctx.fillStyle = '#f0ede6';
-  ctx.fill();
-  // Blauwe plaat — the detail that says "snorfiets, 25 km/u, hoort op het fietspad".
-  box(ctx, -0.78, -0.11, 0.16, 0.22, 0.04, '#1f5fbf');
+type SpriteArgs = { ctx: Ctx; cam: ViewCamera; pose: PoseOnRoute; alarmed: boolean };
 
-  if (alarmed) box(ctx, -0.8, -0.14, 0.12, 0.28, 0.05, '#ff3b30');
+function drawSnorfietsSprite({ ctx, cam, pose, alarmed }: SpriteArgs) {
+  const b = (x: number, y: number, w: number, h: number, c: string) =>
+    worldBox(ctx, cam, pose, x, y, w, h, c);
+
+  b(-1.05, -0.42, 2.1, 0.84, 'rgba(0,0,0,0.25)');
+  b(-0.9, -0.32, 1.8, 0.64, '#3f4a5a');
+  // Blauwe plaat — the detail that says "snorfiets, 25 km/u, hoort op het fietspad".
+  b(-0.86, -0.2, 0.34, 0.4, '#2f6fd0');
+  b(0.16, -0.26, 0.5, 0.52, '#1d232e');
+  b(0.62, -0.1, 0.28, 0.2, '#e8e2d2');
+  if (alarmed) b(-0.92, -0.24, 0.16, 0.48, '#ff3b30');
 }
 
-/**
- * Trekker-oplegger. Local +x is the direction of travel, so the nose is at +length/2 and the
- * doors are at −length/2, the same way round as the mesh.
- *
- * What has to survive being seventeen metres long in a plan view is the *articulation*: cab, a
- * visible gap at the koppeling, then the trailer. One unbroken rectangle at this length reads as
- * a wall or a piece of the road, not as a vehicle with a driver at one end.
- */
-function drawVrachtwagenSprite(ctx: Ctx, alarmed: boolean) {
+/** A trekker-oplegger, 16.5 m. Sprite +x is forward. */
+function drawVrachtwagenSprite({ ctx, cam, pose, alarmed }: SpriteArgs) {
+  const b = (x: number, y: number, w: number, h: number, c: string) =>
+    worldBox(ctx, cam, pose, x, y, w, h, c);
   const nose = TRUCK.length / 2;
   const tail = -nose;
   const half = TRUCK.width / 2;
   const cabRear = nose - TRUCK.cabLength;
 
-  box(ctx, tail - 0.15, -half - 0.15, TRUCK.length + 0.3, TRUCK.width + 0.3, 0.5, 'rgba(0,0,0,0.25)');
+  b(tail - 0.15, -half - 0.15, TRUCK.length + 0.3, TRUCK.width + 0.3, 'rgba(0,0,0,0.25)');
   // The chassis goes down first, so the koppeling shows as a dark waist between the two bodies.
-  box(ctx, cabRear - 1.4, -0.45, 2.2, 0.9, 0.2, '#212429');
-  box(ctx, tail, -half, TRUCK.trailerLength, TRUCK.width, 0.3, '#dcd9d2');
-  box(ctx, tail + 0.06, -half + 0.12, 0.2, TRUCK.width - 0.24, 0.06, '#c4c0b7');
-  box(ctx, cabRear, -half + 0.05, TRUCK.cabLength, TRUCK.width - 0.1, 0.35, '#2f5f8f');
-  // The same five axles the mesh has, mirrored because sprite +x is forward and mesh −z is. Last
-  // over both bodies, or the steering axle disappears under the cab standing on it.
+  b(cabRear - 1.4, -0.45, 2.2, 0.9, '#212429');
+  b(tail, -half, TRUCK.trailerLength, TRUCK.width, '#dcd9d2');
+  b(tail + 0.06, -half + 0.12, 0.2, TRUCK.width - 0.24, '#c4c0b7');
+  b(cabRear, -half + 0.05, TRUCK.cabLength, TRUCK.width - 0.1, '#2f5f8f');
+  // The same five axles the mesh has. Last over both bodies, or the steering axle disappears
+  // under the cab standing on it.
   for (const x of [6.85, 3.15, -4.3, -5.6, -6.9]) {
     for (const side of [-1, 1]) {
-      box(ctx, x - 0.28, side > 0 ? half - 0.34 : -half, 0.56, 0.34, 0.1, '#17171a');
+      b(x - 0.28, side > 0 ? half - 0.34 : -half, 0.56, 0.34, '#17171a');
     }
   }
   // Windscreen, so the plan view says which end the driver is at.
-  box(ctx, nose - 0.55, -half + 0.2, 0.4, TRUCK.width - 0.4, 0.12, '#2f3b47');
+  b(nose - 0.55, -half + 0.2, 0.4, TRUCK.width - 0.4, '#2f3b47');
 
   if (alarmed) {
     for (const side of [-1, 1]) {
-      box(ctx, tail + 0.02, side > 0 ? 0.72 : -1.14, 0.22, 0.42, 0.07, '#ff3b30');
+      b(tail + 0.02, side > 0 ? 0.72 : -1.14, 0.22, 0.42, '#ff3b30');
     }
   }
 }
 
 /** An ordinary car, 4.4 m. Sprite +x is forward, as with the truck. */
-function drawAutoSprite(ctx: Ctx, alarmed: boolean) {
+function drawAutoSprite({ ctx, cam, pose, alarmed }: SpriteArgs) {
+  const b = (x: number, y: number, w: number, h: number, c: string) =>
+    worldBox(ctx, cam, pose, x, y, w, h, c);
   const nose = 4.4 / 2;
   const tail = -nose;
   const half = 1.78 / 2;
 
-  box(ctx, tail - 0.12, -half - 0.12, 4.4 + 0.24, 1.78 + 0.24, 0.4, 'rgba(0,0,0,0.25)');
-  box(ctx, tail, -half, 4.4, 1.78, 0.5, '#8d3f3a');
+  b(tail - 0.12, -half - 0.12, 4.4 + 0.24, 1.78 + 0.24, 'rgba(0,0,0,0.25)');
+  b(tail, -half, 4.4, 1.78, '#8d3f3a');
   // The greenhouse, inset on all four sides, which is what says car rather than crate.
-  box(ctx, tail + 1.05, -half + 0.16, 1.65, 1.78 - 0.32, 0.35, '#7c3733');
-  box(ctx, tail + 1.15, -half + 0.22, 0.16, 1.78 - 0.44, 0.08, '#2f3b47');
-  box(ctx, nose - 1.35, -half + 0.22, 0.16, 1.78 - 0.44, 0.08, '#2f3b47');
+  b(tail + 1.05, -half + 0.16, 1.65, 1.78 - 0.32, '#7c3733');
+  b(tail + 1.15, -half + 0.22, 0.16, 1.78 - 0.44, '#2f3b47');
+  b(nose - 1.35, -half + 0.22, 0.16, 1.78 - 0.44, '#2f3b47');
   for (const x of [nose - 1.3, tail + 1.25]) {
     for (const side of [-1, 1]) {
-      box(ctx, x - 0.26, side > 0 ? half - 0.28 : -half, 0.52, 0.28, 0.08, '#17171a');
+      b(x - 0.26, side > 0 ? half - 0.28 : -half, 0.52, 0.28, '#17171a');
     }
   }
   if (alarmed) {
     for (const side of [-1, 1]) {
-      box(ctx, tail + 0.02, side > 0 ? 0.34 : -0.72, 0.2, 0.38, 0.06, '#ff3b30');
+      b(tail + 0.02, side > 0 ? 0.34 : -0.72, 0.2, 0.38, '#ff3b30');
     }
   }
 }
@@ -356,12 +397,13 @@ function drawActor(
   const alarmed = actor.mode === 'braking' || actor.mode === 'stopped';
   const pulse = 0.5 + 0.5 * Math.sin(opts.time * 9);
 
-  const projected = withPose(ctx, cam, pose, () => {
-    if (actor.spec.kind === 'vrachtwagen') drawVrachtwagenSprite(ctx, alarmed);
-    else if (actor.spec.kind === 'auto') drawAutoSprite(ctx, alarmed);
-    else drawSnorfietsSprite(ctx, alarmed);
-  });
-  if (!projected) return;
+  const projected = cam.project(pose.x, pose.y);
+  if (projected.q <= 0) return;
+
+  const args = { ctx, cam, pose, alarmed };
+  if (actor.spec.kind === 'vrachtwagen') drawVrachtwagenSprite(args);
+  else if (actor.spec.kind === 'auto') drawAutoSprite(args);
+  else drawSnorfietsSprite(args);
 
   // Decoration is screen-space, but sized by depth so a far marker does not swamp the road.
   const radius = Math.max(9, cam.scale * projected.q * (MARKER_RADIUS[actor.spec.kind] ?? 1.4));
