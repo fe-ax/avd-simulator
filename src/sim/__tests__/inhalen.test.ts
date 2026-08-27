@@ -72,6 +72,31 @@ describe('wat er misgaat', () => {
   });
 });
 
+describe('de aanloop telt ook', () => {
+  test('op de bumper van de vrachtwagen hangen terwijl je op een gat wacht, is een fout', () => {
+    // The whole reason the headway rule stopped waiting for a manoeuvre. On an open motorway there
+    // is no manoeuvre to wait for: the rider is behind the lorry from the first frame, and sitting
+    // on its bumper while looking for a gap is a real fault the exam watches for. It was measured
+    // nowhere until the temporal gate came out.
+    const r = driveOvertake(inhalenSnelweg, { tailgate: true });
+    const row = r.results.find((x) => x.expectedId === 'afstand-vrachtwagen-1');
+    expect(row?.status).toBe('ongewenst');
+  });
+
+  test('en netjes wachten op afstand is dat niet', () => {
+    const r = driveOvertake(inhalenSnelweg);
+    const row = r.results.find((x) => x.expectedId === 'afstand-vrachtwagen-1');
+    expect(row?.status).toBe('goed');
+  });
+
+  test('wie helemaal niet inhaalt wordt niet alsnog voor volgafstand gepakt', () => {
+    // Staying in lane 1 the whole way is its own fault — the assignment was not carried out — and
+    // a rider who keeps a sensible distance while doing it should not collect a second one.
+    const r = driveOvertake(inhalenSnelweg, { neverOvertake: true });
+    expect(r.results.find((x) => x.expectedId === 'afstand-vrachtwagen-1')?.status).toBe('goed');
+  });
+});
+
 describe('de weg zelf', () => {
   test('is een doorgaande snelweg: geen oprit, geen invoegstrook', () => {
     const world = inhalenSnelweg.world;

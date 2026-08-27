@@ -68,6 +68,13 @@ describe('wat er misgaat', () => {
     expect(r.results.some((x) => x.expectedId === 'richting-uit')).toBe(false);
     expect(r.faults.some((x) => x.expectedId === 'invoegen')).toBe(true);
     expect(r.verdict).toBe('gezakt');
+
+    // And no following distance either, which is the claim that let the temporal gate go. Headway
+    // used to be measured only from `manoeuvreCompletedAt`; it is measured from the first frame
+    // now, and a rider still on the oprit is more than half a lane off the carriageway, so
+    // `headwaySeconds` refuses every sample on the lateral test alone. Two gates said one thing.
+    expect(r.results.some((x) => x.expectedId === 'volgafstand-auto')).toBe(false);
+    expect(r.results.some((x) => x.expectedId === 'volgafstand')).toBe(false);
   });
 
   test('de reeks in de verkeerde volgorde wordt apart aangerekend', () => {

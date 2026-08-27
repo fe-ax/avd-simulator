@@ -266,6 +266,13 @@ commit.
   rule marks every successful overtake as tailgating, and the better the overtake the closer the
   "gap" it reports. A headway with nothing to measure returns **no row at all**: it is not
   applicable, and the thing that actually went wrong has a row of its own.
+- **And that lateral test is the *only* gate on it.** There was a second one — measure only after
+  the manoeuvre — which said the same thing about the oprit, since being on it is exactly what
+  "more than half a lane off your line" means. Agreeing made it invisible, and it was not free: on
+  an open motorway there is no manoeuvre to wait for, so sitting on the bumper of the lorry you are
+  waiting to pass went unmeasured entirely. Removing it left every row on the merge identical,
+  which is the proof it had never done anything there. **Two checks that agree are one check and a
+  trap.**
 - **Not every exercise has a conflict point.** The first two happen somewhere and their windows are
   metres before that place. An overtake happens wherever the rider decides, so scenario 3's reeks
   hangs off the manoeuvre instead — `beforeLaneChange` asks whether a look happened in the seconds
