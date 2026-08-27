@@ -7,6 +7,7 @@
  * through that one door, which is what makes the recording complete and the replay faithful.
  */
 import { applyPerception, GAZE_DURATION_S, isLookControl } from './perception';
+import { steeringIsAutomatic, steeringIsInert } from './steering';
 import { buildRoutes, poseAt, type Route, type ScenarioRoutes } from './route';
 import type {
   ActiveGaze,
@@ -32,8 +33,6 @@ const KMH = 1 / 3.6;
 const ACCEL = 2.2; // m/s^2 when below target speed
 const COAST_DECEL = 1.2; // m/s^2 when above target speed and not braking
 const BRAKE_DECEL = 4.5; // m/s^2 while the rem is held
-const THROTTLE_STEP = 5 * KMH;
-const MAX_SPEED = 60 * KMH;
 const MAX_GEAR = 6;
 
 const ACTOR_ACCEL = 1.5;
@@ -47,6 +46,29 @@ const ACTOR_BRAKE = 5.0;
 const ACTOR_ALARM_HORIZON_S = 1.3;
 const ACTOR_ALARM_TTC_S = 1.6;
 const ACTOR_HALF_LENGTH = 0.9;
+
+/**
+ * Seconds a lane change takes end to end. About sixty metres at motorway speed — an unhurried,
+ * ordinary move rather than a flick, which is what it has to feel like for the timing of it to be
+ * the thing being taught.
+ */
+const LANE_CHANGE_S = 2.2;
+
+/** Half the length of the machine, for bumper-to-bumper gaps. */
+const BIKE_HALF_LENGTH = 1.15;
+
+/** Actors are as long as they say they are; a snorfiets was the old hardcoded assumption. */
+function actorHalfLength(actor: ActorState): number {
+  return (actor.spec.length ?? ACTOR_HALF_LENGTH * 2) / 2;
+}
+
+/** Below this much clear headway the vehicle behind has to do something about it. */
+const CUT_IN_ALARM_S = 1;
+
+function smoothstep(u: number): number {
+  const x = Math.max(0, Math.min(1, u));
+  return x * x * (3 - 2 * x);
+}
 /** Proportional gain of the blind-spot director. */
 const DIRECTOR_GAIN = 0.6;
 
@@ -60,7 +82,6 @@ const RECORD_HZ = 20;
 const MAX_RUN_S = 90;
 /** How far past the junction the run continues before it ends — long enough that "na de bocht"
  * expectations such as richting uitzetten and weer optrekken have room to be scored. */
-const RUN_OUT_M = 42;
 
 export type Phase = 'briefing' | 'countdown' | 'riding' | 'finished';
 
@@ -79,6 +100,14 @@ export interface BikeState {
   indicator: 'left' | 'right' | 'off';
   branch: RouteBranch;
   steerArmed: boolean;
+  /** Metres left of the route spine: which rijstrook the machine is actually in. */
+  laneOffset: number;
+  /** Index into `routes.laneOffsets`; 0 is the invoegstrook. */
+  laneIndex: number;
+  laneFromOffset: number;
+  laneTargetOffset: number;
+  /** 0 to 1 through the current change; 1 means settled. */
+  laneU: number;
   pose: PoseOnRoute;
 }
 
@@ -188,7 +217,7 @@ export class SimEngine {
   samples: BikeSample[] = [];
   actorTracks: Record<string, ActorSample[]> = {};
   incidents: ActorIncident[] = [];
-  turnCompletedAt: number | null = null;
+  manoeuvreCompletedAt: number | null = null;
 
   private accumulator = 0;
   private lastFrameMs: number | null = null;
@@ -198,8 +227,20 @@ export class SimEngine {
   private onFinish: ((record: RunRecord) => void) | null = null;
   private onFrame: (() => void) | null = null;
 
+  /**
+   * The machine's ceiling and throttle granularity, from the scenario.
+   *
+   * These were constants — 60 km/h and 5 km/h steps — which read as facts about motorcycles and
+   * were really facts about a 30-zone. Left alone, the ceiling makes a motorway literally
+   * unrideable and nothing says why.
+   */
+  private readonly maxSpeed: number;
+  private readonly throttleStep: number;
+
   constructor(scenario: Scenario) {
     this.scenario = scenario;
+    this.maxSpeed = scenario.maxSpeedKmh * KMH;
+    this.throttleStep = scenario.throttleStepKmh * KMH;
     this.routes = buildRoutes(scenario);
     this.bike = this.freshBike();
     this.actors = scenario.actors.map(makeActorState);
@@ -217,6 +258,11 @@ export class SimEngine {
       indicator: 'off',
       branch: 'approach',
       steerArmed: false,
+      laneOffset: 0,
+      laneIndex: 0,
+      laneFromOffset: 0,
+      laneTargetOffset: 0,
+      laneU: 1,
       pose: poseAt(this.routes.turn, 0),
     };
   }
@@ -276,7 +322,7 @@ export class SimEngine {
     this.samples = [];
     this.actorTracks = Object.fromEntries(this.scenario.actors.map((a) => [a.id, []]));
     this.incidents = [];
-    this.turnCompletedAt = null;
+    this.manoeuvreCompletedAt = null;
     this.paused = false;
     this.accumulator = 0;
     this.lastFrameMs = null;
@@ -315,7 +361,12 @@ export class SimEngine {
     if (this.phase !== 'riding') return;
     // With auto-sturen the controls are inert and nothing is recorded: an inactive button that
     // still fills the log would put phantom rows in the debrief.
-    if (this.autoSteer && (control === 'STEER_LEFT' || control === 'STEER_RIGHT')) return;
+    if (
+      steeringIsInert(this.scenario, this.autoSteer) &&
+      (control === 'STEER_LEFT' || control === 'STEER_RIGHT')
+    ) {
+      return;
+    }
 
     // A control whose prerequisites are not met records the attempt and does nothing else. The
     // richtingaanwijzer announces a decision you have already checked, so announcing first has
@@ -354,10 +405,10 @@ export class SimEngine {
         bike.clutch = phase !== 'up';
         break;
       case 'THROTTLE_UP':
-        bike.targetSpeed = Math.min(MAX_SPEED, bike.targetSpeed + THROTTLE_STEP);
+        bike.targetSpeed = Math.min(this.maxSpeed, bike.targetSpeed + this.throttleStep);
         break;
       case 'THROTTLE_DOWN':
-        bike.targetSpeed = Math.max(0, bike.targetSpeed - THROTTLE_STEP);
+        bike.targetSpeed = Math.max(0, bike.targetSpeed - this.throttleStep);
         break;
       case 'GEAR_UP':
         bike.gear = Math.min(MAX_GEAR, bike.gear + 1);
@@ -375,11 +426,13 @@ export class SimEngine {
         bike.indicator = 'off';
         break;
       case 'STEER_RIGHT':
+        if (this.scenario.steering === 'lane') this.changeLane(-1);
         // Arming, not steering: the geometry of the turn is fixed, the decision is not.
-        if (bike.branch === 'approach') bike.steerArmed = true;
+        else if (bike.branch === 'approach') bike.steerArmed = true;
         break;
       case 'STEER_LEFT':
-        if (bike.branch === 'approach') bike.steerArmed = false;
+        if (this.scenario.steering === 'lane') this.changeLane(1);
+        else if (bike.branch === 'approach') bike.steerArmed = false;
         break;
       default:
         if (isLookControl(control) && phase === 'press') {
@@ -433,18 +486,43 @@ export class SimEngine {
     // Commit to a branch at the turn-in point. Missing the steer press is not an abort:
     // the rider simply carries straight on and the run plays out.
     if (bike.branch === 'approach' && bike.s >= this.routes.decisionS) {
-      bike.branch = bike.steerArmed || this.autoSteer ? 'turn' : 'straight';
+      bike.branch =
+        bike.steerArmed || steeringIsAutomatic(this.scenario, this.autoSteer) ? 'turn' : 'straight';
     }
 
     const route = this.activeRoute();
-    bike.pose = poseAt(route, bike.s);
+    const spine = poseAt(route, bike.s);
+
+    // The spine is where the road goes; the offset is which rijstrook the machine is in. Composed
+    // here rather than in a renderer, because `applyPerception` and `recordSample` both read
+    // `bike.pose` immediately after this — offset it later and perception would credit the rider
+    // with seeing from a position they are not in.
+    const before = bike.laneOffset;
+    if (bike.laneU < 1) {
+      bike.laneU = Math.min(1, bike.laneU + dt / LANE_CHANGE_S);
+      if (bike.laneU >= 1 && this.manoeuvreCompletedAt === null) this.manoeuvreCompletedAt = this.t;
+    }
+    bike.laneOffset =
+      bike.laneFromOffset +
+      (bike.laneTargetOffset - bike.laneFromOffset) * smoothstep(bike.laneU);
+
+    const lateral = dt > 0 ? (bike.laneOffset - before) / dt : 0;
+    const h = spine.heading;
+    bike.pose = {
+      // Left of the heading is (-sin, cos): rotate the direction a quarter turn anticlockwise.
+      x: spine.x - Math.sin(h) * bike.laneOffset,
+      y: spine.y + Math.cos(h) * bike.laneOffset,
+      // Angled into the move, so the machine visibly leans across and the mirrors sweep with it.
+      heading: h + Math.atan2(lateral, Math.max(bike.speed, 0.1)),
+    };
 
     if (
+      this.scenario.steering === 'branch' &&
       bike.branch === 'turn' &&
-      this.turnCompletedAt === null &&
+      this.manoeuvreCompletedAt === null &&
       bike.s >= this.routes.decisionS + this.routes.turn.lengths[1]
     ) {
-      this.turnCompletedAt = this.t;
+      this.manoeuvreCompletedAt = this.t;
     }
   }
 
@@ -521,8 +599,34 @@ export class SimEngine {
   }
 
   /** True when the rider is taking (or about to take) this actor's right of way. */
+  /**
+   * A vehicle already on the motorway having to brake because the rider dropped in on it.
+   *
+   * Nobody crosses anybody's path here, so the crossing predicate has nothing to say. What makes
+   * a merge dangerous is longitudinal: same lane, coming up behind, and not enough room left to
+   * do anything but brake.
+   */
+  private actorCutIn(actor: ActorState): boolean {
+    const bike = this.bike;
+    if (this.scenario.world.kind !== 'motorway') return false;
+    const laneWidth = this.scenario.world.road.laneWidth;
+    // Sharing a lane is a lateral question, and during a lane change the answer changes.
+    if (Math.abs(actor.x - bike.pose.x) > laneWidth / 2) return false;
+
+    const gap = this.longitudinalGap(actor);
+    if (gap <= 0) return false; // ahead of the rider: not its problem
+
+    const clear = gap - actorHalfLength(actor) - BIKE_HALF_LENGTH;
+    if (clear <= 0) return true;
+    const closing = actor.speed - bike.speed;
+    // Not catching up means it never has to do anything, however close it is sitting.
+    if (closing <= 0) return clear / Math.max(actor.speed, 0.1) < CUT_IN_ALARM_S;
+    return clear / closing < ACTOR_ALARM_TTC_S || clear / Math.max(actor.speed, 0.1) < CUT_IN_ALARM_S;
+  }
+
   private actorConflicts(actor: ActorState): boolean {
     const bike = this.bike;
+    if (this.routes.kind === 'motorway') return this.actorCutIn(actor);
     if (bike.branch !== 'turn') return false;
 
     const { crossEntryS, crossExitS, crossYSpan } = this.routes;
@@ -545,12 +649,34 @@ export class SimEngine {
     return gapToStrip <= 0 || ttc < ACTOR_ALARM_TTC_S;
   }
 
+  /**
+   * Move one rijstrook. `dir` is +1 for left, matching the offsets, which grow leftward.
+   *
+   * A press during a change is deliberately ignored rather than queued: half a lane across is
+   * exactly where a rider should be committing, not reconsidering. The press is still recorded —
+   * `dispatch` logs before it acts — so the debrief can say it happened.
+   */
+  private changeLane(dir: number) {
+    if (this.routes.kind !== 'motorway') return;
+    const bike = this.bike;
+    if (bike.laneU < 1) return;
+    if (bike.s < this.routes.mergeFromS) return;
+    const next = bike.laneIndex + dir;
+    if (next < 0 || next >= this.routes.laneOffsets.length) return;
+    bike.laneIndex = next;
+    bike.laneFromOffset = bike.laneOffset;
+    bike.laneTargetOffset = this.routes.laneOffsets[next];
+    bike.laneU = 0;
+  }
+
   private checkFinished() {
-    const endS =
-      this.bike.branch === 'straight'
-        ? this.routes.decisionS + RUN_OUT_M
-        : this.routes.crossExitS + RUN_OUT_M;
-    if (this.bike.s >= endS || this.t >= MAX_RUN_S) this.finish();
+    const past =
+      this.routes.kind === 'urbanCrossing' && this.bike.branch !== 'straight'
+        ? this.routes.crossExitS
+        : this.bike.branch === 'straight'
+          ? this.routes.decisionS
+          : this.routes.conflictS;
+    if (this.bike.s >= past + this.routes.runOutM || this.t >= MAX_RUN_S) this.finish();
   }
 
   private finish() {
@@ -584,6 +710,7 @@ export class SimEngine {
       branch: b.branch,
       headYaw: round3(this.headPose.yaw),
       headPitch: round3(this.headPose.pitch),
+      laneOffset: round3(this.bike.laneOffset),
     });
     for (const actor of this.actors) {
       this.actorTracks[actor.spec.id].push({
@@ -606,9 +733,9 @@ export class SimEngine {
       startedAt: this.startedAt,
       durationS: round3(this.t),
       timeScale: this.timeScale,
-      autoSteer: this.autoSteer,
+      autoSteer: steeringIsAutomatic(this.scenario, this.autoSteer),
       branch: this.bike.branch,
-      turnCompletedAt: this.turnCompletedAt === null ? null : round3(this.turnCompletedAt),
+      manoeuvreCompletedAt: this.manoeuvreCompletedAt === null ? null : round3(this.manoeuvreCompletedAt),
       samples: this.samples,
       actorTracks: this.actorTracks,
       events: this.events,
@@ -635,7 +762,9 @@ export class SimEngine {
 
   actorDistanceToConflict(actor: ActorState): number {
     // Actors travel a straight line, so distance-to-conflict is measured along their own path
-    // toward the strip the rider sweeps through.
+    // toward the strip the rider sweeps through. On a motorway nobody crosses anybody's path;
+    // the gap that matters there is longitudinal and lives in `longitudinalGap`.
+    if (this.routes.kind !== 'urbanCrossing') return Infinity;
     return this.routes.crossYSpan[0] - actor.y;
   }
 
@@ -654,9 +783,9 @@ export class SimEngine {
     return -(dx * Math.cos(this.bike.pose.heading) + dy * Math.sin(this.bike.pose.heading));
   }
 
-  /** Turn completion time, used by `afterTurn` expectations. */
-  getTurnCompletedAt(): number | null {
-    return this.turnCompletedAt;
+  /** When the manoeuvre this scenario is about finished: the turn, or the lane change. */
+  getManoeuvreCompletedAt(): number | null {
+    return this.manoeuvreCompletedAt;
   }
 
   world(revealAll: boolean): World {
@@ -675,7 +804,7 @@ export class SimEngine {
       phase: this.phase,
       t: this.t,
       timeScale: this.timeScale,
-      autoSteer: this.autoSteer,
+      autoSteer: steeringIsAutomatic(this.scenario, this.autoSteer),
       paused: this.paused,
       rejection: this.rejection
         ? { message: this.rejection.message, ageS: this.t - this.rejection.t }

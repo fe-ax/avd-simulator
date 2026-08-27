@@ -16,13 +16,54 @@ import {
   type Surface,
   type SurfaceKind,
 } from '../sim/roadSurfaces';
+import { buildRoutes, poseAt } from '../sim/route';
 import type { Scenario } from '../sim/types';
 
 /**
- * How far the built world extends. Generous enough that the rider never sees an edge, and fixed,
- * because all of this is created once and never rebuilt.
+ * How far the built world reaches past the ridden line.
+ *
+ * This is the fog's near plane (`Stage`): beyond it the world fades to sky, so an edge that far
+ * from every point of the route is an edge nobody can see. It used to be a hand-picked rectangle,
+ * which was honest while there was one scenario and wrong the moment there were two — the
+ * motorway's oprit starts 187 m south of the origin and its run-out ends 120 m north of it, so a
+ * box sized for a 30-zone kruising ended the world mid-ride and left the hectometerpaaltjes, which
+ * stand on whole hundreds of world y, with two of their number inside it.
  */
-const EXTENT: RoadExtent = { minX: -85, maxX: 95, minY: -150, maxY: 65 };
+const WORLD_MARGIN = 95;
+
+/**
+ * The extent to build, from the line the rider actually rides.
+ *
+ * Derived from the route rather than from the road layout on purpose: a scenario's scenery is
+ * placed relative to where the rider goes, not relative to how wide its carriageway happens to be,
+ * and the route is the one description every scenario has to have.
+ */
+function worldExtent(scenario: Scenario): RoadExtent {
+  const routes = buildRoutes(scenario);
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  // A metre at a time. The widest arc in any scenario has a 120 m radius, where a metre of chord
+  // departs from the curve by a millimetre — far below anything a 95 m margin cares about.
+  for (const route of [routes.turn, routes.straight]) {
+    for (let s = 0; s <= route.total + 1; s += 1) {
+      const { x, y } = poseAt(route, Math.min(s, route.total));
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  return {
+    minX: minX - WORLD_MARGIN,
+    maxX: maxX + WORLD_MARGIN,
+    minY: minY - WORLD_MARGIN,
+    maxY: maxY + WORLD_MARGIN,
+  };
+}
 
 /**
  * Height of each flat surface above the ground, in metres. Ordering matters more than the
@@ -40,6 +81,9 @@ const LAYER: Record<SurfaceKind, number> = {
   hedge: 0,
   house: 0,
   lamp: 0,
+  guardrail: 0,
+  hectometerPost: 0,
+  tree: 0,
 };
 
 /**
@@ -86,10 +130,34 @@ function detailMaterial(colour: string, doubleSided = false): THREE.MeshLambertM
   return detailMaterials[colour];
 }
 
+/**
+ * Shared materials, one per key.
+ *
+ * The cache is keyed by name and *checked* against the colour, because it silently was not: the
+ * ground plane asked for `('hedge', PALETTE.grass)` and every hedge built afterwards asked for
+ * `('hedge', PALETTE.hedge)` and got grass back. The hedges had been the wrong green the whole
+ * time, and the top-down view — which reads the same palette but caches nothing — was drawing
+ * them correctly, so the two views quietly disagreed about a colour. That is exactly the class of
+ * bug `roadSurfaces` exists to prevent, turning up one layer down.
+ *
+ * Now asking for a key with a different colour throws instead of handing back the first one.
+ */
 function material(key: string, colour: string): THREE.Material {
-  if (!MATERIALS[key]) {
-    MATERIALS[key] = new THREE.MeshLambertMaterial({ color: new THREE.Color(colour) });
+  const existing = MATERIALS[key];
+  if (existing) {
+    if (import.meta.env.DEV) {
+      const held = (existing as THREE.MeshLambertMaterial).color.getHexString();
+      const want = new THREE.Color(colour).getHexString();
+      if (held !== want) {
+        throw new Error(
+          `[buildWorld] materiaal "${key}" bestaat al als #${held}, maar wordt nu als #${want} ` +
+            `opgevraagd. Twee dingen delen een naam en niet een kleur.`,
+        );
+      }
+    }
+    return existing;
   }
+  MATERIALS[key] = new THREE.MeshLambertMaterial({ color: new THREE.Color(colour) });
   return MATERIALS[key];
 }
 
@@ -136,13 +204,43 @@ function extrudedGeometry(surface: Surface): THREE.BufferGeometry {
 }
 
 /**
+ * One piece of a standing roadside detail. Most pieces take the colour of the kind they belong to;
+ * `group` names the exceptions, the way `houseAlt` does — a tree's trunk and the band on a
+ * hectometerpaaltje are the whole reason those two read as what they are.
+ */
+interface Part {
+  geometry: THREE.BufferGeometry;
+  group?: string;
+}
+
+const TREE_TRUNK = 'treeTrunk';
+const HECTOMETER_BAND = 'hectometerBand';
+const TRUNK_COLOUR = '#584434';
+
+/** Centre and spans of a footprint, in world metres. */
+function footprint(surface: Surface) {
+  const xs = surface.points.map((p) => p.x);
+  const ys = surface.points.map((p) => p.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return {
+    x: (minX + maxX) / 2,
+    y: (minY + maxY) / 2,
+    width: maxX - minX,
+    depth: maxY - minY,
+  };
+}
+
+/**
  * A street light, from the small square footprint that stands for it.
  *
  * The footprint carries only where the post is and how tall; the arm and the head are built here
  * because a bent tube is not a polygon anyone wants in the shared road data. The arm reaches
  * toward the junction centre, which is where a real one reaches: out over the road it lights.
  */
-function lampGeometry(surface: Surface): THREE.BufferGeometry[] {
+function lampGeometry(surface: Surface): Part[] {
   const xs = surface.points.map((p) => p.x);
   const ys = surface.points.map((p) => p.y);
   const x = (Math.min(...xs) + Math.max(...xs)) / 2;
@@ -175,8 +273,177 @@ function lampGeometry(surface: Surface): THREE.BufferGeometry[] {
   head.rotateY(Math.atan2(-dz, dx));
   head.translate(x + along.x, top + along.y, -y + along.z);
 
-  return [post, arm, head];
+  return [post, arm, head].map((geometry) => ({ geometry }));
 }
+
+/**
+ * A geleiderail, from the long thin run that stands for it.
+ *
+ * The footprint says where the rail is, how far it reaches and — as `height` — where the top of
+ * the beam sits. The profile is not the footprint's to choose: a W-beam is a rolled section, so
+ * two flanges and a web set back between them are built here at fixed proportions of whatever
+ * envelope the footprint allows.
+ */
+const GUARDRAIL = {
+  /** A real W-beam is 0.31 m deep, in two corrugations. */
+  beamDepth: 0.31,
+  flange: 0.09,
+  /** How much of the footprint's thickness the beam takes, and how much the posts behind it take. */
+  beamOfEnvelope: 0.3,
+  postOfEnvelope: 0.6,
+  /** Along the run. */
+  postWidth: 0.14,
+  spacing: 4,
+  /** Where the beam sits if the footprint forgot to say. Knee-high, as a middenberm rail is. */
+  fallbackHeight: 0.75,
+};
+
+function guardrailGeometry(surface: Surface): Part[] {
+  const fp = footprint(surface);
+  const alongY = fp.depth >= fp.width;
+  const run = alongY ? fp.depth : fp.width;
+  const from = alongY ? fp.y - fp.depth / 2 : fp.x - fp.width / 2;
+  const envelope = Math.max(alongY ? fp.width : fp.depth, 0.12);
+  const top = surface.height > 0 ? surface.height : GUARDRAIL.fallbackHeight;
+  const bottom = top - GUARDRAIL.beamDepth;
+  const out: Part[] = [];
+
+  /** A bar the length of the run, `thick` across it, occupying the height between y0 and y1. */
+  const bar = (thick: number, y0: number, y1: number) => {
+    const geometry = alongY
+      ? new THREE.BoxGeometry(thick, y1 - y0, run)
+      : new THREE.BoxGeometry(run, y1 - y0, thick);
+    geometry.translate(fp.x, (y0 + y1) / 2, -fp.y);
+    out.push({ geometry });
+  };
+
+  // Symmetric about the run, because a middenberm rail is seen from both sides and the footprint
+  // does not say which one the road is on. The web is held a centimetre clear of the flanges top
+  // and bottom so no two faces end up coplanar and fighting for the same depth.
+  const beam = envelope * GUARDRAIL.beamOfEnvelope;
+  bar(beam, top - GUARDRAIL.flange, top);
+  bar(beam, bottom, bottom + GUARDRAIL.flange);
+  bar(beam * 0.55, bottom + 0.01, top - 0.01);
+
+  // Posts on a grid of whole world metres rather than on this run's own ends. A rail arrives in
+  // bolted lengths that overlap by a seam, and one post per end would put two of them in the same
+  // hole at every joint — which is exactly the rhythm the eye uses to read speed off a barrier.
+  const postTop = top - 0.04;
+  const postThick = envelope * GUARDRAIL.postOfEnvelope;
+  const first = Math.ceil(from / GUARDRAIL.spacing) * GUARDRAIL.spacing;
+  for (let at = first; at < from + run - GUARDRAIL.spacing / 8; at += GUARDRAIL.spacing) {
+    const geometry = alongY
+      ? new THREE.BoxGeometry(postThick, postTop, GUARDRAIL.postWidth)
+      : new THREE.BoxGeometry(GUARDRAIL.postWidth, postTop, postThick);
+    geometry.translate(alongY ? fp.x : at, postTop / 2, alongY ? -at : -fp.y);
+    out.push({ geometry });
+  }
+
+  return out;
+}
+
+/**
+ * A hectometerpaaltje: green blade, white band near the top.
+ *
+ * The blade is clamped rather than taken from the footprint, because a paaltje is a rolled section
+ * and not a size — a square footprint copied from the lamp would otherwise stand a fence post at
+ * the roadside. What is emphatically not attempted is the number on it: at 100 km/h the band is
+ * the whole of what anyone sees, and a legible board would be a lie about how much a rider can
+ * read going past.
+ */
+const HECTOMETER = {
+  fallbackHeight: 1,
+  minSide: 0.08,
+  maxSide: 0.16,
+  /** How far below the top the band starts, and how deep it is. */
+  bandDrop: 0.04,
+  bandDepth: 0.19,
+  bandProud: 0.008,
+};
+
+function hectometerPostGeometry(surface: Surface): Part[] {
+  const fp = footprint(surface);
+  const top = surface.height > 0 ? surface.height : HECTOMETER.fallbackHeight;
+  const side = (v: number) => Math.min(Math.max(v, HECTOMETER.minSide), HECTOMETER.maxSide);
+  const width = side(fp.width);
+  const depth = side(fp.depth);
+
+  const post = new THREE.BoxGeometry(width, top, depth);
+  post.translate(fp.x, top / 2, -fp.y);
+
+  const proud = HECTOMETER.bandProud * 2;
+  const band = new THREE.BoxGeometry(width + proud, HECTOMETER.bandDepth, depth + proud);
+  band.translate(fp.x, top - HECTOMETER.bandDrop - HECTOMETER.bandDepth / 2, -fp.y);
+
+  return [{ geometry: post }, { geometry: band, group: HECTOMETER_BAND }];
+}
+
+/**
+ * A tree: trunk plus crown.
+ *
+ * The road data's footprint is the *trunk* — the crown is the renderer's to decide — so the crown
+ * comes off the height and the variant, which are what the road data does vary. A treeline runs
+ * for three hundred metres here, and a row of identically proportioned copies at different scales
+ * reads as wallpaper rather than as a wood.
+ */
+const TREE = {
+  fallbackHeight: 9,
+  /** Crown radius as a fraction of the tree's height, and how far the variant moves it. */
+  crownOfHeight: 0.21,
+  crownSpread: 0.04,
+  /** Where the crown starts, likewise. */
+  trunkOfHeight: 0.3,
+  trunkSpread: 0.05,
+};
+
+function treeGeometry(surface: Surface): Part[] {
+  const fp = footprint(surface);
+  const height = surface.height > 0 ? surface.height : TREE.fallbackHeight;
+  const variant = surface.variant ?? Math.round(height * 4);
+  const trunkTop = height * (TREE.trunkOfHeight + TREE.trunkSpread * (variant % 3));
+  const crown = height * (TREE.crownOfHeight + TREE.crownSpread * ((variant >> 1) % 3));
+  const rise = (height - trunkTop) / 2;
+
+  // Eight facets round and six up: chunky on purpose, so the wood catches the sun in planes like
+  // everything else in the scene rather than turning into a row of smooth balls. The poles land
+  // exactly on the ellipsoid's axes, so the crown tops out at `height` and not near it.
+  const canopy = new THREE.SphereGeometry(1, 8, 6);
+  canopy.scale(crown, rise, crown);
+  canopy.translate(fp.x, trunkTop + rise, -fp.y);
+
+  // The trunk carries on into the crown, or a tree in a stiff perspective shows daylight at its
+  // own neck.
+  const radius = Math.max((fp.width + fp.depth) / 4, 0.06);
+  const length = trunkTop + rise * 0.6;
+  const trunk = new THREE.CylinderGeometry(radius * 0.75, radius, length, 6);
+  trunk.translate(fp.x, length / 2, -fp.y);
+
+  return [{ geometry: canopy }, { geometry: trunk, group: TREE_TRUNK }];
+}
+
+/**
+ * Everything that is built rather than extruded. The footprint carries position and size; the
+ * shape of the thing standing on it lives here, where three.js primitives are available and the
+ * shared road data does not have to carry a rolled steel section as a polygon.
+ */
+const DETAILS: Partial<Record<SurfaceKind, (surface: Surface) => Part[]>> = {
+  lamp: lampGeometry,
+  guardrail: guardrailGeometry,
+  hectometerPost: hectometerPostGeometry,
+  tree: treeGeometry,
+};
+
+/** Only what stands up casts; the ground it stands on receives. */
+const CASTS_SHADOW = new Set([
+  'hedge',
+  'kerb',
+  'lamp',
+  'guardrail',
+  'hectometerPost',
+  HECTOMETER_BAND,
+  'tree',
+  TREE_TRUNK,
+]);
 
 function mergedMesh(
   geometries: THREE.BufferGeometry[],
@@ -358,33 +625,49 @@ export function buildWorld(scenario: Scenario): THREE.Group {
   const world = new THREE.Group();
   world.name = 'world';
 
-  // The verge is uniform, so it is one plane rather than thousands of polygons.
+  const ext = worldExtent(scenario);
+
+  // The verge is uniform, so it is one plane rather than thousands of polygons — and it is sized
+  // from the extent with the margin added a second time, because it has to outlast every surface
+  // standing on it. It used to be a fixed 400 m square, which covered a 30-zone kruising and
+  // stopped 13 m behind the start of the motorway's oprit: grass that runs out first leaves the
+  // road running off into the sky.
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(400, 400),
-    material('hedge', PALETTE.grass),
+    new THREE.PlaneGeometry(
+      ext.maxX - ext.minX + 2 * WORLD_MARGIN,
+      ext.maxY - ext.minY + 2 * WORLD_MARGIN,
+    ),
+    material('grass', PALETTE.grass),
   );
   ground.rotation.x = -Math.PI / 2;
+  ground.position.set((ext.minX + ext.maxX) / 2, 0, -(ext.minY + ext.maxY) / 2);
   ground.name = 'verge';
   ground.receiveShadow = true;
   world.add(ground);
 
   const byKind = new Map<string, THREE.BufferGeometry[]>();
   const byDetail = new Map<string, THREE.BufferGeometry[]>();
-  for (const surface of roadSurfaces(scenario.road, EXTENT)) {
+  const push = (group: string, geometry: THREE.BufferGeometry) => {
+    const list = byKind.get(group) ?? [];
+    list.push(geometry);
+    byKind.set(group, list);
+  };
+
+  for (const surface of roadSurfaces(scenario.world, ext)) {
     if (surface.kind === 'roof') continue;
     // Neighbouring houses alternate render, exactly as they do in plan view. Merging them all
     // into one mesh would throw that away and leave a terrace of identical beige blocks.
     const group =
       surface.kind === 'house' && (surface.variant ?? 0) % 2 !== 0 ? 'houseAlt' : surface.kind;
-    const list = byKind.get(group) ?? [];
-    if (surface.kind === 'lamp') {
-      list.push(...lampGeometry(surface));
+    const detail = DETAILS[surface.kind];
+    if (detail) {
+      for (const part of detail(surface)) push(part.group ?? group, part.geometry);
     } else {
-      list.push(
+      push(
+        group,
         surface.height > 0 ? extrudedGeometry(surface) : flatGeometry(surface, LAYER[surface.kind]),
       );
     }
-    byKind.set(group, list);
 
     for (const { colour, geometry } of frontage(surface)) {
       const details = byDetail.get(colour) ?? [];
@@ -409,14 +692,17 @@ export function buildWorld(scenario: Scenario): THREE.Group {
     house: PALETTE.house,
     houseAlt: PALETTE.houseAlt,
     lamp: PALETTE.lamp,
+    guardrail: PALETTE.guardrail,
+    hectometerPost: PALETTE.hectometerPost,
+    [HECTOMETER_BAND]: PALETTE.paint,
+    tree: PALETTE.tree,
+    [TREE_TRUNK]: TRUNK_COLOUR,
   };
 
   for (const [group, geometries] of byKind) {
     const mesh = mergedMesh(geometries, material(group, colours[group] ?? PALETTE.asphalt), group);
     if (!mesh) continue;
-    // Only what stands up casts; the ground it stands on receives.
-    mesh.castShadow =
-      group.startsWith('house') || group === 'hedge' || group === 'kerb' || group === 'lamp';
+    mesh.castShadow = group.startsWith('house') || CASTS_SHADOW.has(group);
     mesh.receiveShadow = !mesh.castShadow;
     world.add(mesh);
   }

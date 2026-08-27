@@ -6,17 +6,27 @@ import { rechtsafFietspad as scenario } from '../scenario.rechtsaf-fietspad';
 const routes = buildRoutes(scenario);
 const DEG = 180 / Math.PI;
 
+/**
+ * These tests are about the crossing, so they narrow to it once here rather than at every read.
+ * A motorway scenario has no `approach` and no fietspad to cross, and the type says so.
+ */
+const world = scenario.world;
+if (world.kind !== 'urbanCrossing') throw new Error('scenario 1 is een kruispunt');
+const routes_ = routes;
+if (routes_.kind !== 'urbanCrossing') throw new Error('scenario 1 is een kruispunt');
+const crossing = routes_;
+
 describe('de route', () => {
   test('start noordwaarts in de rechterrijstrook', () => {
     const start = poseAt(routes.turn, 0);
-    expect(start.x).toBeCloseTo(scenario.road.laneCenterX, 5);
-    expect(start.y).toBeCloseTo(scenario.approach.startY, 5);
+    expect(start.x).toBeCloseTo(world.road.laneCenterX, 5);
+    expect(start.y).toBeCloseTo(world.approach.startY, 5);
     expect(start.heading * DEG).toBeCloseTo(90, 5);
   });
 
   test('splitst op het insturpunt', () => {
     expect(routes.decisionS).toBeCloseTo(
-      scenario.approach.turnInY - scenario.approach.startY,
+      world.approach.turnInY - world.approach.startY,
       5,
     );
     const a = poseAt(routes.turn, routes.decisionS);
@@ -31,29 +41,29 @@ describe('de route', () => {
     expect(mid.heading * DEG).toBeLessThan(90);
     const after = poseAt(routes.turn, routes.decisionS + routes.turn.lengths[1] + 1);
     expect(after.heading * DEG).toBeCloseTo(0, 5);
-    expect(after.y).toBeCloseTo(scenario.road.sideLaneCenterY, 5);
+    expect(after.y).toBeCloseTo(world.road.sideLaneCenterY, 5);
   });
 
   test('rijdt op de rechtdoor-tak gewoon noordwaarts verder', () => {
     const after = poseAt(routes.straight, routes.decisionS + 20);
     expect(after.heading * DEG).toBeCloseTo(90, 5);
-    expect(after.x).toBeCloseTo(scenario.road.laneCenterX, 5);
+    expect(after.x).toBeCloseTo(world.road.laneCenterX, 5);
   });
 });
 
 describe('het conflictpunt', () => {
   test('ligt op de hartlijn van het fietspad', () => {
     const point = poseAt(routes.turn, routes.conflictS);
-    expect(point.x).toBeCloseTo(scenario.conflictX, 2);
+    expect(point.x).toBeCloseTo(world.conflictX, 2);
   });
 
   test('ligt tussen het in- en uitrijden van het fietspad', () => {
-    expect(routes.crossEntryS).toBeLessThan(routes.conflictS);
-    expect(routes.crossExitS).toBeGreaterThan(routes.conflictS);
+    expect(crossing.crossEntryS).toBeLessThan(routes.conflictS);
+    expect(crossing.crossExitS).toBeGreaterThan(routes.conflictS);
   });
 
   test('de doorkruiste strook is minstens zo lang als de motor', () => {
-    const [yMin, yMax] = routes.crossYSpan;
+    const [yMin, yMax] = crossing.crossYSpan;
     expect(yMax - yMin).toBeGreaterThan(2.2);
   });
 
@@ -80,7 +90,7 @@ describe('er staat niets in de weg', () => {
   };
 
   test('de hele route is vrij van alles wat overeind staat', () => {
-    const standing = roadSurfaces(scenario.road, {
+    const standing = roadSurfaces(scenario.world, {
       minX: -85,
       maxX: 95,
       minY: -150,
@@ -106,7 +116,7 @@ describe('er staat niets in de weg', () => {
   });
 
   test('de lantaarnpalen staan op de vier hoeken, niet op de weg', () => {
-    const lamps = roadSurfaces(scenario.road, { minX: -85, maxX: 95, minY: -150, maxY: 65 }).filter(
+    const lamps = roadSurfaces(scenario.world, { minX: -85, maxX: 95, minY: -150, maxY: 65 }).filter(
       (s) => s.kind === 'lamp',
     );
     expect(lamps).toHaveLength(4);
@@ -121,14 +131,14 @@ describe('er staat niets in de weg', () => {
     expect(corners).toEqual(['-1,-1', '-1,1', '1,-1', '1,1']);
     for (const lamp of lamps) {
       for (const p of lamp.points) {
-        expect(Math.abs(p.x)).toBeGreaterThan(scenario.road.fietspadTo);
-        expect(Math.abs(p.y)).toBeGreaterThan(scenario.road.sideHalfWidth);
+        expect(Math.abs(p.x)).toBeGreaterThan(world.road.fietspadTo);
+        expect(Math.abs(p.y)).toBeGreaterThan(world.road.sideHalfWidth);
       }
     }
   });
 
   test('de hoek is open: de heg houdt op bij de zijweg', () => {
-    const hedges = roadSurfaces(scenario.road, { minX: -85, maxX: 95, minY: -150, maxY: 65 }).filter(
+    const hedges = roadSurfaces(scenario.world, { minX: -85, maxX: 95, minY: -150, maxY: 65 }).filter(
       (s) => s.kind === 'hedge',
     );
     // Four runs, not two: each side stops short of the Kerkstraat and picks up again beyond it.
@@ -142,8 +152,8 @@ describe('er staat niets in de weg', () => {
 });
 
 describe('de fietsoversteek', () => {
-  const { fietspadFrom, fietspadTo, sideHalfWidth } = scenario.road;
-  const all = roadSurfaces(scenario.road, { minX: -85, maxX: 95, minY: -150, maxY: 65 });
+  const { fietspadFrom, fietspadTo, sideHalfWidth } = world.road;
+  const all = roadSurfaces(scenario.world, { minX: -85, maxX: 95, minY: -150, maxY: 65 });
   const overlapsCrossing = (s: { points: { x: number; y: number }[] }, xa: number, xb: number) => {
     const xs = s.points.map((p) => p.x);
     const ys = s.points.map((p) => p.y);
@@ -185,7 +195,7 @@ describe('geometriecontrole', () => {
     expect(() =>
       buildRoutes({
         ...scenario,
-        approach: { ...scenario.approach, turnRadius: 9 },
+        world: { ...world, approach: { ...world.approach, turnRadius: 9 } },
       }),
     ).toThrow(/kink/i);
   });

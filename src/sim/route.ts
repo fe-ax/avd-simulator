@@ -5,7 +5,15 @@
  * steer press. Everything is measured in metres of world space so that expected-action windows
  * can be expressed in metres and stay fair regardless of how fast the student rides.
  */
-import type { ArcSegment, PoseOnRoute, RouteSegment, Scenario, Vec2 } from './types';
+import { motorwayLanes } from './surfaces/motorway';
+import type {
+  ArcSegment,
+  PoseOnRoute,
+  RouteSegment,
+  Scenario,
+  ScenarioWorld,
+  Vec2,
+} from './types';
 
 export interface Route {
   segments: RouteSegment[];
@@ -75,13 +83,34 @@ function poseInSegment(seg: RouteSegment, u: number): PoseOnRoute {
  * Used to derive the conflict point (the fietspad centreline) from the geometry rather than
  * hardcoding a number that would silently drift when the layout is edited.
  */
+/** Arc length at which the route first reaches `targetY`, travelling north. */
+export function findSAtY(route: Route, targetY: number, step = 0.05): number {
+  return findSAt(route, (p) => p.y, targetY, step);
+}
+
 export function findSAtX(route: Route, targetX: number, step = 0.05): number {
-  let prev = poseAt(route, 0).x;
+  return findSAt(route, (p) => p.x, targetX, step);
+}
+
+/**
+ * Arc length at which `read` of the pose first rises through `target`.
+ *
+ * Reading a coordinate through a callback rather than hard-coding x is what lets a conflict be
+ * anchored on a route of any orientation. The old x-only version could only ever find a crossing
+ * on a route travelling east, which was invisible while there was one scenario.
+ */
+export function findSAt(
+  route: Route,
+  read: (p: PoseOnRoute) => number,
+  target: number,
+  step = 0.05,
+): number {
+  let prev = read(poseAt(route, 0));
   for (let s = step; s <= route.total; s += step) {
-    const x = poseAt(route, s).x;
-    if (prev < targetX && x >= targetX) {
+    const x = read(poseAt(route, s));
+    if (prev < target && x >= target) {
       // Linear refine between the two samples.
-      const u = (targetX - prev) / (x - prev);
+      const u = (target - prev) / (x - prev);
       return s - step + step * u;
     }
     prev = x;
@@ -93,21 +122,40 @@ export function findSAtX(route: Route, targetX: number, step = 0.05): number {
 // Scenario routes
 // ---------------------------------------------------------------------------
 
-export interface ScenarioRoutes {
-  /** The full right-turn route: straight approach → arc → side road. */
+/**
+ * What every world has: a route the rider follows and one arc length everything is measured from.
+ *
+ * `turn` and `straight` are the two candidate lines. On a motorway there is no branch, so both
+ * are the same route and `decisionS` sits past the end — the engine's branch logic then simply
+ * never fires, which is cheaper than teaching it about a third case.
+ */
+interface CommonRoutes {
   turn: Route;
-  /** What happens when the student never presses "stuur rechts": straight on. */
   straight: Route;
   /** Arc length at which the two routes diverge. */
   decisionS: number;
-  /** Arc length of the conflict point (fietspad centreline) on the turn route. */
+  /** Arc length of the point every distance window is measured back from. */
   conflictS: number;
-  /** Arc lengths at which the rider enters and leaves the fietspad crossing. */
-  crossEntryS: number;
-  crossExitS: number;
-  /** World-y span of the strip of fietspad the rider sweeps through. */
-  crossYSpan: [number, number];
+  /** How far past the conflict the ride continues before it is called finished. */
+  runOutM: number;
 }
+
+export type ScenarioRoutes =
+  | (CommonRoutes & {
+      kind: 'urbanCrossing';
+      /** Arc lengths at which the rider enters and leaves the fietspad crossing. */
+      crossEntryS: number;
+      crossExitS: number;
+      /** World-y span of the strip of fietspad the rider sweeps through. */
+      crossYSpan: [number, number];
+    })
+  | (CommonRoutes & {
+      kind: 'motorway';
+      /** Lateral offset, in metres left of the spine, of each rijstrook. Index 0 is the strook. */
+      laneOffsets: number[];
+      /** Arc length from which a lane change is allowed: the straight part of the invoegstrook. */
+      mergeFromS: number;
+    });
 
 /**
  * Right turn out of a northbound lane.
@@ -117,6 +165,66 @@ export interface ScenarioRoutes {
  * `(sin theta, -cos theta)`: heading north at theta = pi, heading east at theta = pi/2.
  */
 export function buildRoutes(scenario: Scenario): ScenarioRoutes {
+  return scenario.world.kind === 'motorway'
+    ? buildMotorwayRoutes(scenario.world)
+    : buildCrossingRoutes(scenario.world);
+}
+
+/**
+ * The oprit and the invoegstrook.
+ *
+ * The arc sweeps onto north so the invoegstrook is dead straight, which matters for more than
+ * looks: a lane change is a lateral offset from the spine, and on a curve an offset machine's
+ * real ground speed differs from its progress along the spine by `offset / radius`. Keeping the
+ * merge on the straight makes that term exactly zero instead of a correction nobody would
+ * remember to apply.
+ */
+function buildMotorwayRoutes(world: Extract<ScenarioWorld, { kind: 'motorway' }>): ScenarioRoutes {
+  const { road, ramp, mergeEndY, runOutM } = world;
+  const lanes = motorwayLanes(road);
+  const sweep = (ramp.sweepDeg * Math.PI) / 180;
+
+  // The arc ends heading north at the mouth of the invoegstrook. Its centre therefore lies
+  // `radius` to the right of that point, and the sweep runs back from there.
+  const center: Vec2 = { x: lanes.mergeCentre + ramp.radius, y: ramp.strookStartY };
+  const spine = makeRoute([
+    {
+      kind: 'arc',
+      center,
+      radius: ramp.radius,
+      // Clockwise: theta runs down from pi+sweep to pi, where the tangent (sin, -cos) is due
+      // north. Anticlockwise would take the long way round the same circle — 342 degrees of arc
+      // instead of 18, which is not a wrong-looking ramp so much as a roundabout.
+      startAngle: Math.PI + sweep,
+      endAngle: Math.PI,
+      cw: true,
+    },
+    {
+      kind: 'line',
+      from: { x: lanes.mergeCentre, y: ramp.strookStartY },
+      to: { x: lanes.mergeCentre, y: mergeEndY + runOutM },
+    },
+  ]);
+
+  const conflictS = findSAtY(spine, mergeEndY);
+  return {
+    kind: 'motorway',
+    turn: spine,
+    straight: spine,
+    // No branch here: put the decision past the end so the engine's branch logic never fires.
+    decisionS: spine.total + 1,
+    conflictS,
+    runOutM,
+    // Index 0 is the invoegstrook itself, then each rijstrook further left.
+    laneOffsets: [0, ...lanes.centres.map((c) => lanes.mergeCentre - c)],
+    mergeFromS: findSAtY(spine, ramp.strookStartY),
+  };
+}
+
+function buildCrossingRoutes(
+  world: Extract<ScenarioWorld, { kind: 'urbanCrossing' }>,
+): ScenarioRoutes {
+  const scenario = world;
   const { laneCenterX, sideLaneCenterY } = scenario.road;
   const { startY, turnInY, turnRadius, exitX } = scenario.approach;
 
@@ -181,10 +289,12 @@ export function buildRoutes(scenario: Scenario): ScenarioRoutes {
   yMax += HALF_LENGTH;
 
   return {
+    kind: 'urbanCrossing',
     turn,
     straight,
     decisionS: segmentLength(approachSeg),
     conflictS: findSAtX(turn, scenario.conflictX),
+    runOutM: 42,
     crossEntryS,
     crossExitS,
     crossYSpan: [yMin, yMax],

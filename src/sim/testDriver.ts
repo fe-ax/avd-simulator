@@ -225,14 +225,15 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
     if (p.shoulder && d <= 14) once('shoulder', () => dispatch('SHOULDER_RIGHT'));
     if (p.steer && d <= 11) once('steer', () => dispatch('STEER_RIGHT'));
 
-    const actorPast = actor.y > engine.routes.crossYSpan[1] + 1.5;
+    const actorPast =
+      engine.routes.kind === 'urbanCrossing' && actor.y > engine.routes.crossYSpan[1] + 1.5;
     const wantStop = p.yieldToActor && d <= 12 && !actorPast;
     if (wantStop !== braking) {
       braking = wantStop;
       dispatch('BRAKE', wantStop ? 'down' : 'up');
     }
 
-    const turnedAt = engine.getTurnCompletedAt();
+    const turnedAt = engine.getManoeuvreCompletedAt();
     if (turnedAt !== null) {
       if (p.indicatorOff === 'direct') once('off', () => dispatch('INDICATOR_OFF'));
       else if (p.indicatorOff === 'laat' && engine.t > turnedAt + 4.5) {
@@ -246,6 +247,135 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
   }
 
   if (record === null) throw new Error('Run did not finish within the frame budget');
+  const scored = scoreRun(record, scenario);
+  return { ...(record as RunRecord), ...scored };
+}
+
+// ---------------------------------------------------------------------------
+// Motorway
+// ---------------------------------------------------------------------------
+
+/**
+ * How a merge is ridden, headless.
+ *
+ * A separate driver rather than more flags on `RidePlan`: the crossroads plan is a list of
+ * things you do *approaching a junction*, and bolting a merge onto it would have made every
+ * option mean "unless it is a motorway, in which case".
+ */
+export interface MergePlan {
+  /** Throttle presses, and how promptly. Five presses of 10 km/h takes 50 to 100. */
+  throttlePresses?: number;
+  /** Distance-to-conflict at which the first throttle press happens. */
+  throttleFromD?: number;
+  /** Metres between presses. */
+  throttleEveryM?: number;
+  mirror?: boolean;
+  shoulder?: boolean;
+  indicator?: boolean;
+  /** Distance-to-conflict at which the rider commits to the lane change. */
+  mergeAtD?: number;
+  /** Announce before checking, to probe the prerequisite. */
+  signalBeforeLooking?: boolean;
+  /** Do the schouderblik over the wrong shoulder: it reveals nothing. */
+  shoulderWrongSide?: boolean;
+  indicatorOff?: boolean;
+  /** Ease off once settled in the lane, which is what the road asks of you behind a truck. */
+  matchSpeedAfterMerge?: boolean;
+  /**
+   * Merge with plenty of room and then close right up. The whole reason the rule is a held
+   * minimum rather than a reading taken at the moment of merging: this ride must not score well.
+   */
+  chaseAfterMerge?: boolean;
+}
+
+const MERGE_DEFAULTS: Required<MergePlan> = {
+  throttlePresses: 5,
+  throttleFromD: 148,
+  throttleEveryM: 8,
+  mirror: true,
+  shoulder: true,
+  indicator: true,
+  mergeAtD: 60,
+  signalBeforeLooking: false,
+  shoulderWrongSide: false,
+  indicatorOff: true,
+  matchSpeedAfterMerge: false,
+  chaseAfterMerge: false,
+};
+
+export function driveMerge(scenario: Scenario, plan: MergePlan = {}): RunRecord {
+  const p = { ...MERGE_DEFAULTS, ...plan };
+  const engine = new SimEngine(scenario);
+  let record: RunRecord | null = null;
+  engine.arm((r) => {
+    record = r;
+  }, '2026-01-01T12:00:00.000Z');
+
+  const done = new Set<string>();
+  let headHold = 0;
+  let pressed = 0;
+  let nextPressD = p.throttleFromD;
+  let eased = false;
+
+  const once = (key: string, fn: () => void) => {
+    if (done.has(key)) return;
+    done.add(key);
+    fn();
+  };
+  const dispatch = (control: Parameters<SimEngine['dispatch']>[0]) => {
+    if (isLookControl(control)) {
+      const aim = LOOK_DIRECTIONS[control];
+      engine.headPose.yaw = (aim.yaw * Math.PI) / 180;
+      engine.headPose.pitch = (aim.pitch * Math.PI) / 180;
+      headHold = GAZE_DURATION_S;
+    }
+    engine.dispatch(control, 'press', isLookControl(control) ? 'gaze' : 'keyboard');
+  };
+
+  for (let frame = 0; frame < MAX_FRAMES && record === null; frame++) {
+    engine.advance(DT);
+    if (engine.phase !== 'riding') continue;
+
+    if (headHold > 0) {
+      headHold -= DT;
+      if (headHold <= 0) {
+        engine.headPose.yaw = 0;
+        engine.headPose.pitch = 0;
+      }
+    }
+
+    const d = engine.distanceToConflict();
+
+    if (pressed < p.throttlePresses && d <= nextPressD) {
+      dispatch('THROTTLE_UP');
+      pressed++;
+      nextPressD -= p.throttleEveryM;
+    }
+
+    // Announcing first is a real reeks, ridden in the wrong order — so every press has to land
+    // inside its own window, or scoring discards it and there is no order left to be wrong.
+    const early = p.signalBeforeLooking;
+    if (p.indicator && d <= (early ? 110 : 95)) once('indicator', () => dispatch('INDICATOR_LEFT'));
+    if (p.mirror && d <= (early ? 100 : 120)) once('mirror', () => dispatch('MIRROR_LEFT'));
+    if (p.shoulderWrongSide && d <= 105) once('wrongShoulder', () => dispatch('SHOULDER_RIGHT'));
+    if (p.shoulder && d <= (early ? 90 : 105)) once('shoulder', () => dispatch('SHOULDER_LEFT'));
+    if (d <= p.mergeAtD) once('merge', () => dispatch('STEER_LEFT'));
+
+    const settled = engine.getManoeuvreCompletedAt() !== null;
+    if (settled && p.indicatorOff) once('indicatorOff', () => dispatch('INDICATOR_OFF'));
+    if (settled && p.chaseAfterMerge && !eased) {
+      eased = true;
+      for (let i = 0; i < 3; i++) dispatch('THROTTLE_UP');
+    }
+    // Trim back toward the truck's speed rather than running up its back at 100.
+    if (settled && p.matchSpeedAfterMerge && !eased) {
+      eased = true;
+      dispatch('THROTTLE_DOWN');
+      dispatch('THROTTLE_DOWN');
+    }
+  }
+
+  if (record === null) throw new Error('rit is niet afgerond binnen de tijd');
   const scored = scoreRun(record, scenario);
   return { ...(record as RunRecord), ...scored };
 }

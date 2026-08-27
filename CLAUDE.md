@@ -5,8 +5,12 @@ practical exam. It is not a driving game: it exists so a student can rehearse **
 looking and acting in traffic**, and then see afterwards exactly when they looked versus when they
 should have.
 
-One scenario so far: *rechtsaf de Kerkstraat in* — a right turn across a vrijliggend fietspad with
-a snorfiets coming up the inside.
+Two scenarios:
+
+1. *Rechtsaf de Kerkstraat in* — a right turn across a vrijliggend fietspad, with a snorfiets
+   coming up the inside. Teaches the look sequence and the dode hoek.
+2. *Invoegen op de A12* — a motorway merge from an on-ramp into a gap between a car ahead and a
+   truck coming up behind. Teaches speed matching and following distance.
 
 The UI is Dutch. Code, comments and commit messages are English.
 
@@ -16,7 +20,7 @@ The UI is Dutch. Code, comments and commit messages are English.
 
 ```bash
 npm run dev      # vite dev server; :5173 by default, next free port if taken
-npm test         # vitest run — 71 tests, all of them fast
+npm test         # vitest run — all of them fast, none needing a browser
 npm run build    # tsc -b && vite build
 ```
 
@@ -49,13 +53,28 @@ The load-bearing consequence, which nothing declares and which you should re-mea
 change to the view:
 
 ```
-full reeks        snorfiets first seen at   8.1s   (right mirror, step 4)
-no mirrors                                 15.5s   (schouderblik, step 8)
-no looks at all                            17.0s   (once it has already overtaken)
+scenario 1        full reeks        snorfiets first seen at   8.1s   (right mirror, step 4)
+                  no mirrors                                 15.5s   (schouderblik, step 8)
+                  no looks at all                            16.9s   (once it has overtaken)
+
+scenario 2        full reeks        truck first seen at        4.7s   (left mirror)
+                  no mirror                                   never   (see below)
+                  no looks at all                             18.2s   (as it goes past)
 ```
 
 If those move, something about the view changed. That is either the point of your change or a bug;
 know which.
+
+That `never` is not a bug and is worth understanding before you "fix" it. Ride scenario 2 properly
+and the truck is still three seconds back when you merge — seventy-odd metres, nowhere near the
+blind spot — so the schouderblik genuinely cannot reveal it. Unlike scenario 1, the mirror is what
+finds the hazard there. The check is still required, for the reason an examiner gives: no mirror
+covers the strook beside you. A road user that really does sit in the dode hoek on that stretch
+would be a good third actor and is the obvious next thing to add.
+
+**Perception tests a vehicle's nose, middle and tail, not its centre.** It tested only the centre
+until a 16.5 m truck existed, at which point a truck filling the whole of a shoulder check counted
+as unseen until the rider drew level with the middle of the trailer.
 
 ---
 
@@ -69,7 +88,10 @@ src/
     perception.ts          the view frusta; measurements of the scene
     scoring.ts             pure. scoreRun + the sequence, prerequisite and incident rules
     route.ts               the racing line, as arcs and straights
-    roadSurfaces.ts        the road as pure polygon data — the seam both renderers read
+    roadSurfaces.ts        the vocabulary, and dispatch on the kind of world
+    surfaces/              one generator per kind of road; pure (layout, extent) -> Surface[]
+    scenarios.ts           the registry, keyed by the id a RunRecord stores
+    steering.ts            what the sturen controls mean; ONE body of that rule
     scenario.*.ts          pure data
     testDriver.ts          headless rider: drives the real engine through the real dispatch
     replay.ts / recorder.ts
@@ -103,8 +125,18 @@ public/dev-driver.js       dev-only scripted rider, loaded by hand from the cons
 4. **`WorldView` is the whole contract between sim and any renderer.** If a renderer needs to know
    something, add it to `WorldView` and supply it from *both* `App.getLiveView()` and
    `ReplayPlayer.scene()` — otherwise the feature silently works live and breaks in replay.
-5. Scenarios and runs are **pure data**. Drag-and-drop scenario editing and post-editing of
-   recordings are the stated future direction; nothing may become un-serialisable.
+5. **`Scenario.world` is tagged, and it tags the road *and* the route anchors together.** Tagging
+   only the road would leave a motorway scenario supplying a dummy `approach`, and `buildRoutes`
+   would throw inside the engine constructor. Pure data that lies is the one thing the eventual
+   scenario editor must not be able to produce. Both `roadSurfaces()` and `buildRoutes()` dispatch
+   on that single tag.
+6. Scenarios and runs are **pure data**. Drag-and-drop scenario editing and post-editing of
+   recordings are the stated future direction; nothing may become un-serialisable. Thresholds a
+   teacher might disagree with — window bounds, headway bands — belong in the scenario, not in
+   `scoring.ts`.
+7. **A saved run outlives the code that made it.** `RunRecord` is persisted to localStorage, so a
+   renamed field needs a migration in `recorder.ts` (there is one) and every replay must resolve
+   its scenario through `scenarios.ts` by `record.scenarioId`, never from whatever is on screen.
 
 ---
 
@@ -143,8 +175,15 @@ commit.
 - **The fietspad red stops at the crossing** and blokmarkering takes over, same number of blocks
   on each edge.
 - **The mirror glass tilt is derived from `EYE_HEIGHT`**, not a constant. See below.
-- **A clean ride scores Geslaagd 0/0/0.** Anything else means the windows or the targets moved,
-  not the rules.
+- **A clean ride scores Geslaagd 0/0/0**, in both scenarios. Anything else means the windows or the
+  targets moved, not the rules.
+- **Following distance is a state, not an event.** The headway rule scores the lowest gap actually
+  *held* for half a second, never the gap at one instant. Sampling the moment of the merge is
+  gameable in the obvious direction: drop in three seconds clear, bank the credit, then close right
+  up and never be measured again. Two tests in `invoegen.test.ts` pin this.
+- **Engine constants that are really facts about one scenario belong in the scenario.** `MAX_SPEED`
+  was 60 km/h, which read as a fact about motorcycles and was a fact about a 30-zone; it made a
+  motorway literally unrideable. Speed ceiling, throttle step and steering mode are scenario data.
 
 ### Derived, not guessed
 
@@ -171,10 +210,16 @@ What has actually worked:
 - **Sweep exhaustively.** To find what a mirror covers, step an actor through following distances
   and record SEEN/blind. To check two gaze dots do not overlap, sweep the head across the whole
   travel.
-- **Drive it headless.** `driveRun(scenario, plan)` in `testDriver.ts` runs the real engine,
-  perception and scoring with the clock advanced by hand. `RidePlan` has flags for most of the
-  interesting mistakes (`shoulderTooFarBack`, `swapLookOrder`, `rushSequenceAtStart`,
-  `indicatorOff`, …). Prefer this over clicking through a 20-second approach.
+- **Drive it headless.** `driveRun(scenario, plan)` for the crossroads and `driveMerge(scenario,
+  plan)` for the motorway, both in `testDriver.ts`, run the real engine, perception and scoring
+  with the clock advanced by hand. Their plans have flags for most of the interesting mistakes
+  (`shoulderTooFarBack`, `swapLookOrder`, `chaseAfterMerge`, …). Prefer this over clicking through
+  a 20-second approach.
+- **Spike the design before building the world.** Scenario 2's whole premise was wrong on first
+  specification — with the truck ahead, "get up to speed" and "keep two seconds" cannot both hold,
+  and the rider who never accelerates scores best. Eighty lines of standalone kinematics found that
+  in one run, before there was a motorway to look at. When a scenario's difficulty depends on
+  several tuned numbers at once, prove the bands are separable first.
 
 **A hidden browser pane throttles `requestAnimationFrame`**, so a scene will look frozen and mirror
 cameras will read as un-aimed. Force frames with `__frames3d(n)` before measuring anything.
