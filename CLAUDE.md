@@ -11,6 +11,8 @@ Two scenarios:
    coming up the inside. Teaches the look sequence and the dode hoek.
 2. *Invoegen op de A12* — a motorway merge from an on-ramp into a gap between a car ahead and a
    truck coming up behind. Teaches speed matching and following distance.
+3. *Inhalen op de A12* — open motorway, two lorries nose to tail at 90, busy left lane. Teaches
+   waiting for a gap, and **not** tucking back in between the lorries.
 
 The UI is Dutch. Code, comments and commit messages are English.
 
@@ -60,7 +62,15 @@ scenario 1        full reeks        snorfiets first seen at   8.1s   (right mirr
 scenario 2        full reeks        truck first seen at        4.7s   (left mirror)
                   no mirror                                   never   (see below)
                   no looks at all                             18.2s   (as it goes past)
+
+scenario 3        every column identical: lorries at 0.0s and 4.8s, cars at 3.0s and 6.0s
 ```
+
+Scenario 3's flat table is not a bug either, and it is a different flatness from scenario 2's
+`never`. Everything there is ahead of you or comes past you, so the forward view finds all of it at
+the same moment whatever you do with your head. What the mirrors change is not *when you see* the
+traffic but *whether you know it is safe to move* — which is why that scenario's proof is the
+incident tests (`ignoreTraffic` puts two cars on the brakes) rather than this table.
 
 If those move, something about the view changed. That is either the point of your change or a bug;
 know which.
@@ -71,6 +81,27 @@ blind spot — so the schouderblik genuinely cannot reveal it. Unlike scenario 1
 finds the hazard there. The check is still required, for the reason an examiner gives: no mirror
 covers the strook beside you. A road user that really does sit in the dode hoek on that stretch
 would be a good third actor and is the obvious next thing to add.
+
+**The teller always shows what the machine is aiming for**, as `WorldView.targetSpeedKmh` — blue
+while it is still climbing there, grey once it has arrived. Always, not only after a `SET_SPEED`:
+a readout that stays blank until you happen to use one particular control looks broken rather than
+empty, and is one nobody learns to read.
+
+**A set speed is a fixed timespan, not a fixed acceleration.** `SET_SPEED` ramps linearly from
+whatever you are doing to what you asked for in `SPEED_RAMP_S`, however big the jump. That is
+unusual and deliberate: a rider practising a merge wants to know *when* they will be at speed, and
+tying it to a rate makes the answer depend on where they started. The throttle steps keep the
+ordinary physics — this is the cruise control, not the wrist, and the brake or the throttle
+cancels it. A press with no value means the road's limit, because the keyboard cannot carry one and
+falling through to zero would stop the machine dead on a motorway.
+
+**A long vehicle is drawn corner by corner, not under one transform.** `withPose` takes the depth
+at a sprite's centre and draws the whole thing at that one scale, which is right for a snorfiets
+and wrong for a 16.5 m truck: its ends sit at different depths, so it has to come out as a
+trapezoid lying on the road rather than a rectangle pasted on it. Vehicle bodies go through
+`worldBox`, which projects each corner the way the road surfaces always have. Note the local frame
+is **x forward, y to the vehicle's *right*** — despite what the older comment said, and it is the
+axis that inverted the blinker once.
 
 **Perception tests a vehicle's nose, middle and tail, not its centre.** It tested only the centre
 until a 16.5 m truck existed, at which point a truck filling the whole of a shoulder check counted
@@ -106,8 +137,15 @@ src/
     gazeOverlay.ts         the DOM dots and reticle
     instrument.ts          the binnacle: speed, gear, indicator telltales
     actors3d.ts, coords.ts
-  render/       the top-down canvas renderer — now the REVIEW view only
+    validate.ts            geometry checks; shared by the tests and the builder
+    referenceRide.ts       what a model rider makes of a scenario — the builder's safety net
+    scenarioExport.ts      a built scenario, as a file you can drop back into src/sim
+  render/       the top-down canvas renderer — the review view, and the builder's
+    camera.ts              ViewCamera (the interface) + the projective chase camera
+    planCamera.ts          flat, north-up, invertible: the one the builder edits through
+    builderOverlay.ts      route line, actor paths, drag handles
   ui/           React. RideView hosts three.js; MapView hosts the canvas
+    builder/               the scenario builder: plan view, forms, validator, export
 public/dev-driver.js       dev-only scripted rider, loaded by hand from the console
 ```
 
@@ -167,6 +205,13 @@ These are pinned by tests in `src/sim/__tests__/route.test.ts` and `looking.test
 one, the test tells you; if you change one deliberately, update the test *and* say why in the
 commit.
 
+- **There is road under the whole ride.** `findOffRoad` in `validate.ts`. Ask it about a *recorded
+  ride* (`riddenPath`), not the route: the route is the spine, the machine is metres left of it
+  after a lane change, and the invoegstrook now ends in a puntstuk — so the spine leaves the tarmac
+  exactly where it should. This exists because it
+  happened: the motorway's oprit was described in `buildRoutes` and not in `motorwaySurfaces`, so
+  the first forty metres of scenario 2 were ridden across the verge — carriageway off to the left,
+  trees going past, no tarmac at all — and every test passed, because nothing had thought to ask.
 - **Nothing standing up intersects the route.** The turn cuts the corner well before the mouth of
   the side road, so kerbs and hedges must stop short of it (`KERB_JUNCTION_GAP = 8.5`,
   `HEDGE_GAP = 4.5`). A hedge that looks fine in plan view because the road is painted over it is
@@ -177,6 +222,16 @@ commit.
 - **The mirror glass tilt is derived from `EYE_HEIGHT`**, not a constant. See below.
 - **A clean ride scores Geslaagd 0/0/0**, in both scenarios. Anything else means the windows or the
   targets moved, not the rules.
+- **Following distance is a same-lane thing.** `headwaySeconds` skips any sample where the other
+  vehicle is more than half a lane off your line. Overtaking means spending seconds level with a
+  lorry, where the distance measured along the heading is nearly nothing — without the gate, the
+  rule marks every successful overtake as tailgating, and the better the overtake the closer the
+  "gap" it reports. A headway with nothing to measure returns **no row at all**: it is not
+  applicable, and the thing that actually went wrong has a row of its own.
+- **Not every exercise has a conflict point.** The first two happen somewhere and their windows are
+  metres before that place. An overtake happens wherever the rider decides, so scenario 3's reeks
+  hangs off the manoeuvre instead — `beforeLaneChange` asks whether a look happened in the seconds
+  before the machine moved. Anchor that to a milepost and you score the rider's choice of milepost.
 - **Following distance is a state, not an event.** The headway rule scores the lowest gap actually
   *held* for half a second, never the gap at one instant. Sampling the moment of the merge is
   gameable in the obvious direction: drop in three seconds clear, bank the credit, then close right
@@ -239,6 +294,31 @@ debug tool, and it is how the mirrored-world bug was finally cornered after thre
 theories about it were all wrong.
 
 ---
+
+## The scenario builder
+
+`#bouwen`, or the button at the foot of the sidebar. You start from a scenario that ships, change
+the road's numbers, drag the traffic, and export a TypeScript file that **derives** from the base
+rather than flattening it — so the base keeps its Dutch prose as the source of truth and the diff
+is small enough to read.
+
+Three things make it cheap, and all three are worth preserving:
+
+- **The preview is `drawScene`**, given an orthographic camera and a `WorldView` from a
+  `ReplayPlayer` over the reference ride. What you edit is drawn by exactly the code that draws it
+  when it is ridden, so the two cannot drift.
+- **`referenceRide()` runs the real engine in the browser.** A full ride is a few milliseconds, so
+  it re-rides after every edit and says what a model rider made of it. **A scenario a model rider
+  fails is usually a broken scenario** — that check is the reason the builder exists, and it earned
+  itself the day it was written by finding that scenario 2's car was forty metres too close.
+- **Dependent values are derived, never typed in.** `buildRoutes` throws when
+  `turnInY + turnRadius !== sideLaneCenterY`, which an editor would violate on every keystroke — so
+  the side road's lane centre is computed from the other two. Unrepresentable beats reported.
+
+**Not in it yet, and it matters:** you cannot edit the reeks or the briefing. A derived scenario
+inherits both, which stays coherent for the windows (they are anchored in metres before the
+conflict point) but *not* for the briefing text — a variant will describe itself as its parent. Fix
+that before shipping any built scenario to a student.
 
 ## Scoring, briefly
 

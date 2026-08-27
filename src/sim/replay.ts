@@ -146,6 +146,7 @@ export class ReplayPlayer {
       speedFactor: bike.speed / Math.max(1, this.scenario.speedLimitKmh / 3.6),
       speedKmh: bike.speed * 3.6,
       gear: bike.gear,
+      targetSpeedKmh: bike.targetSpeedKmh ?? Math.round(bike.speed * 3.6),
       indicator: bike.indicator,
       braking: bike.brake,
       actors,

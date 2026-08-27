@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { buildRoutes, findSAtX, poseAt } from '../route';
 import { roadSurfaces } from '../roadSurfaces';
+import { findObstructions } from '../validate';
 import { rechtsafFietspad as scenario } from '../scenario.rechtsaf-fietspad';
 
 const routes = buildRoutes(scenario);
@@ -74,44 +75,16 @@ describe('het conflictpunt', () => {
 });
 
 describe('er staat niets in de weg', () => {
-  /**
-   * Anything with height is a wall once there is a third dimension. A plan view hides that — an
-   * uninterrupted hedge disappears under the side road painted on top of it — so nothing about
-   * drawing it flat says whether you can ride through it. This walks the route and checks.
-   */
-  const inside = (poly: { x: number; y: number }[], x: number, y: number): boolean => {
-    let hit = false;
-    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-      const a = poly[i];
-      const b = poly[j];
-      if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) hit = !hit;
-    }
-    return hit;
-  };
 
   test('de hele route is vrij van alles wat overeind staat', () => {
-    const standing = roadSurfaces(scenario.world, {
+    // The builder runs this same check live while you drag things around, so it lives in
+    // sim/validate.ts and both callers share one implementation.
+    const blocked = findObstructions(scenario.world, routes, {
       minX: -85,
       maxX: 95,
       minY: -150,
       maxY: 65,
-    }).filter((s) => s.height > 0);
-    expect(standing.length).toBeGreaterThan(0);
-
-    const blocked: string[] = [];
-    for (let s = 0; s <= routes.turn.total; s += 0.5) {
-      const pose = poseAt(routes.turn, s);
-      // The machine has width; check either side of the centreline as well.
-      const left = { x: pose.x - Math.sin(pose.heading) * 0.5, y: pose.y + Math.cos(pose.heading) * 0.5 };
-      const right = { x: pose.x + Math.sin(pose.heading) * 0.5, y: pose.y - Math.cos(pose.heading) * 0.5 };
-      for (const point of [pose, left, right]) {
-        for (const surface of standing) {
-          if (inside(surface.points, point.x, point.y)) {
-            blocked.push(`${surface.kind} at s=${s.toFixed(0)}`);
-          }
-        }
-      }
-    }
+    });
     expect(blocked).toEqual([]);
   });
 

@@ -1,0 +1,308 @@
+/**
+ * The scenario builder.
+ *
+ * You start from a scenario that ships, change the road's numbers and drag the traffic about, and
+ * a model rider rides it after every change and tells you what it made of it. What comes out is a
+ * TypeScript file that derives from the one you started with.
+ *
+ * The preview is not a special editor renderer: it is the same `drawScene` the replay uses, given
+ * an orthographic camera and a `WorldView` from a `ReplayPlayer` over the reference ride. Which
+ * means the thing you are editing is drawn by exactly the code that will draw it when it is
+ * ridden, and the two cannot drift.
+ */
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { buildRoutes, poseAt } from '../../sim/route';
+import { ReplayPlayer } from '../../sim/replay';
+import { ALL_SCENARIOS, scenarioById } from '../../sim/scenarios';
+import { referenceRide, revealTimeline } from '../../sim/referenceRide';
+import { findObstructions, findOffRoad, riddenPath } from '../../sim/validate';
+import { exportScenario } from '../../sim/scenarioExport';
+import { clearDraft, loadDraft, saveDraft } from '../../sim/drafts';
+import type { Handle } from '../../render/builderOverlay';
+import type { ActorSpec, Scenario, Vec2 } from '../../sim/types';
+import { BuilderView, type BuilderScene } from './BuilderView';
+import { ValidationPanel, type Validation } from './Validation';
+import { WorldForm } from './WorldForm';
+
+/** How long to wait after the last change before riding it. Long enough to drag through. */
+const SETTLE_MS = 220;
+
+const EMPTY: Validation = { record: null, error: null, obstructions: [], offRoad: [], reveals: [] };
+
+/** Which module each shipped scenario lives in, so an export can import its base. */
+const BASE_MODULE: Record<string, { module: string; binding: string }> = {
+  'rechtsaf-fietspad-v1': { module: 'scenario.rechtsaf-fietspad', binding: 'rechtsafFietspad' },
+  'invoegen-snelweg-v1': { module: 'scenario.invoegen-snelweg', binding: 'invoegenSnelweg' },
+};
+
+/** How much road to show around the conflict point, in metres either side along the route. */
+const FRAME_M = 85;
+
+/**
+ * What to frame: the stretch around the conflict point, not the whole route.
+ *
+ * Fitting everything sounds right and looks useless. Scenario 2's route is three hundred metres
+ * long and fifteen wide, so framing all of it puts the entire road in a strip thirty pixels
+ * across — and every number worth editing lives in the last eighty metres anyway. An actor's `to`
+ * is worse still: on the A12 it is nine hundred metres up the road, meaning "and then it carries
+ * on". Where someone comes from is a placement; where they end up is not.
+ */
+function extentOf(scenario: Scenario) {
+  const xs: number[] = [];
+  const ys: number[] = [];
+  try {
+    const routes = buildRoutes(scenario);
+    const from = Math.max(0, routes.conflictS - FRAME_M);
+    const to = Math.min(routes.turn.total, routes.conflictS + FRAME_M);
+    for (let s = from; s <= to; s += 4) {
+      const p = poseAt(routes.turn, s);
+      xs.push(p.x);
+      ys.push(p.y);
+    }
+  } catch {
+    // A draft that will not build a route is still worth looking at; its traffic frames it.
+  }
+  // Anything starting inside the framed stretch belongs in the picture too.
+  for (const a of scenario.actors) {
+    const near = ys.length === 0 || (a.from.y >= Math.min(...ys) - 40 && a.from.y <= Math.max(...ys) + 40);
+    if (near) {
+      xs.push(a.from.x);
+      ys.push(a.from.y);
+    }
+  }
+  if (xs.length === 0) return { minX: -20, maxX: 20, minY: -20, maxY: 20 };
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minY: Math.min(...ys),
+    maxY: Math.max(...ys),
+  };
+}
+
+export function Builder({ onExit }: { onExit: () => void }) {
+  const [baseId, setBaseId] = useState(() => loadDraft()?.baseId ?? ALL_SCENARIOS[0].id);
+  const [draft, setDraft] = useState<Scenario>(() => loadDraft()?.scenario ?? ALL_SCENARIOS[0]);
+  const [validation, setValidation] = useState<Validation>(EMPTY);
+  const [time, setTime] = useState(0);
+  const [fitKey, setFitKey] = useState(0);
+  const [exported, setExported] = useState<string | null>(null);
+
+  const base = scenarioById(baseId) ?? ALL_SCENARIOS[0];
+
+  const routes = useMemo(() => {
+    try {
+      return buildRoutes(draft);
+    } catch {
+      return null;
+    }
+  }, [draft]);
+
+  // Ride it after every change, once the changes stop. A full run is a few milliseconds, so this
+  // is a courtesy to the drag rather than a necessity.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      const { record, error } = referenceRide(draft);
+      if (error) {
+        setValidation({ record: null, error, obstructions: [], offRoad: [], reveals: [] });
+        return;
+      }
+      const extent = extentOf(draft);
+      const margin = 120;
+      const bounds = {
+        minX: extent.minX - margin,
+        maxX: extent.maxX + margin,
+        minY: extent.minY - margin,
+        maxY: extent.maxY + margin,
+      };
+      setValidation({
+        record,
+        error: null,
+        obstructions: routes ? findObstructions(draft.world, routes, bounds) : [],
+        offRoad: findOffRoad(draft.world, riddenPath(record.samples), bounds),
+        reveals: revealTimeline(draft),
+      });
+    }, SETTLE_MS);
+    return () => clearTimeout(id);
+  }, [draft, routes]);
+
+  useEffect(() => {
+    const id = setTimeout(() => saveDraft(draft, baseId), 500);
+    return () => clearTimeout(id);
+  }, [draft, baseId]);
+
+  const player = useMemo(
+    () => (validation.record ? new ReplayPlayer(validation.record, draft) : null),
+    [validation.record, draft],
+  );
+
+  const duration = validation.record?.durationS ?? 0;
+  useEffect(() => {
+    if (time > duration) setTime(0);
+  }, [duration, time]);
+
+  const handles = useMemo<Handle[]>(
+    () =>
+      draft.actors.flatMap((a) => [
+        { id: `${a.id}:from`, at: a.from, label: a.id },
+        { id: `${a.id}:to`, at: a.to },
+      ]),
+    [draft.actors],
+  );
+
+  const getScene = useCallback((): BuilderScene | null => {
+    if (!player) return null;
+    player.seek(time);
+    return {
+      world: player.scene(),
+      opts: {
+        time,
+        // The builder is the god view by definition: you are looking at the exercise, not riding it.
+        revealAll: true,
+        highlightUnseen: false,
+        showConflictMarker: false,
+      },
+      routes,
+      actors: draft.actors,
+      handles,
+    };
+  }, [player, time, routes, draft.actors, handles]);
+
+  const dragHandle = useCallback((id: string, to: Vec2) => {
+    const [actorId, which] = id.split(':') as [string, 'from' | 'to'];
+    const round = (v: number) => Math.round(v * 10) / 10;
+    setDraft((d) => ({
+      ...d,
+      actors: d.actors.map((a) =>
+        a.id === actorId ? { ...a, [which]: { x: round(to.x), y: round(to.y) } } : a,
+      ),
+    }));
+  }, []);
+
+  const changeBase = useCallback((id: string) => {
+    const next = scenarioById(id);
+    if (!next) return;
+    setBaseId(id);
+    setDraft(next);
+    setFitKey((k) => k + 1);
+    setExported(null);
+  }, []);
+
+  const patchActor = useCallback((actorId: string, patch: Partial<ActorSpec>) => {
+    setDraft((d) => ({
+      ...d,
+      actors: d.actors.map((a) => (a.id === actorId ? { ...a, ...patch } : a)),
+    }));
+  }, []);
+
+  const doExport = useCallback(() => {
+    const meta = BASE_MODULE[base.id] ?? { module: 'scenario.rechtsaf-fietspad', binding: 'rechtsafFietspad' };
+    setExported(exportScenario(draft, base, meta.module, meta.binding).source);
+  }, [draft, base]);
+
+  const dirty = draft !== base;
+
+  return (
+    <div className="app builder">
+      <div className="stage">
+        <div className="builder-topbar">
+          <button type="button" className="ghost-btn" onClick={onExit}>
+            ← Terug naar rijden
+          </button>
+          <span className="builder-bases">
+            {ALL_SCENARIOS.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className={`replay-btn tiny${s.id === baseId ? ' active' : ''}`}
+                onClick={() => changeBase(s.id)}
+              >
+                {s.title}
+              </button>
+            ))}
+          </span>
+          <button type="button" className="replay-btn tiny" onClick={() => setFitKey((k) => k + 1)}>
+            Pas in beeld
+          </button>
+          {dirty && (
+            <button
+              type="button"
+              className="replay-btn tiny"
+              onClick={() => {
+                clearDraft();
+                changeBase(baseId);
+              }}
+            >
+              Begin opnieuw
+            </button>
+          )}
+        </div>
+
+        <div className="map-wrap">
+          <BuilderView
+            getScene={getScene}
+            onDragHandle={dragHandle}
+            fitKey={`${baseId}-${fitKey}`}
+            fitBounds={extentOf(draft)}
+          />
+        </div>
+
+        <div className="builder-scrub">
+          <label>
+            Tijd
+            <input
+              type="range"
+              min={0}
+              max={Math.max(duration, 0.1)}
+              step={0.05}
+              value={Math.min(time, duration)}
+              onChange={(e) => setTime(Number(e.target.value))}
+            />
+          </label>
+          <span className="replay-time">
+            {time.toFixed(1).replace('.', ',')}s / {duration.toFixed(1).replace('.', ',')}s
+          </span>
+          <span className="builder-note">
+            Schuif door de ontmoeting: hier zie je waar het verkeer écht zit op het moment dat telt.
+          </span>
+        </div>
+      </div>
+
+      <aside className="sidebar">
+        <header className="sidebar-header">
+          <h2>Scenario bouwen</h2>
+          <p>
+            Afgeleid van <strong>{base.title}</strong>. De reeks, de vensters en de uitleg komen
+            daarvandaan; hier verzet je de weg en het verkeer.
+          </p>
+        </header>
+
+        <WorldForm draft={draft} onChange={setDraft} onPatchActor={patchActor} />
+
+        <ValidationPanel {...validation} />
+
+        <section className="sidebar-section">
+          <h3>Exporteren</h3>
+          <button type="button" className="primary-btn" onClick={doExport}>
+            Maak er een bestand van
+          </button>
+          {exported && (
+            <>
+              <p className="builder-note">
+                Zet dit in <code>src/sim/</code> en voeg één regel toe aan{' '}
+                <code>ALL_SCENARIOS</code>.
+              </p>
+              <textarea className="builder-export" readOnly value={exported} rows={16} />
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={() => navigator.clipboard?.writeText(exported)}
+              >
+                Kopieer
+              </button>
+            </>
+          )}
+        </section>
+      </aside>
+    </div>
+  );
+}

@@ -20,6 +20,7 @@ import type {
   ControlId,
   ControlPhase,
   HeadPose,
+  LaneChange,
   LookControl,
   PoseOnRoute,
   RouteBranch,
@@ -34,6 +35,17 @@ const ACCEL = 2.2; // m/s^2 when below target speed
 const COAST_DECEL = 1.2; // m/s^2 when above target speed and not braking
 const BRAKE_DECEL = 4.5; // m/s^2 while the rem is held
 const MAX_GEAR = 6;
+
+/**
+ * How long a set speed takes to arrive, whatever the change.
+ *
+ * Fixed time rather than fixed acceleration, which is unusual and deliberate. A rider practising
+ * a merge wants to say "make it a hundred" and know exactly when it will be a hundred; tying that
+ * to a rate means the answer depends on where you started, and the one thing a training tool
+ * should not make you compute in your head is when you will be ready. Throttle steps keep the
+ * ordinary physics — this is the cruise control, not the wrist.
+ */
+const SPEED_RAMP_S = 4;
 
 const ACTOR_ACCEL = 1.5;
 const ACTOR_BRAKE = 5.0;
@@ -100,6 +112,8 @@ export interface BikeState {
   indicator: 'left' | 'right' | 'off';
   branch: RouteBranch;
   steerArmed: boolean;
+  /** A set speed on its way in: linear from `from` to `to`, starting at `startedAt`. */
+  speedRamp: { from: number; to: number; startedAt: number } | null;
   /** Metres left of the route spine: which rijstrook the machine is actually in. */
   laneOffset: number;
   /** Index into `routes.laneOffsets`; 0 is the invoegstrook. */
@@ -108,6 +122,9 @@ export interface BikeState {
   laneTargetOffset: number;
   /** 0 to 1 through the current change; 1 means settled. */
   laneU: number;
+  /** Where the change in progress began, so the finished move can be recorded whole. */
+  laneChangeFrom: number;
+  laneChangeStartedAt: number;
   pose: PoseOnRoute;
 }
 
@@ -217,6 +234,7 @@ export class SimEngine {
   samples: BikeSample[] = [];
   actorTracks: Record<string, ActorSample[]> = {};
   incidents: ActorIncident[] = [];
+  laneChanges: LaneChange[] = [];
   manoeuvreCompletedAt: number | null = null;
 
   private accumulator = 0;
@@ -258,11 +276,14 @@ export class SimEngine {
       indicator: 'off',
       branch: 'approach',
       steerArmed: false,
+      speedRamp: null,
       laneOffset: 0,
       laneIndex: 0,
       laneFromOffset: 0,
       laneTargetOffset: 0,
       laneU: 1,
+      laneChangeFrom: 0,
+      laneChangeStartedAt: 0,
       pose: poseAt(this.routes.turn, 0),
     };
   }
@@ -322,6 +343,7 @@ export class SimEngine {
     this.samples = [];
     this.actorTracks = Object.fromEntries(this.scenario.actors.map((a) => [a.id, []]));
     this.incidents = [];
+    this.laneChanges = [];
     this.manoeuvreCompletedAt = null;
     this.paused = false;
     this.accumulator = 0;
@@ -357,7 +379,12 @@ export class SimEngine {
   // Input
   // -------------------------------------------------------------------------
 
-  dispatch(control: ControlId, phase: ControlPhase, source: ControlEvent['source']) {
+  dispatch(
+    control: ControlId,
+    phase: ControlPhase,
+    source: ControlEvent['source'],
+    value?: number,
+  ) {
     if (this.phase !== 'riding') return;
     // With auto-sturen the controls are inert and nothing is recorded: an inactive button that
     // still fills the log would put phantom rows in the debrief.
@@ -387,6 +414,7 @@ export class SimEngine {
       control,
       phase,
       source,
+      ...(value === undefined ? {} : { value }),
       ...(blocker ? { rejected: true } : {}),
     });
 
@@ -405,11 +433,23 @@ export class SimEngine {
         bike.clutch = phase !== 'up';
         break;
       case 'THROTTLE_UP':
+        // A hand on the throttle cancels a set speed, the way it does on any machine that has one.
+        bike.speedRamp = null;
         bike.targetSpeed = Math.min(this.maxSpeed, bike.targetSpeed + this.throttleStep);
         break;
       case 'THROTTLE_DOWN':
+        bike.speedRamp = null;
         bike.targetSpeed = Math.max(0, bike.targetSpeed - this.throttleStep);
         break;
+      case 'SET_SPEED': {
+        // No value means the limit. The keyboard has no way to carry one, and "S" meaning "get up
+        // to the speed of this road" is the useful reading — where the alternative, a missing
+        // value falling through to zero, would stop the machine dead on a motorway.
+        const want = Math.max(0, Math.min(this.maxSpeed, (value ?? this.scenario.speedLimitKmh) * KMH));
+        bike.targetSpeed = want;
+        bike.speedRamp = { from: bike.speed, to: want, startedAt: this.t };
+        break;
+      }
       case 'GEAR_UP':
         bike.gear = Math.min(MAX_GEAR, bike.gear + 1);
         break;
@@ -473,7 +513,21 @@ export class SimEngine {
     const bike = this.bike;
 
     if (bike.brake) {
+      // The brake wins over everything, including a set speed still on its way in.
+      // The brake cancels a set speed on its way in, but leaves the target alone: let go and the
+      // machine goes back to what it was doing, which is what a brake is. Clamping the target to
+      // the braking speed ratchets it down for good, and the machine never accelerates again.
+      bike.speedRamp = null;
       bike.speed = Math.max(0, bike.speed - BRAKE_DECEL * dt);
+    } else if (bike.speedRamp) {
+      const { from, to, startedAt } = bike.speedRamp;
+      const u = SPEED_RAMP_S <= 0 ? 1 : (this.t - startedAt) / SPEED_RAMP_S;
+      if (u >= 1) {
+        bike.speed = to;
+        bike.speedRamp = null;
+      } else {
+        bike.speed = from + (to - from) * u;
+      }
     } else if (bike.speed < bike.targetSpeed) {
       // The clutch being in means no drive reaches the wheel.
       if (!bike.clutch) bike.speed = Math.min(bike.targetSpeed, bike.speed + ACCEL * dt);
@@ -500,7 +554,17 @@ export class SimEngine {
     const before = bike.laneOffset;
     if (bike.laneU < 1) {
       bike.laneU = Math.min(1, bike.laneU + dt / LANE_CHANGE_S);
-      if (bike.laneU >= 1 && this.manoeuvreCompletedAt === null) this.manoeuvreCompletedAt = this.t;
+      if (bike.laneU >= 1) {
+        // Offsets grow leftward, so a higher lane index is further left.
+        this.laneChanges.push({
+          startedAt: round3(bike.laneChangeStartedAt),
+          completedAt: round3(this.t),
+          direction: bike.laneIndex > bike.laneChangeFrom ? 'left' : 'right',
+          fromLane: bike.laneChangeFrom,
+          toLane: bike.laneIndex,
+        });
+        if (this.manoeuvreCompletedAt === null) this.manoeuvreCompletedAt = this.t;
+      }
     }
     bike.laneOffset =
       bike.laneFromOffset +
@@ -663,6 +727,8 @@ export class SimEngine {
     if (bike.s < this.routes.mergeFromS) return;
     const next = bike.laneIndex + dir;
     if (next < 0 || next >= this.routes.laneOffsets.length) return;
+    bike.laneChangeFrom = bike.laneIndex;
+    bike.laneChangeStartedAt = this.t;
     bike.laneIndex = next;
     bike.laneFromOffset = bike.laneOffset;
     bike.laneTargetOffset = this.routes.laneOffsets[next];
@@ -711,6 +777,7 @@ export class SimEngine {
       headYaw: round3(this.headPose.yaw),
       headPitch: round3(this.headPose.pitch),
       laneOffset: round3(this.bike.laneOffset),
+      targetSpeedKmh: Math.round(this.bike.targetSpeed * 3.6),
     });
     for (const actor of this.actors) {
       this.actorTracks[actor.spec.id].push({
@@ -740,6 +807,7 @@ export class SimEngine {
       actorTracks: this.actorTracks,
       events: this.events,
       incidents: this.incidents,
+      laneChanges: this.laneChanges,
       // scoring.ts fills these in; kept on the record so a saved run needs no re-scoring.
       results: [],
       faults: [],

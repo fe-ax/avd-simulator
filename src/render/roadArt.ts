@@ -3,7 +3,7 @@
  * `roadSurfaces` in the simulation layer; this file only decides what colour it is and hands the
  * polygons to the projection.
  */
-import type { Camera } from './camera';
+import type { ViewCamera } from './camera';
 import { fillWorldPoly } from './paint';
 import { roadSurfaces, type RoadExtent, type SurfaceKind } from '../sim/roadSurfaces';
 import type { ScenarioWorld } from '../sim/types';
@@ -26,7 +26,7 @@ const COLOURS: Record<SurfaceKind, string> = {
   tree: PALETTE.tree,
 };
 
-export function drawRoad(ctx: CanvasRenderingContext2D, cam: Camera, world: ScenarioWorld) {
+export function drawRoad(ctx: CanvasRenderingContext2D, cam: ViewCamera, world: ScenarioWorld) {
   const b = cam.worldBounds();
   const extent: RoadExtent = {
     minX: b.minX - 5,

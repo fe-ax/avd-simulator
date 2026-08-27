@@ -18,6 +18,7 @@ import { RideView } from './ui/RideView';
 import type { CheckState } from './ui/CheckStrip';
 import { RunHistory } from './ui/RunHistory';
 import { RideSettings } from './ui/RideSettings';
+import { Builder } from './ui/builder/Builder';
 import { Timeline } from './ui/Timeline';
 
 /** How often the replay playhead is pushed into React while playing. */
@@ -45,6 +46,10 @@ interface OpenRequest {
  * since those say how they want to practise, not which exercise they are practising.
  */
 export default function App() {
+  // The builder is a different job, not a different mode of the same screen — so it is a sibling
+  // of the session rather than a flag inside it. The hash makes it linkable and survives a reload,
+  // which matters when you are iterating on a scenario and reloading constantly.
+  const [building, setBuilding] = useState(() => window.location.hash === '#bouwen');
   const [scenarioId, setScenarioId] = useState(DEFAULT_SCENARIO.id);
   const [timeScale, setTimeScale] = useState(1);
   const [autoSteer, setAutoSteer] = useState(true);
@@ -71,9 +76,23 @@ export default function App() {
     setOpenRequest({ run, seq: seq.current });
   }, []);
 
+  const setMode = useCallback((next: boolean) => {
+    setBuilding(next);
+    window.location.hash = next ? '#bouwen' : '';
+  }, []);
+
+  useEffect(() => {
+    const onHash = () => setBuilding(window.location.hash === '#bouwen');
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  if (building) return <Builder onExit={() => setMode(false)} />;
+
   return (
     <Session
       key={scenario.id}
+      onBuild={() => setMode(true)}
       scenario={scenario}
       onScenarioChange={chooseScenario}
       openRequest={openRequest}
@@ -88,6 +107,7 @@ export default function App() {
 
 interface SessionProps {
   scenario: Scenario;
+  onBuild: () => void;
   onScenarioChange: (id: string) => void;
   openRequest: OpenRequest | null;
   onOpenRun: (run: RunRecord) => void;
@@ -100,6 +120,7 @@ interface SessionProps {
 /** One scenario, from its briefing to the debrief of a run in it. */
 function Session({
   scenario,
+  onBuild,
   onScenarioChange,
   openRequest,
   onOpenRun,
@@ -281,6 +302,7 @@ function Session({
       speedFactor: world.bike.speed / (scenario.speedLimitKmh / 3.6),
       speedKmh: world.bike.speed * 3.6,
       gear: world.bike.gear,
+      targetSpeedKmh: Math.round(world.bike.targetSpeed * 3.6),
       indicator: world.bike.indicator,
       braking: world.bike.brake,
       actors: world.actors,
@@ -527,6 +549,9 @@ function Session({
             />
             Debug-overlay
           </label>
+          <button type="button" className="ghost-btn tiny" onClick={onBuild}>
+            Scenario bouwen
+          </button>
         </footer>
       </aside>
     </div>

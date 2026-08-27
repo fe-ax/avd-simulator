@@ -782,3 +782,279 @@ kbd {
   .control-btn kbd { display: none; }
   .tempo-hint { display: none; }
 }
+
+
+/* ---------------------------------------------------------------------------
+   Scenario builder
+   --------------------------------------------------------------------------- */
+
+.builder .stage {
+  /* The ride's stage is a grid sized for its own two children. The builder puts three in it, so
+     it says its own rows: bar, canvas, scrubber. Without this the top bar inherits the tall row
+     and the canvas is laid out at zero height — which draws nothing and reports nothing. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.builder .map-wrap {
+  min-height: 0;
+  height: 100%;
+}
+
+.builder-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: default;
+}
+
+.builder-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  flex-wrap: wrap;
+}
+
+.builder-bases {
+  display: inline-flex;
+  gap: 4px;
+  margin-right: auto;
+}
+
+.builder-scrub {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  flex-wrap: wrap;
+}
+
+.builder-scrub label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 240px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.builder-scrub input[type='range'] {
+  flex: 1;
+}
+
+.builder-panel {
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-left-width: 3px;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.builder-panel h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.builder-panel-good {
+  border-left-color: #4bbd7d;
+}
+
+.builder-panel-bad {
+  border-left-color: #e0645c;
+}
+
+.builder-verdict {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 6px;
+}
+
+.builder-counts {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+.builder-faults {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.builder-faults li {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.builder-faults strong {
+  font-size: 12px;
+}
+
+.builder-faults span {
+  opacity: 0.75;
+}
+
+.builder-note {
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0.6;
+  margin: 6px 0 0;
+}
+
+.builder-error {
+  font-size: 11px;
+  white-space: pre-wrap;
+  opacity: 0.85;
+  margin: 6px 0 0;
+}
+
+.builder-reveals {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.builder-reveals th,
+.builder-reveals td {
+  text-align: right;
+  padding: 3px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.builder-reveals thead th {
+  opacity: 0.55;
+  font-weight: 500;
+}
+
+.builder-reveals tbody th {
+  text-align: left;
+  font-weight: 500;
+}
+
+.builder-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+.builder-field span {
+  flex: 1;
+  opacity: 0.75;
+}
+
+.builder-field input {
+  width: 84px;
+  padding: 3px 6px;
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.builder-field.wide input {
+  width: 150px;
+}
+
+.builder-field em {
+  width: 34px;
+  font-style: normal;
+  opacity: 0.5;
+  font-size: 11px;
+}
+
+.builder-subhead {
+  margin: 12px 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+
+.builder-actor {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+.builder-actor h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+
+.builder-coords {
+  font-size: 11px;
+  opacity: 0.55;
+  margin: 4px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.builder-export {
+  width: 100%;
+  margin-top: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  line-height: 1.45;
+  color: inherit;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 8px;
+  resize: vertical;
+}
+
+.ghost-btn.tiny {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+
+.set-speed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.set-speed label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.set-speed input {
+  width: 58px;
+  padding: 3px 5px;
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.set-speed em {
+  font-style: normal;
+  opacity: 0.5;
+}
+
+.set-speed .control-btn {
+  flex: 0 0 auto;
+  padding: 4px 12px;
+}

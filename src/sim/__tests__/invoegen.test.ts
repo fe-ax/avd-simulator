@@ -5,6 +5,7 @@
 import { describe, expect, test } from 'vitest';
 import { driveMerge } from '../testDriver';
 import { invoegenSnelweg } from '../scenario.invoegen-snelweg';
+import type { Scenario } from '../types';
 
 const CLEAN = { throttlePresses: 5, throttleFromD: 148, throttleEveryM: 6, mergeAtD: 60 };
 const headway = (r: ReturnType<typeof driveMerge>, id: string) =>
@@ -92,9 +93,18 @@ describe('de volgafstandsregel is een toestand, geen momentopname', () => {
     );
   });
 
-  test('en aankruipen tot onder de twee seconden is een fout', () => {
-    const r = driveMerge(invoegenSnelweg, { ...CLEAN, mergeAtD: 90, chaseAfterMerge: true });
+  test('en onder de twee seconden zitten is een fout, hoe je er ook komt', () => {
+    // The band, tested directly rather than by hoping a particular way of riding lands in it:
+    // put the car where there is not two seconds of room and ride the merge perfectly anyway.
+    const tight: Scenario = {
+      ...invoegenSnelweg,
+      actors: invoegenSnelweg.actors.map((a) =>
+        a.id === 'auto' ? { ...a, from: { ...a.from, y: a.from.y - 105 } } : a,
+      ),
+    };
+    const r = driveMerge(tight, CLEAN);
     expect(heldSeconds(r, 'volgafstand-auto')).toBeLessThan(2);
     expect(headway(r, 'volgafstand-auto')?.status).not.toBe('goed');
+    expect(r.counts.fout).toBeGreaterThan(0);
   });
 });

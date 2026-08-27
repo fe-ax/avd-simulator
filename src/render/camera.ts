@@ -44,7 +44,33 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
 }
 
-export class Camera {
+/**
+ * What painting needs from a camera, and nothing more.
+ *
+ * Extracted so a second projection can exist. The chase camera below is projective and follows the
+ * rider, which is right for watching a ride back and useless for editing one: it has a horizon, and
+ * mapping a pixel back to a world point is not something you want to do through it. The builder's
+ * plan camera is orthographic and trivially invertible, and satisfies exactly this.
+ */
+export interface ViewCamera {
+  readonly width: number;
+  readonly height: number;
+  /** Lateral pixels per metre at the reference row. */
+  readonly scale: number;
+  /** World angle that points into the screen. */
+  readonly yaw: number;
+  /** Nearer than this the projection inverts; polygons are clipped against it first. */
+  readonly minU: number;
+
+  toCamera(worldX: number, worldY: number): CameraSpace;
+  projectCamera(u: number, v: number): Projected;
+  project(worldX: number, worldY: number): Projected;
+  /** Vertical over lateral pixels per metre at a depth, which is what sits sprites on the ground. */
+  depthRatioAt(q: number): number;
+  worldBounds(): { minX: number; maxX: number; minY: number; maxY: number };
+}
+
+export class Camera implements ViewCamera {
   /** Focus point in world metres. */
   x = 0;
   y = 0;

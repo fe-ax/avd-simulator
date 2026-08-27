@@ -93,14 +93,20 @@ export const invoegenSnelweg: Scenario = {
       bermWidth: 4,
     },
 
-    // A gentle bend onto north. Deliberately gentle, and deliberately over before the
-    // invoegstrook starts: a lane change is a lateral offset from the spine, and on a curve an
-    // offset machine's real ground speed differs from its progress along the spine by
-    // offset / radius. Ending the arc first makes that term exactly zero.
-    ramp: { radius: 120, sweepDeg: 18, strookStartY: -150 },
+    stretch: {
+      kind: 'oprit',
+      // A gentle bend onto north. Deliberately gentle, and deliberately over before the
+      // invoegstrook starts: a lane change is a lateral offset from the spine, and on a curve an
+      // offset machine's real ground speed differs from its progress along the spine by
+      // offset / radius. Ending the arc first makes that term exactly zero.
+      ramp: { radius: 120, sweepDeg: 18, strookStartY: -150 },
 
-    mergeEndY: 0,
-    runOutM: 120,
+      mergeEndY: 0,
+      // A hundred metres of puntstuk. You are told to be over by the deadline; the road gives you
+      // rather more than that before it actually runs out, which is how a real one is built.
+      taperM: 100,
+      runOutM: 120,
+    },
   },
 
   speedLimitKmh: 100,
@@ -116,10 +122,15 @@ export const invoegenSnelweg: Scenario = {
     {
       // The front of the gap. A car already doing the limit, so it neither runs away nor comes
       // back to you: whatever room you leave yourself behind it is room you chose.
+      //
+      // It started forty metres further back, tuned against a rider who dawdled forty metres of
+      // oprit before touching the throttle. A model rider gets on the gas at once — which is the
+      // advice — covers that ground, and arrives 1.7 s off the car's bumper. The builder's own
+      // reference ride is what caught it.
       id: 'auto',
       kind: 'auto',
       label: 'Auto op rijstrook 1',
-      from: { x: RIJSTROOK_1_X, y: -190 },
+      from: { x: RIJSTROOK_1_X, y: -150 },
       to: { x: RIJSTROOK_1_X, y: 900 },
       speed: 100 * KMH,
       length: 4.4,

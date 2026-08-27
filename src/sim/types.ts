@@ -29,6 +29,7 @@ export type ControlId =
   // snelheid
   | 'THROTTLE_UP'
   | 'THROTTLE_DOWN'
+  | 'SET_SPEED'
   | 'BRAKE'
   // aandrijving
   | 'CLUTCH'
@@ -79,6 +80,8 @@ export interface ControlEvent {
   /** Metres still to travel to the conflict point. Negative once past it. */
   d: number;
   control: ControlId;
+  /** What the press was for, when it carries one: the km/h a SET_SPEED asked for. */
+  value?: number;
   phase: ControlPhase;
   /** `gaze` means the rider looked at the thing rather than pressing anything. */
   source: 'pointer' | 'keyboard' | 'gaze';
@@ -223,7 +226,24 @@ export type ExpectedKind =
    * sampled once. A distance you hold is the thing being taught; an instant is gameable —
    * drop in three seconds clear, bank the credit, then close right up.
    */
-  | { type: 'headway'; actorId: string; bands: HeadwayBand[] };
+  | { type: 'headway'; actorId: string; bands: HeadwayBand[] }
+  /** The machine has to move this way once. Missing it is the manoeuvre never happening. */
+  | { type: 'laneChange'; direction: 'left' | 'right' }
+  /**
+   * A control must have been used within `withinSeconds` before the machine moved that way.
+   *
+   * The mirror of `afterTurn`, and the answer to a road where nothing happens at a fixed place:
+   * an overtake is wherever the rider decides, so anchoring the reeks to a milepost would score
+   * their choice of milepost instead of their technique.
+   */
+  | {
+      type: 'beforeLaneChange';
+      control: ControlId;
+      direction: 'left' | 'right';
+      withinSeconds: number;
+    }
+  /** Speed held inside a band, the way `headway` holds a distance. */
+  | { type: 'speedBand'; bands: SpeedBand[] };
 
 /**
  * One rung of the following-distance rule. Bands live in scenario data because the thresholds are
@@ -234,6 +254,19 @@ export interface HeadwayBand {
   atLeastSeconds: number;
   /** Restrict to one side, when the rule differs in front and behind. */
   side?: 'ahead' | 'behind';
+  outcome: Outcome | { praise: string };
+}
+
+/**
+ * One rung of a held-speed rule, ordered widest first.
+ *
+ * Bands rather than a limit because "how fast should you be going" is rarely one number: on a
+ * motorway there is a range that is fine, a range that is untidy, and everything else.
+ */
+export interface SpeedBand {
+  /** Applies when the held speed is inside this range, in km/h. */
+  fromKmh: number;
+  toKmh: number;
   outcome: Outcome | { praise: string };
 }
 
@@ -389,10 +422,24 @@ export type ScenarioWorld =
   | {
       kind: 'motorway';
       road: MotorwayRoad;
+      stretch: MotorwayStretch;
+    };
+
+/**
+ * Which bit of motorway this is.
+ *
+ * Tagged rather than a bag of optional fields. An open stretch has no oprit, no invoegstrook and
+ * no puntstuk, and an entry has no need of an explicit start — the arc fixes it. Left optional,
+ * every generator would have to guess which fields were meant, and a scenario could carry a merge
+ * deadline for a road with nothing to merge onto.
+ */
+export type MotorwayStretch =
+  | {
+      kind: 'oprit';
       /**
-       * The oprit: an arc of `radius` sweeping `sweepDeg` round onto north, ending where the
-       * invoegstrook begins. Those three fix the arc completely, so there is no start point to
-       * supply and no way to supply one that disagrees.
+       * An arc of `radius` sweeping `sweepDeg` round onto north, ending where the invoegstrook
+       * begins. Those three fix the arc completely, so there is no start point to supply and no
+       * way to supply one that disagrees.
        */
       ramp: { radius: number; sweepDeg: number; strookStartY: number };
       /**
@@ -400,8 +447,24 @@ export type ScenarioWorld =
        * measured back from — the motorway's answer to the fietspad centreline.
        */
       mergeEndY: number;
+      /**
+       * How long the puntstuk is: the strook narrows from full width at `mergeEndY` to nothing
+       * over this many metres. Generous on purpose — the scoring deadline is `mergeEndY`, and the
+       * tarmac running out well after it is what makes that a deadline rather than a wall.
+       */
+      taperM: number;
       /** How far past the deadline the ride continues, so a held following distance can be judged. */
       runOutM: number;
+    }
+  | {
+      /**
+       * Open road: two or more lanes and nothing joining them. Nothing happens at a fixed place
+       * here, so there is no conflict point to measure back from — what gets scored is anchored to
+       * the manoeuvre the rider chooses to make.
+       */
+      kind: 'doorgaand';
+      startY: number;
+      endY: number;
     };
 
 export interface Scenario {
@@ -458,6 +521,12 @@ export interface WorldView {
   /** What the instrument on the cowl reads. */
   speedKmh: number;
   gear: number;
+  /**
+   * The speed the machine is aiming for, in km/h. Always a number: there is always an answer to
+   * "what is it trying to do", and a readout that is blank until you happen to use one particular
+   * control is a readout nobody trusts.
+   */
+  targetSpeedKmh: number;
   indicator: 'left' | 'right' | 'off';
   braking: boolean;
   actors: ActorState[];
@@ -491,6 +560,8 @@ export interface BikeSample {
    * machine is actually in, so a replay reproduces the lane change rather than the intention.
    */
   laneOffset: number;
+  /** The set speed at this instant, so a replay shows the same readout the rider had. */
+  targetSpeedKmh: number;
 }
 
 export interface ActorSample {
@@ -514,6 +585,21 @@ export interface ActorIncident {
   wasPerceived: boolean;
 }
 
+/**
+ * One completed move from lane to lane.
+ *
+ * Both ends are recorded because both get judged. The reeks before a manoeuvre is judged against
+ * when the machine *started* moving — that is the moment the looking had to be finished by — while
+ * following distance and which lane you ended up in are questions about where it arrived.
+ */
+export interface LaneChange {
+  startedAt: number;
+  completedAt: number;
+  direction: 'left' | 'right';
+  fromLane: number;
+  toLane: number;
+}
+
 export interface RunRecord {
   id: string;
   scenarioId: string;
@@ -527,9 +613,12 @@ export interface RunRecord {
   branch: RouteBranch;
   /**
    * Seconds at which the manoeuvre this scenario is about was completed — the turn, or the lane
-   * change — or null when the rider never made it.
+   * change — or null when the rider never made it. On a road with more than one manoeuvre this is
+   * the first of them; `laneChanges` has them all.
    */
   manoeuvreCompletedAt: number | null;
+  /** Every lane change, in order. Empty on a road where the rider never changed lane. */
+  laneChanges: LaneChange[];
   /** Sampled at RECORD_HZ. */
   samples: BikeSample[];
   actorTracks: Record<string, ActorSample[]>;

@@ -4,7 +4,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SimEngine } from '../sim/engine';
-import type { ControlId } from '../sim/types';
+import type { ControlId, Scenario } from '../sim/types';
 import { CheckStrip, type CheckState } from './CheckStrip';
 import {
   CONTROLS,
@@ -155,11 +155,79 @@ export function ControlPanel({ engine, enabled, activeGazes, indicator, autoStee
                     );
                   })}
                 </div>
+                {group === 'snelheid' && (
+                  <SetSpeed engine={engine} enabled={enabled} scenario={scenario} />
+                )}
               </section>
             );
           })}
         </div>
       ))}
+    </div>
+  );
+}
+
+
+/**
+ * Cruise control: say what you want to be doing, and the machine gets there in a fixed four
+ * seconds however far away it is.
+ *
+ * On the invoegstrook the exercise is arriving at the speed of the traffic, not operating a
+ * throttle — and getting from fifty to a hundred in ten-kilometre steps is five presses of a
+ * button while the road runs out. This turns "kom op snelheid" into one action whose timing you
+ * can actually plan around, which is the thing being taught.
+ */
+function SetSpeed({
+  engine,
+  enabled,
+  scenario,
+}: {
+  engine: SimEngine;
+  enabled: boolean;
+  scenario: Pick<Scenario, 'speedLimitKmh' | 'maxSpeedKmh'>;
+}) {
+  const [value, setValue] = useState(scenario.speedLimitKmh);
+  const commit = useCallback(() => {
+    if (!enabled) return;
+    engine.dispatch('SET_SPEED', 'press', 'pointer', value);
+  }, [enabled, engine, value]);
+
+  // "S" belongs to this widget rather than to the control table, so the key and the button send
+  // the number in the box. A table entry could only ever dispatch without one, and then the two
+  // affordances sitting next to each other would mean different speeds.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyS' || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement;
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
+      commit();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [commit]);
+  return (
+    <div className="set-speed">
+      <label>
+        <span>Zet op</span>
+        <input
+          type="number"
+          min={0}
+          max={scenario.maxSpeedKmh}
+          step={5}
+          value={value}
+          disabled={!enabled}
+          onChange={(e) => setValue(Number(e.target.value))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit();
+            // The ride reads the keyboard; a number field must not double as the controls.
+            e.stopPropagation();
+          }}
+        />
+        <em>km/u</em>
+      </label>
+      <button type="button" className="control-btn" disabled={!enabled} onClick={commit} title="Zet snelheid">
+        Zet<kbd>S</kbd>
+      </button>
     </div>
   );
 }

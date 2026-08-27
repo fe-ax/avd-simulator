@@ -107,7 +107,8 @@ function scoreExpected(
 ): ActionResult | null {
   // Hoisted so TypeScript keeps the narrowing inside the closures below.
   const kind = expected.kind;
-  if (kind.type !== 'afterTurn' && !expected.window) {
+  const ANCHORED = ['afterTurn', 'laneChange', 'beforeLaneChange'];
+  if (!ANCHORED.includes(kind.type) && !expected.window) {
     throw new Error(`Verwachte handeling "${expected.id}" mist een venster.`);
   }
   const windowD: [number, number] | null = expected.window
@@ -143,6 +144,24 @@ function scoreExpected(
     }
     case 'headway':
       return scoreHeadway(expected, kind, record, scenario, samples, windowT, windowD);
+    case 'laneChange': {
+      const move = record.laneChanges.find((c) => c.direction === kind.direction);
+      return outcomeRow(expected, move !== undefined, windowT, windowD, move?.completedAt ?? null);
+    }
+    case 'beforeLaneChange': {
+      const move = record.laneChanges.find((c) => c.direction === kind.direction);
+      // No manoeuvre means nothing to be late for. The missing manoeuvre is its own row, and
+      // marking the rider twice for one omission reads as the debrief padding its case.
+      if (!move) return null;
+      const press = pressesOf(events, kind.control)
+        .filter((e) => !consumed.has(e))
+        .filter((e) => e.t <= move.startedAt && move.startedAt - e.t <= kind.withinSeconds)
+        .pop();
+      if (press) consumed.add(press);
+      return outcomeRow(expected, press !== undefined, windowT, windowD, press?.t ?? null);
+    }
+    case 'speedBand':
+      return scoreSpeedBand(expected, kind, samples, windowT, windowD);
     case 'control': {
       const presses = pressesOf(events, kind.control).filter((e) => !consumed.has(e));
       const w = expected.window!;
@@ -450,11 +469,26 @@ function reportLookDiscipline(audit: LookAudit, scenario: Scenario): ActionResul
  * a trekker-oplegger is seven metres longer than that, which is about a third of a second at
  * motorway speed — enough on its own to move a verdict a whole band.
  */
+/**
+ * How far off the rider's own line another vehicle has to be before its distance stops being a
+ * following distance. Half a lane: closer than that you are behind it, further and you are beside
+ * it on a different piece of road.
+ */
+const SAME_LANE_M = 2;
+
 function headwaySeconds(
   bike: BikeSample,
   actor: ActorSample,
   actorLength: number,
-): { seconds: number; side: 'ahead' | 'behind' } {
+): { seconds: number; side: 'ahead' | 'behind' } | null {
+  // Alongside is not behind.
+  //
+  // Overtaking means spending several seconds level with a lorry, where the distance measured
+  // along the heading is nearly nothing. Without this, the rule marks every successful overtake as
+  // tailgating — and the better the overtake, the closer the "gap" it reports.
+  const lateral =
+    -(actor.x - bike.x) * Math.sin(bike.heading) + (actor.y - bike.y) * Math.cos(bike.heading);
+  if (Math.abs(lateral) > SAME_LANE_M) return null;
   const along = (actor.y - bike.y) * Math.sin(bike.heading) + (actor.x - bike.x) * Math.cos(bike.heading);
   const riderAhead = along < 0;
   const clear = Math.abs(along) - actorLength / 2 - BIKE_LENGTH / 2;
@@ -522,26 +556,17 @@ function scoreHeadway(
       const actor = byT.get(Math.round(s.t * 20));
       if (!actor) continue;
       const h = headwaySeconds(s, actor, actorLength);
+      if (!h) continue;
       side = h.side;
       series.push({ t: s.t, seconds: h.seconds });
     }
   }
 
   const held = heldMinimum(series);
-  if (held === null) {
-    return {
-      expectedId: expected.id,
-      label: expected.label,
-      group: expected.group,
-      status: 'gemist',
-      severity: expected.missed.severity,
-      explanation: expected.missed.explanation,
-      windowT,
-      windowD,
-      actualT: null,
-      actualD: null,
-    };
-  }
+  // Nothing to measure is not a fault, it is not applicable — the rider never spent time in the
+  // same lane as this vehicle. Whatever went wrong instead (no merge, no return to the right) has
+  // a row of its own, and marking the same omission twice reads as the debrief padding its case.
+  if (held === null) return null;
 
   // Bands are ordered generous-first in the scenario data; the first one that fits, wins.
   const band = kind.bands.find(
@@ -565,6 +590,90 @@ function scoreHeadway(
     windowD,
     actualT: series[0]?.t ?? null,
     actualD: null,
+  };
+}
+
+/** The plain good/missed row, for rules whose only question is whether it happened. */
+function outcomeRow(
+  expected: ExpectedAction,
+  ok: boolean,
+  windowT: [number, number] | null,
+  windowD: [number, number] | null,
+  actualT: number | null,
+): ActionResult {
+  return {
+    expectedId: expected.id,
+    label: expected.label,
+    group: expected.group,
+    status: ok ? 'goed' : 'gemist',
+    severity: ok ? null : expected.missed.severity,
+    explanation: (ok ? expected.praise : expected.missed.explanation) ?? '',
+    windowT,
+    windowD,
+    actualT,
+    actualD: null,
+  };
+}
+
+/**
+ * The speed actually held, judged against ordered bands.
+ *
+ * Held, not touched: the same `heldMinimum` idea as following distance, but two-sided, because a
+ * speed has a floor and a ceiling and drifting through one for a fraction of a second is not
+ * riding at it. Reported as the worst band the rider spent real time in.
+ */
+function scoreSpeedBand(
+  expected: ExpectedAction,
+  kind: Extract<ExpectedKind, { type: 'speedBand' }>,
+  samples: BikeSample[],
+  windowT: [number, number] | null,
+  windowD: [number, number] | null,
+): ActionResult | null {
+  const w = expected.window!;
+  const inWindow = samples.filter((s) => s.d <= w.from && s.d >= w.to);
+  if (inWindow.length === 0) return null;
+
+  const bandOf = (kmh: number) => kind.bands.findIndex((b) => kmh >= b.fromKmh && kmh <= b.toKmh);
+  // Anything outside every band is worse than the worst band there is.
+  const rank = (kmh: number) => {
+    const i = bandOf(kmh);
+    return i < 0 ? kind.bands.length : i;
+  };
+
+  // Sustained, so one sample dipping through a boundary cannot decide a verdict.
+  let worst = 0;
+  let worstAt: BikeSample | null = null;
+  for (let i = 0; i < inWindow.length; i++) {
+    let best = kind.bands.length;
+    let j = i;
+    for (; j < inWindow.length && inWindow[j].t - inWindow[i].t <= HELD_FOR_S; j++) {
+      best = Math.min(best, rank(inWindow[j].speed * 3.6));
+    }
+    if (j >= inWindow.length && inWindow[inWindow.length - 1].t - inWindow[i].t < HELD_FOR_S) break;
+    if (best > worst) {
+      worst = best;
+      worstAt = inWindow[i];
+    }
+  }
+
+  const band = kind.bands[worst];
+  const outcome = band?.outcome;
+  const praise = outcome && 'praise' in outcome ? outcome.praise : null;
+  const fault: Outcome | null = outcome && !('praise' in outcome) ? outcome : null;
+  const held = worstAt ? Math.round(worstAt.speed * 3.6) : Math.round((inWindow[0]?.speed ?? 0) * 3.6);
+  return {
+    expectedId: expected.id,
+    label: expected.label,
+    group: expected.group,
+    status: praise ? 'goed' : 'ongewenst',
+    severity: praise ? null : (fault?.severity ?? expected.missed.severity),
+    explanation:
+      (praise ?? fault?.explanation ?? expected.missed.explanation) +
+      (praise ? '' : ` Je reed daar ${held} km/u.`),
+    windowT,
+    windowD,
+    actualT: worstAt?.t ?? null,
+    actualD: worstAt?.d ?? null,
   };
 }
 
