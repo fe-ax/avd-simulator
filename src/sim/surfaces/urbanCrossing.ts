@@ -2,7 +2,16 @@
  * Scenario 1's world: a 30-zone carriageway with a vrijliggend fietspad beside it and the
  * Kerkstraat crossing it. Pure geometry; see `../roadSurfaces.ts` for the vocabulary.
  */
-import { dashedAlongY, rect, SEAM, type Facing, type RoadExtent, type Surface } from '../roadSurfaces';
+import {
+  dashedAlongX,
+  dashedAlongY,
+  rect,
+  sharkTeeth,
+  SEAM,
+  type Facing,
+  type RoadExtent,
+  type Surface,
+} from '../roadSurfaces';
 import type { UrbanRoad } from '../types';
 
 const HOUSE_PITCH = 9;
@@ -65,47 +74,7 @@ function blocksAlongY(out: Surface[], x1: number, x2: number, fromY: number, toY
 }
 
 
-function dashedAlongX(
-  out: Surface[],
-  y: number,
-  ext: RoadExtent,
-  opts: { dash: number; gap: number; width: number; skips?: [number, number][] },
-) {
-  const step = opts.dash + opts.gap;
-  const start = Math.floor(ext.minX / step) * step;
-  for (let x = start; x < ext.maxX; x += step) {
-    if (opts.skips?.some(([a, b]) => x + opts.dash > a && x < b)) continue;
-    out.push(rect('paint', x, y - opts.width / 2, x + opts.dash, y + opts.width / 2));
-  }
-}
 
-/**
- * Haaientanden: a row of triangles whose apex points at whoever has to give way. Here they mark
- * that traffic on the Kerkstraat yields to the fietspad — they are not about the rider, who is
- * governed by the afslaan rule.
- */
-function sharkTeeth(
-  out: Surface[],
-  baseX: number,
-  fromY: number,
-  toY: number,
-  pointing: 1 | -1,
-) {
-  const toothWidth = 0.5;
-  const toothLength = 0.6;
-  const spacing = 0.85;
-  for (let y = fromY; y + toothWidth <= toY; y += spacing) {
-    out.push({
-      kind: 'paint',
-      height: 0,
-      points: [
-        { x: baseX, y },
-        { x: baseX, y: y + toothWidth },
-        { x: baseX + toothLength * pointing, y: y + toothWidth / 2 },
-      ],
-    });
-  }
-}
 
 function house(
   out: Surface[],

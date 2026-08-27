@@ -1092,3 +1092,15 @@ kbd {
 .crash button {
   justify-self: start;
 }
+
+
+.builder-choice {
+  align-items: flex-start;
+}
+
+.builder-choice-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 0 0 auto;
+}

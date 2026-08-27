@@ -15,6 +15,7 @@
  */
 import type { ScenarioWorld, Vec2 } from './types';
 import { urbanCrossingSurfaces } from './surfaces/urbanCrossing';
+import { junctionGiveWay, junctionSurfaces } from './surfaces/junction';
 import { motorwaySurfaces } from './surfaces/motorway';
 
 export type SurfaceKind =
@@ -66,9 +67,19 @@ export interface RoadExtent {
  * them slower.
  */
 export function roadSurfaces(world: ScenarioWorld, ext: RoadExtent): Surface[] {
-  return world.kind === 'motorway'
-    ? motorwaySurfaces(world, ext)
-    : urbanCrossingSurfaces(world.road, ext);
+  switch (world.kind) {
+    case 'motorway':
+      return motorwaySurfaces(world, ext);
+    case 'junction':
+      return [
+        ...junctionSurfaces(world.road, ext),
+        // Who yields is the scenario's choice, not the geometry's: the same crossroads teaches a
+        // different lesson depending on which way the teeth point.
+        ...junctionGiveWay(world.road, world.giveWay),
+      ];
+    default:
+      return urbanCrossingSurfaces(world.road, ext);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -118,5 +129,77 @@ export function dashedAlongY(
   for (let y = start; y < ext.maxY; y += step) {
     if (opts.skip && y + opts.dash > opts.skip[0] && y < opts.skip[1]) continue;
     out.push(rect('paint', x - opts.width / 2, y, x + opts.width / 2, y + opts.dash));
+  }
+}
+
+export function dashedAlongX(
+  out: Surface[],
+  y: number,
+  ext: RoadExtent,
+  opts: { dash: number; gap: number; width: number; skips?: [number, number][] },
+) {
+  const step = opts.dash + opts.gap;
+  const start = Math.floor(ext.minX / step) * step;
+  for (let x = start; x < ext.maxX; x += step) {
+    if (opts.skips?.some(([a, b]) => x + opts.dash > a && x < b)) continue;
+    out.push(rect('paint', x, y - opts.width / 2, x + opts.dash, y + opts.width / 2));
+  }
+}
+
+/**
+ * Haaientanden: a row of triangles whose apex points at whoever has to give way. Here they mark
+ * that traffic on the Kerkstraat yields to the fietspad — they are not about the rider, who is
+ * governed by the afslaan rule.
+ */
+export function sharkTeeth(
+  out: Surface[],
+  baseX: number,
+  fromY: number,
+  toY: number,
+  pointing: 1 | -1,
+) {
+  const toothWidth = 0.5;
+  const toothLength = 0.6;
+  const spacing = 0.85;
+  for (let y = fromY; y + toothWidth <= toY; y += spacing) {
+    out.push({
+      kind: 'paint',
+      height: 0,
+      points: [
+        { x: baseX, y },
+        { x: baseX, y: y + toothWidth },
+        { x: baseX + toothLength * pointing, y: y + toothWidth / 2 },
+      ],
+    });
+  }
+}
+
+/**
+ * The same teeth, across a road running north–south instead of east–west.
+ *
+ * A transposed twin rather than an axis parameter on the original: the two differ only in which
+ * coordinate steps, and reading `sharkTeethAlongX` at the call site says which road is being
+ * painted more plainly than a boolean would.
+ */
+export function sharkTeethAlongX(
+  out: Surface[],
+  baseY: number,
+  fromX: number,
+  toX: number,
+  pointing: 1 | -1,
+) {
+  const toothWidth = 0.5;
+  const toothLength = 0.6;
+  const spacing = 0.85;
+  for (let x = fromX; x + toothWidth <= toX; x += spacing) {
+    out.push({
+      kind: 'paint',
+      height: 0,
+      points: [
+        { x, y: baseY },
+        { x: x + toothWidth, y: baseY },
+        { x: x + toothWidth / 2, y: baseY + toothLength * pointing },
+      ],
+    });
   }
 }

@@ -431,7 +431,29 @@ export interface MotorwayRoad {
   bermWidth: number;
 }
 
-export type RoadLayout = UrbanRoad | MotorwayRoad;
+/**
+ * A plain crossroads: two roads meeting, and nothing else. No fietspad, no invoegstrook.
+ *
+ * Deliberately separate from `UrbanRoad`, which is the Kerkstraat's geometry — a bike path along
+ * one side and a route that always turns right. Most hazard exercises happen at an ordinary
+ * junction you carry straight on through, and none of them could be written until this existed.
+ *
+ * Lane centres are derived, never given: the northbound lane is half a half-width from the middle,
+ * and so on. Two numbers that have to agree are two numbers that eventually will not.
+ */
+export interface JunctionRoad {
+  /** Half width of the road you are on, which runs north–south. */
+  halfWidth: number;
+  /** Half width of the road that crosses it, which runs east–west. */
+  sideHalfWidth: number;
+  /** How far the verge reaches beyond the kerb, before the hedges and the houses. */
+  vergeTo: number;
+}
+
+export type RoadLayout = UrbanRoad | MotorwayRoad | JunctionRoad;
+
+/** Which way the rider is asked to go at the junction. */
+export type Manoeuvre = 'straight' | 'right' | 'left';
 
 /**
  * Where a scenario takes place, and the anchors its route is built from.
@@ -456,6 +478,24 @@ export type ScenarioWorld =
       kind: 'motorway';
       road: MotorwayRoad;
       stretch: MotorwayStretch;
+    }
+  | {
+      kind: 'junction';
+      road: JunctionRoad;
+      /** Where the ride begins, in world y, and how far past the junction it carries on. */
+      startY: number;
+      runOutM: number;
+      manoeuvre: Manoeuvre;
+      /** Radius of the turn, when there is one. Ignored going straight on. */
+      turnRadius: number;
+      /**
+       * Which arm has haaientanden painted across it — the one that has to give way.
+       *
+       * `side` means you have priority and anyone coming out of the side road should stop, which
+       * is what makes a car arriving too fast somebody else's mistake rather than the rules being
+       * followed.
+       */
+      giveWay: 'side' | 'main' | 'none';
     };
 
 /**
