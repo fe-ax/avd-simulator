@@ -11,6 +11,11 @@ motorrijexamen. Je zit op de motor, kijkt met de muis om je heen, en moet de bed
 juiste moment gebruiken. Alles wordt vastgelegd en achteraf teruggespeeld — van bovenaf, of
 opnieuw vanuit het zadel met je eigen hoofdbewegingen erbij.
 
+Je kunt er zelf bij maken. In de scenario-bouwer (`#bouwen`) bouw je een oefening, bewaar je hem in
+je browser, en rijd je hem meteen. Met **Download** krijg je een klein `.avd.json`-bestand dat je
+naar een collega kunt sturen; die opent het met **Open bestand**. Een gereden rit werkt net zo, en
+neemt zijn scenario mee — anders kijkt de ontvanger naar een lege weg.
+
 Elke oefening heeft zijn eigen reeks: bij *rechtsaf de Kerkstraat in* zijn dat negen stappen,
 waarvan zes kijken; bij *auto van rechts remt* gaat het om twee — op tijd gas terugnemen, en daarna
 weer doorrijden.
@@ -26,7 +31,7 @@ nvm use && npm install && npm run dev
 Daarna http://localhost:5273. Chrome is het doelplatform.
 
 ```bash
-npm test        # 57 tests: scoring, perceptie, volgorde, routegeometrie
+npm test        # scoring, perceptie, volgorde, routegeometrie, de bouwer
 npm run build   # typecheck + productiebundel
 ```
 

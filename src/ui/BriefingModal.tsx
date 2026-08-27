@@ -1,3 +1,4 @@
+import { RESERVED_IDS } from '../sim/scenarios';
 import type { Scenario } from '../sim/types';
 import { CONTROLS, controlLabels, GROUP_ORDER, groupLabel } from './controls';
 import { formatTempo, RideSettings } from './RideSettings';
@@ -47,17 +48,25 @@ export function BriefingModal({
           <p className="briefing-eyebrow">AVD · Verkeersdeelneming</p>
           <div className="scenario-switch" role="group" aria-label="Scenario kiezen">
             <span className="scenario-switch-label">Scenario</span>
-            {scenarios.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                className={`replay-btn tiny${s.id === scenario.id ? ' active' : ''}`}
-                aria-pressed={s.id === scenario.id}
-                onClick={() => onScenarioChange(s.id)}
-              >
-                {s.title}
-              </button>
-            ))}
+            {scenarios.map((s) => {
+              // Your own scenarios sit in the same list as the four that ship, because they are
+              // the same kind of thing to ride. They are marked because they are not the same kind
+              // of thing to trust: nobody has checked them but you.
+              const own = !RESERVED_IDS.has(s.id);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`replay-btn tiny${s.id === scenario.id ? ' active' : ''}${own ? ' own' : ''}`}
+                  aria-pressed={s.id === scenario.id}
+                  title={own ? 'Zelfgemaakt scenario, bewaard in deze browser' : undefined}
+                  onClick={() => onScenarioChange(s.id)}
+                >
+                  {s.title}
+                  {own && <span className="scenario-own" aria-label="zelfgemaakt"> ·eigen</span>}
+                </button>
+              );
+            })}
           </div>
         </div>
         <h1>{scenario.title}</h1>

@@ -13,7 +13,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildRoutes, poseAt } from '../../sim/route';
 import { ReplayPlayer } from '../../sim/replay';
-import { ALL_SCENARIOS, scenarioById } from '../../sim/scenarios';
+import { ALL_SCENARIOS, RESERVED_IDS, scenarioById } from '../../sim/scenarios';
+import { deleteScenario, freeId, listSaved, saveScenario, type SavedScenario } from '../../sim/library';
+import { readScenarioFile, scenarioFileFor, scenarioFilename } from '../../sim/scenarioFile';
+import { downloadText, pickTextFile } from '../files';
 import { STARTERS } from '../../sim/starters';
 import { analyseScenario } from '../../sim/referenceRide';
 import { findObstructions, findOffRoad, riddenPath } from '../../sim/validate';
@@ -112,7 +115,7 @@ function extentOf(scenario: Scenario) {
   };
 }
 
-export function Builder({ onExit }: { onExit: () => void }) {
+export function Builder({ onExit, onRide }: { onExit: () => void; onRide: (id: string) => void }) {
   const [baseId, setBaseId] = useState(() => loadDraft()?.baseId ?? ALL_SCENARIOS[0].id);
   const [draft, setDraft] = useState<Scenario>(() => loadDraft()?.scenario ?? ALL_SCENARIOS[0]);
   const [validation, setValidation] = useState<Validation>(EMPTY);
@@ -120,6 +123,9 @@ export function Builder({ onExit }: { onExit: () => void }) {
   const [fitKey, setFitKey] = useState(0);
   const [exported, setExported] = useState<string | null>(null);
   const [hoveredActor, setHoveredActor] = useState<string | null>(null);
+  const [saved, setSaved] = useState<SavedScenario[]>(() => listSaved());
+  /** What the last save, import or delete did. Dutch; shown next to the buttons. */
+  const [notice, setNotice] = useState<{ tone: 'good' | 'bad'; text: string } | null>(null);
 
   // A starter is a road to build on, not an exercise to derive from — so a draft based on one
   // exports as a whole file rather than as a spread that would owe its parent nothing.
@@ -298,6 +304,57 @@ export function Builder({ onExit }: { onExit: () => void }) {
     }));
   }, []);
 
+  const takenIds = useCallback(
+    () => new Set([...RESERVED_IDS, ...listSaved().map((s) => s.scenario.id)]),
+    [],
+  );
+
+  const doSave = useCallback(() => {
+    const result = saveScenario(draft, RESERVED_IDS);
+    if (!result.ok) {
+      setNotice({ tone: 'bad', text: result.reason });
+      return;
+    }
+    setSaved(result.saved);
+    setNotice({ tone: 'good', text: `"${draft.title}" is bewaard. Je vindt hem nu ook bij het rijden.` });
+  }, [draft]);
+
+  const doDownload = useCallback(() => {
+    downloadText(scenarioFilename(draft), JSON.stringify(scenarioFileFor(draft), null, 2));
+  }, [draft]);
+
+  const doImport = useCallback(async () => {
+    const text = await pickTextFile();
+    if (text === null) return;
+    const parsed = readScenarioFile(text);
+    if (!parsed.ok) {
+      setNotice({ tone: 'bad', text: parsed.reason });
+      return;
+    }
+    // An id that is already ours would silently replace somebody's work, and one that is shipped
+    // cannot be saved at all. Both become a new id rather than a refusal: the file is fine, and
+    // whoever opened it wants to look at what is in it.
+    const taken = takenIds();
+    const id = freeId(parsed.value.id, taken);
+    const scenario = id === parsed.value.id ? parsed.value : { ...parsed.value, id };
+    setDraft(scenario);
+    setBaseId(scenario.id);
+    setFitKey((k) => k + 1);
+    setNotice(
+      id === parsed.value.id
+        ? { tone: 'good', text: `"${scenario.title}" is ingelezen. Druk op Bewaar om hem te houden.` }
+        : {
+            tone: 'good',
+            text: `"${scenario.title}" is ingelezen als ${id}, want ${parsed.value.id} was al in gebruik.`,
+          },
+    );
+  }, [takenIds]);
+
+  const doDelete = useCallback((id: string) => {
+    setSaved(deleteScenario(id));
+    setNotice({ tone: 'good', text: 'Verwijderd.' });
+  }, []);
+
   const doExport = useCallback(() => {
     const meta = BASE_MODULE[base.id];
     setExported(
@@ -418,8 +475,71 @@ export function Builder({ onExit }: { onExit: () => void }) {
         <ValidationPanel {...validation} />
 
         <section className="sidebar-section">
-          <h3>Exporteren</h3>
-          <button type="button" className="primary-btn" onClick={doExport}>
+          <h3>Bewaren en delen</h3>
+          <p className="builder-note">
+            Bewaarde scenario's staan in deze browser en verschijnen bij het rijden, naast de
+            scenario's die meegeleverd worden. Wil je er een aan iemand anders geven, download hem
+            dan als bestand.
+          </p>
+          <div className="builder-actions">
+            <button type="button" className="primary-btn" onClick={doSave}>
+              Bewaar
+            </button>
+            <button type="button" className="ghost-btn" onClick={doDownload}>
+              Download
+            </button>
+            <button type="button" className="ghost-btn" onClick={doImport}>
+              Open bestand
+            </button>
+          </div>
+          {notice && (
+            <p className={`builder-note builder-notice ${notice.tone}`}>{notice.text}</p>
+          )}
+
+          {saved.length > 0 && (
+            <ul className="builder-saved">
+              {saved.map((s) => (
+                <li key={s.scenario.id}>
+                  <span className="builder-saved-title">{s.scenario.title}</span>
+                  <button
+                    type="button"
+                    className="replay-btn tiny"
+                    onClick={() => onRide(s.scenario.id)}
+                  >
+                    Rijd
+                  </button>
+                  <button
+                    type="button"
+                    className="replay-btn tiny"
+                    onClick={() => {
+                      setDraft(s.scenario);
+                      setBaseId(s.scenario.id);
+                      setFitKey((k) => k + 1);
+                      setNotice(null);
+                    }}
+                  >
+                    Bewerk
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-btn tiny"
+                    onClick={() => doDelete(s.scenario.id)}
+                  >
+                    Weg
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="sidebar-section">
+          <h3>Naar de broncode</h3>
+          <p className="builder-note">
+            Voor wie het scenario in de simulator zelf wil opnemen, in plaats van alleen in deze
+            browser. Hier komt TypeScript uit; je hebt de repository nodig om er iets mee te doen.
+          </p>
+          <button type="button" className="ghost-btn" onClick={doExport}>
             Maak er een bestand van
           </button>
           {exported && (

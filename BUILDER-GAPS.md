@@ -265,6 +265,22 @@ one, so there is no cheat to refuse.
 Five rules across the four shipped scenarios that no sloppy rider misses. They are pinned in
 `discrimination.test.ts` with a comment each, so the list cannot grow in silence.
 
+### 31. ~~A scenario you built could not be used~~
+
+Not found by the discrimination check, and not on any earlier list — because every earlier list was
+written by the only person using the builder, who had the repository checked out. The builder's
+closing instruction was *"Zet dit in `src/sim/` en voeg één regel toe aan `ALL_SCENARIOS`"*. For a
+riding instructor that is not an instruction, it is a wall. `drafts.ts` also held exactly one draft,
+so building a second overwrote the first, and nothing let you ride what you had made.
+
+Fixed: a library in the browser, `.avd.json` files for sending one to a colleague, rides that
+export with their scenario embedded, and `Rijd` straight out of the builder. The TypeScript export
+stays, as the way a scenario graduates into the repo.
+
+**The lesson worth keeping:** the gap was invisible for as long as the author and the user were the
+same person. Everything on this list before it is about whether an exercise is any *good*; none of
+it noticed that an exercise could not be *used*.
+
 ### 26. My own "ride on afterwards" rule teaches nothing
 
 `auto-van-rechts-v1 / regel-2`. An *opmerking* for getting going again after the junction, which a

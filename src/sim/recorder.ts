@@ -52,16 +52,6 @@ export function deleteRun(id: string): RunRecord[] {
   return runs;
 }
 
-export function exportRun(record: RunRecord) {
-  const blob = new Blob([JSON.stringify(record, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `avd-rit-${record.startedAt.replace(/[:.]/g, '-')}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 export function formatRunLabel(record: RunRecord): string {
   const d = new Date(record.startedAt);
   return d.toLocaleString('nl-NL', {
