@@ -150,13 +150,24 @@ export function Builder({ onExit, onRide }: { onExit: () => void; onRide: (id: s
         setValidation({ ...EMPTY, error });
         return;
       }
-      const extent = extentOf(draft);
+      // Bounds for the *questions*, not for the picture.
+      //
+      // extentOf frames what you look at: the conflict point and a stretch either side of it. Ask
+      // "is there road under the whole ride?" with those and any ride longer than the frame reports
+      // its own tail as verge — a blank motorway, whose ride is nine hundred metres and whose
+      // frame is a hundred and seventy, opened with "de weg houdt op, 383 punten". The traffic on
+      // the shipped motorways happens to stretch the frame far enough to hide it, which is why it
+      // only ever showed on the empty starter somebody would begin from.
+      //
+      // So the road is generated over everywhere the machine actually went, plus room around it.
+      const framed = extentOf(draft);
       const margin = 120;
+      const ridden = riddenPath(record.samples);
       const bounds = {
-        minX: extent.minX - margin,
-        maxX: extent.maxX + margin,
-        minY: extent.minY - margin,
-        maxY: extent.maxY + margin,
+        minX: Math.min(framed.minX, ...ridden.map((p) => p.x)) - margin,
+        maxX: Math.max(framed.maxX, ...ridden.map((p) => p.x)) + margin,
+        minY: Math.min(framed.minY, ...ridden.map((p) => p.y)) - margin,
+        maxY: Math.max(framed.maxY, ...ridden.map((p) => p.y)) + margin,
       };
       setValidation({
         record,

@@ -197,6 +197,10 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
   };
 
   let braking = false;
+  /** Latched across frames: see the hysteresis where it is set. */
+  let closing = false;
+  /** Whether this ride has already had to slow for something, for the rider who never picks up. */
+  let slowedFor = false;
 
   for (let frame = 0; frame < MAX_FRAMES && record === null; frame++) {
     engine.advance(DT);
@@ -278,21 +282,47 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
     // Somebody arriving at the same place at the same time. Compared in seconds rather than
     // metres, because that is the question actually being asked: not "how far away is it" but
     // "will we be there together".
-    let closing = false;
     if (p.anticipate) {
       const bike = engine.world(false).bike;
       const meeting = poseAt(engine.routes.turn, engine.routes.conflictS);
       const mine = d / Math.max(bike.speed, 0.5);
+      // Hysteresis, and it is not cosmetic. Both times shift every frame — the rider's because it
+      // is slowing, the other's because it is braking — so a single threshold has the difference
+      // crossing it back and forth and the brake going on and off twenty-five times a second. The
+      // average deceleration comes out about right, which is why it went unnoticed; what does not
+      // is the record, where one approach left two hundred and fourteen brake events for a debrief
+      // to draw. A rider decides to back off and then stays backed off until it is clearly clear.
+      let nearest = Infinity;
       for (const other of engine.actors) {
         if (other.speed < 1) continue;
         const toMeeting =
           (meeting.x - other.x) * Math.cos(other.heading) +
           (meeting.y - other.y) * Math.sin(other.heading);
         if (toMeeting <= 0) continue;
-        if (Math.abs(toMeeting / other.speed - mine) < 2.5) closing = true;
+        nearest = Math.min(nearest, Math.abs(toMeeting / other.speed - mine));
       }
+      closing = nearest < (closing ? 4 : 2.5);
+    } else {
+      closing = false;
     }
-    const wantStop = (p.yieldToActor && d <= 12 && !actorPast) || (closing && d <= 55 && d > -2);
+    const hazard = (p.yieldToActor && d <= 12 && !actorPast) || (closing && d <= 55 && d > -2);
+    if (hazard) slowedFor = true;
+
+    // Having slowed for something, get going again — or, for the rider who does not, do not.
+    //
+    // Modelled as staying on the brake rather than as withholding a throttle press, because there
+    // is no throttle press to withhold: the machine climbs back to its set speed by itself once
+    // the brake is off, so a rider who wants to keep crawling has to keep asking for it. Which is
+    // also what dawdling away from a junction actually looks like from behind.
+    //
+    // Without this nobody dawdles at a straight-through crossing, and a rule about riding on
+    // afterwards can never be missed — which is exactly what the discrimination check reported.
+    // A speed floor, because dawdling is not stopping. Without it this rider brakes all the way
+    // through the Kerkstraat's turn, never completes the manoeuvre, and every rule anchored to the
+    // manoeuvre vanishes instead of failing — the check then reports those rules as untestable
+    // when the truth is that the harness fell over.
+    const crawling = engine.world(false).bike.speed < 4;
+    const wantStop = hazard || (!p.pullAway && slowedFor && d > -55 && !crawling);
     if (wantStop !== braking) {
       braking = wantStop;
       dispatch('BRAKE', wantStop ? 'down' : 'up');
@@ -367,10 +397,39 @@ export interface MergePlan {
    * minimum rather than a reading taken at the moment of merging: this ride must not score well.
    */
   chaseAfterMerge?: boolean;
+  /** Sit on the bumper of whoever is ahead, so the headway rule has somebody to catch. */
+  tailgate?: boolean;
 }
 
 /** How far off the rider's line another vehicle has to be before it is somebody else's problem. */
 const SAME_LANE_M = 2;
+
+/**
+ * Seconds to whatever is in front, in this lane. Infinity when the road ahead is clear.
+ *
+ * Both components, not just the one along the heading: on the oprit the car is ten metres to the
+ * left and a metre ahead, and measuring only forward distance calls that tailgating. A model rider
+ * built on it then brakes for traffic on a different road and never gets up to speed.
+ *
+ * Written twice, identically, in the merge driver and the overtake driver before the tailgating
+ * rider needed a third copy.
+ */
+function gapAheadSeconds(engine: SimEngine): number {
+  const bike = engine.world(false).bike;
+  const cos = Math.cos(bike.pose.heading);
+  const sin = Math.sin(bike.pose.heading);
+  let closest = Infinity;
+  for (const actor of engine.actors) {
+    const dx = actor.x - bike.pose.x;
+    const dy = actor.y - bike.pose.y;
+    const along = dx * cos + dy * sin;
+    const across = -dx * sin + dy * cos;
+    if (along <= 0 || Math.abs(across) > SAME_LANE_M) continue;
+    const clear = along - (actor.spec.length ?? 1.8) / 2 - 1.15;
+    closest = Math.min(closest, clear / Math.max(bike.speed, 0.1));
+  }
+  return closest;
+}
 
 const MERGE_DEFAULTS: Required<MergePlan> = {
   throttlePresses: 5,
@@ -386,6 +445,7 @@ const MERGE_DEFAULTS: Required<MergePlan> = {
   matchSpeedAfterMerge: false,
   chaseAfterMerge: false,
   keepDistance: true,
+  tailgate: false,
 };
 
 export function driveMerge(scenario: Scenario, plan: MergePlan = {}): RunRecord {
@@ -438,23 +498,21 @@ export function driveMerge(scenario: Scenario, plan: MergePlan = {}): RunRecord 
     // Both components, not just the one along the heading: on the oprit the car is ten metres
     // to the left and a metre ahead, and measuring only forward distance calls that tailgating.
     // The model rider then brakes for traffic on a different road and never gets up to speed.
-    if (p.keepDistance && !p.chaseAfterMerge) {
-      const bike = engine.world(false).bike;
-      const cos = Math.cos(bike.pose.heading);
-      const sin = Math.sin(bike.pose.heading);
-      let closest = Infinity;
-      for (const actor of engine.actors) {
-        const dx = actor.x - bike.pose.x;
-        const dy = actor.y - bike.pose.y;
-        const along = dx * cos + dy * sin;
-        const across = -dx * sin + dy * cos;
-        if (along <= 0 || Math.abs(across) > SAME_LANE_M) continue;
-        const clear = along - (actor.spec.length ?? 1.8) / 2 - 1.15;
-        closest = Math.min(closest, clear / Math.max(bike.speed, 0.1));
+    if (p.tailgate) {
+      // Sit on the bumper of whoever is ahead. The mirror image of keepDistance, and the reason it
+      // exists: until there was a rider who did this, the headway band against the vehicle in
+      // front had never once been tested by a bad ride, so the panel could not tell whether the
+      // rule was strict or simply unreachable.
+      const closest = gapAheadSeconds(engine);
+      if (engine.t - easedAt > 0.4) {
+        easedAt = engine.t;
+        if (closest > 0.9) dispatch('THROTTLE_UP');
+        else if (closest < 0.5) dispatch('THROTTLE_DOWN');
       }
+    } else if (p.keepDistance && !p.chaseAfterMerge) {
       // Ease off below two and a half, so the two-second rule is met with something in hand
       // rather than hit exactly. Rate-limited, or one frame of closing costs the whole throttle.
-      if (closest < 2.5 && engine.t - easedAt > 0.4) {
+      if (gapAheadSeconds(engine) < 2.5 && engine.t - easedAt > 0.4) {
         easedAt = engine.t;
         dispatch('THROTTLE_DOWN');
       }
@@ -523,6 +581,8 @@ export interface OvertakePlan {
   stayLeft?: boolean;
   /** Ignore the left lane entirely and pull out regardless. */
   ignoreTraffic?: boolean;
+  /** Sit on the bumper of whoever is ahead, so the headway rule has somebody to catch. */
+  tailgate?: boolean;
 }
 
 const OVERTAKE_DEFAULTS: Required<OvertakePlan> = {
@@ -536,6 +596,7 @@ const OVERTAKE_DEFAULTS: Required<OvertakePlan> = {
   neverOvertake: false,
   stayLeft: false,
   ignoreTraffic: false,
+  tailgate: false,
 };
 
 /**
@@ -619,24 +680,16 @@ export function driveOvertake(scenario: Scenario, plan: OvertakePlan = {}): RunR
     // straight into the back of the lorry it is waiting to pass, and the scenario gets blamed for
     // the harness having no brakes.
     {
-      const bike = engine.world(false).bike;
-      const cos = Math.cos(bike.pose.heading);
-      const sin = Math.sin(bike.pose.heading);
-      let closest = Infinity;
-      for (const actor of engine.actors) {
-        const dx = actor.x - bike.pose.x;
-        const dy = actor.y - bike.pose.y;
-        const along = dx * cos + dy * sin;
-        const across = -dx * sin + dy * cos;
-        if (along <= 0 || Math.abs(across) > SAME_LANE_M) continue;
-        const clear = along - (actor.spec.length ?? 1.8) / 2 - 1.15;
-        closest = Math.min(closest, clear / Math.max(bike.speed, 0.1));
-      }
+      const closest = gapAheadSeconds(engine);
       // Ease off for the lorry while waiting; press on while past it. Fifteen km/h of closing
       // speed makes overtaking two lorries a thirty-four second affair, which is not an exercise
       // so much as an endurance test — and dawdling alongside is its own fault on the road.
+      //
+      // The tailgater eases at 0.8 instead of 2.6, which is to say it does not really ease at all:
+      // it closes to about half a second and sits there, which is what the headway rule is for.
       const busy = ride.stage === 'goingOut' || ride.stage === 'passing';
-      const wantKmh = closest < 2.6 ? 88 : busy ? p.passingKmh : p.cruiseKmh;
+      const easeAt = p.tailgate ? 0.8 : 2.6;
+      const wantKmh = closest < easeAt ? 88 : busy ? p.passingKmh : p.cruiseKmh;
       if (Math.abs(wantKmh - lastSet) > 0.5 && engine.t - lastSetAt > 0.5) {
         lastSet = wantKmh;
         lastSetAt = engine.t;

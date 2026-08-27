@@ -253,6 +253,7 @@ function sloppyRiders(scenario: Scenario): SloppyRider[] {
           { label: 'wie geen schouderblik doet', plan: { shoulder: false } },
           { label: 'wie niet aangeeft', plan: { indicator: false } },
           { label: 'wie te langzaam aankomt', plan: { cruiseKmh: 80 } },
+          { label: 'wie te dicht op zijn voorganger zit', plan: { tailgate: true } },
         ]
       : [
           { label: 'wie niet in de spiegel kijkt', plan: { mirror: false } },
@@ -261,6 +262,7 @@ function sloppyRiders(scenario: Scenario): SloppyRider[] {
           { label: 'wie erop gaat plakken', plan: { chaseAfterMerge: true } },
           { label: 'wie niet aangeeft', plan: { indicator: false } },
           { label: 'wie de richtingaanwijzer laat staan', plan: { cancelIndicator: false } },
+          { label: 'wie te dicht op zijn voorganger zit', plan: { tailgate: true } },
         ];
   }
   return [
@@ -280,8 +282,19 @@ export interface RuleDiscrimination {
   expectedId: string;
   label: string;
   modelPasses: boolean;
-  /** Names of the sloppy riders that missed this rule. Empty means nothing here can fail it. */
+  /** Names of the sloppy riders that missed this rule. */
   failedBy: string[];
+  /**
+   * Riders this rule actually produced a row for.
+   *
+   * Not the same question as `failedBy`, and conflating them cost an afternoon. A rule nobody
+   * *failed* is soft — the window is wide or the threshold is kind. A rule nobody was *measured
+   * against* is one whose mistake takes the rider outside its scope entirely: skip the schouderblik
+   * on the overtake and the prerequisite refuses the manoeuvre, so there is no lane change, and
+   * every rule about how you changed lane returns no row rather than a miss. The first wants
+   * sharpening; the second cannot be judged from here at all, and saying so is the honest answer.
+   */
+  testedBy: string[];
 }
 
 /**
@@ -301,6 +314,7 @@ function discriminationOf(
   ride: (plan: RidePlan & MergePlan & OvertakePlan) => ReferenceRide,
 ): RuleDiscrimination[] {
   const missedBy = new Map<string, string[]>(scenario.expected.map((e) => [e.id, []]));
+  const testedBy = new Map<string, string[]>(scenario.expected.map((e) => [e.id, []]));
   let anyRode = false;
 
   for (const rider of sloppyRiders(scenario)) {
@@ -308,6 +322,7 @@ function discriminationOf(
     if (error) continue;
     anyRode = true;
     for (const result of record.results) {
+      testedBy.get(result.expectedId)?.push(rider.label);
       // Anything that is not 'goed' is a rider who did not satisfy the rule — missed it, was late,
       // was early. All of those are the rule doing its job.
       if (result.status === 'goed') continue;
@@ -324,6 +339,7 @@ function discriminationOf(
     label: e.label,
     modelPasses: model.error === null && model.record.results.find((r) => r.expectedId === e.id)?.status === 'goed',
     failedBy: missedBy.get(e.id) ?? [],
+    testedBy: testedBy.get(e.id) ?? [],
   }));
 }
 

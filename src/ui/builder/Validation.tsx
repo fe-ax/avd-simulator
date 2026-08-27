@@ -192,7 +192,13 @@ export function ValidationPanel({
       )}
 
       {discrimination.length > 0 && (() => {
-        const toothless = discrimination.filter((r) => r.failedBy.length === 0);
+        // Two different complaints, and telling them apart is the point. A rule some sloppy rider
+        // was measured against and still passed is soft. A rule nobody was measured against at all
+        // is one whose mistake removes the rider from its scope — no lane change, so no rule about
+        // the lane change — and no amount of sharpening the threshold would change that.
+        const soft = discrimination.filter((r) => r.failedBy.length === 0 && r.testedBy.length > 0);
+        const untested = discrimination.filter((r) => r.testedBy.length === 0);
+        const toothless = [...soft, ...untested];
         if (toothless.length === 0) {
           return (
             <section className="builder-panel builder-panel-good">
@@ -215,22 +221,36 @@ export function ValidationPanel({
         return (
           <section className="builder-panel builder-panel-bad">
             <h3>{toothless.length === 1 ? 'Deze regel onderscheidt niets' : 'Deze regels onderscheiden niets'}</h3>
-            <p>
-              Er is geen enkele manier van slecht rijden die {toothless.length === 1 ? 'hem' : 'ze'}{' '}
-              mist:
-            </p>
             <ul className="builder-faults">
-              {toothless.map((r) => (
+              {soft.map((r) => (
                 <li key={r.expectedId}>
                   <strong>{r.label}</strong>
-                  <span>ook een slordige rijder haalt dit</span>
+                  <span>ook een slordige rijder haalt dit — de grens of het venster is te ruim</span>
+                </li>
+              ))}
+              {untested.map((r) => (
+                <li key={r.expectedId}>
+                  <strong>{r.label}</strong>
+                  <span>
+                    geen enkele slordige rit werd hierop gemeten — wie de fout maakt, komt niet eens
+                    aan deze regel toe
+                  </span>
                 </li>
               ))}
             </ul>
-            <p className="builder-note">
-              Een regel die iedereen haalt, leert niemand iets — hij kleurt groen en zegt niets.
-              Verscherp het venster of de grens, of haal hem weg.
-            </p>
+            {soft.length > 0 && (
+              <p className="builder-note">
+                Een regel die iedereen haalt, leert niemand iets — hij kleurt groen en zegt niets.
+                Verscherp het venster of de grens, of haal hem weg.
+              </p>
+            )}
+            {untested.length > 0 && (
+              <p className="builder-note">
+                Bij de tweede soort is er niets mis met de grens: de fout die je zou willen vangen,
+                haalt de rijder uit de regel weg. Vaak wordt hij ergens anders al afgestraft — en
+                dan is deze regel dubbelop.
+              </p>
+            )}
           </section>
         );
       })()}

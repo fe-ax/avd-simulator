@@ -85,6 +85,82 @@ const RECIPES: {
     }),
   },
   {
+    id: 'laneChange',
+    label: 'Strookwissel',
+    hint: 'Of de rijder één keer die kant op van rijstrook wisselt. Voor invoegen en inhalen.',
+    make: ({ n }) => ({
+      id: `regel-${n}`,
+      label: `${n}. Van strook wisselen`,
+      group: 'sturen',
+      kind: { type: 'laneChange', direction: 'left' },
+      praise: 'Je wisselde van rijstrook.',
+      missed: { severity: 'kritiek', explanation: 'Je bent nooit van rijstrook gewisseld. De opdracht is niet uitgevoerd.' },
+    }),
+  },
+  {
+    id: 'beforeLaneChange',
+    label: 'Handeling vóór de strookwissel',
+    hint: 'Een blik of een knop, binnen zoveel seconden vóórdat de motor van strook ging.',
+    make: ({ n }) => ({
+      id: `regel-${n}`,
+      label: `${n}. Schouderblik links`,
+      group: 'kijken',
+      kind: { type: 'beforeLaneChange', control: 'SHOULDER_LEFT', direction: 'left', withinSeconds: 5 },
+      praise: 'Gecontroleerd vóór je ging.',
+      missed: { severity: 'fout', explanation: 'Je ging van strook zonder dit eerst te controleren.' },
+    }),
+  },
+  {
+    id: 'speedBand',
+    label: 'Snelheidsband',
+    hint: 'De snelheid die je vasthoudt, tegen een reeks marges. Voor tempo op de snelweg.',
+    make: ({ n }) => ({
+      id: `regel-${n}`,
+      label: `${n}. Tempo`,
+      group: 'snelheid',
+      kind: {
+        type: 'speedBand',
+        bands: [
+          { fromKmh: 95, toKmh: 130, outcome: { praise: 'Je hield een passend tempo aan.' } },
+          {
+            fromKmh: 85,
+            toKmh: 95,
+            outcome: { severity: 'opmerking', explanation: 'Je reed wat traag voor deze weg.' },
+          },
+        ],
+      },
+      window: { from: 400, to: 0 },
+      missed: { severity: 'fout', explanation: 'Je tempo paste niet bij deze weg.' },
+    }),
+  },
+  {
+    id: 'gearAtMost',
+    label: 'Versnelling hoogstens',
+    hint: 'Teruggeschakeld zijn tegen het eind van het venster.',
+    make: ({ n }) => ({
+      id: `regel-${n}`,
+      label: `${n}. Terugschakelen`,
+      group: 'aandrijving',
+      kind: { type: 'gearAtMost', maxGear: 2 },
+      window: { from: 40, to: 5 },
+      praise: 'Tijdig teruggeschakeld.',
+      missed: { severity: 'fout', explanation: 'Je schakelde niet terug; in een te hoge versnelling heb je geen controle.' },
+    }),
+  },
+  {
+    id: 'afterTurn',
+    label: 'Handeling ná de manoeuvre',
+    hint: 'Een knop, binnen zoveel seconden nadat de bocht of de strookwissel klaar was.',
+    make: ({ n }) => ({
+      id: `regel-${n}`,
+      label: `${n}. Richtingaanwijzer uit`,
+      group: 'richting',
+      kind: { type: 'afterTurn', control: 'INDICATOR_OFF', withinSeconds: 3 },
+      praise: 'Direct uitgezet.',
+      missed: { severity: 'fout', explanation: 'Je richtingaanwijzer bleef aanstaan; dat is misleidend voor achterliggers.' },
+    }),
+  },
+  {
     id: 'headway',
     label: 'Volgafstand',
     hint: 'Seconden tot een andere weggebruiker, vastgehouden en niet even aangetikt.',
@@ -251,16 +327,94 @@ function KindFields({
       );
     case 'headway':
       return (
+        <>
+          <Choice
+            label="Tot wie"
+            value={kind.actorId}
+            options={actors.map((a) => ({ id: a.id, label: a.label }))}
+            onChange={(v) => onChange({ ...kind, actorId: v })}
+          />
+          {!actors.some((a) => a.id === kind.actorId) && (
+            // Scoring returns no row at all for a headway to nobody — the track is empty, so there
+            // is no distance to have held, which is correct and completely silent. A rule added
+            // before there was any traffic sits there looking like a rule for ever.
+            <p className="builder-note builder-notice bad">
+              Deze regel wijst naar een weggebruiker die er niet is. Er wordt niets gemeten en er
+              komt geen regel in de nabespreking.
+            </p>
+          )}
+        </>
+      );
+    case 'laneChange':
+      return (
         <Choice
-          label="Tot wie"
-          value={kind.actorId}
-          options={actors.map((a) => ({ id: a.id, label: a.label }))}
-          onChange={(v) => onChange({ ...kind, actorId: v })}
+          label="Richting"
+          value={kind.direction}
+          options={[
+            { id: 'left' as const, label: 'Naar links' },
+            { id: 'right' as const, label: 'Naar rechts' },
+          ]}
+          onChange={(v) => onChange({ ...kind, direction: v })}
         />
       );
+    case 'beforeLaneChange':
+      return (
+        <>
+          <Choice
+            label="Handeling"
+            value={kind.control}
+            options={CONTROLS.map((c) => ({ id: c.id as ControlId, label: c.short }))}
+            onChange={(v) => onChange({ ...kind, control: v })}
+          />
+          <Choice
+            label="Vóór welke wissel"
+            value={kind.direction}
+            options={[
+              { id: 'left' as const, label: 'Naar links' },
+              { id: 'right' as const, label: 'Naar rechts' },
+            ]}
+            onChange={(v) => onChange({ ...kind, direction: v })}
+          />
+          <Num
+            label="Binnen"
+            unit="s"
+            value={kind.withinSeconds}
+            onChange={(v) => onChange({ ...kind, withinSeconds: v })}
+          />
+        </>
+      );
+    case 'speedBand':
+      // The bands themselves are a table of numbers and Dutch, and editing them inline would take
+      // more room than the rest of the rule put together. The outer edges are the part an author
+      // actually retunes; the middle band follows them, so the two can never cross.
+      return (
+        <>
+          <Num
+            label="Goed vanaf"
+            unit="km/u"
+            step={5}
+            value={kind.bands[0]?.fromKmh ?? 0}
+            onChange={(v) =>
+              onChange({
+                ...kind,
+                bands: kind.bands.map((b, i) =>
+                  i === 0 ? { ...b, fromKmh: v } : i === 1 ? { ...b, toKmh: v } : b,
+                ),
+              })
+            }
+          />
+          <Num
+            label="tot"
+            unit="km/u"
+            step={5}
+            value={kind.bands[0]?.toKmh ?? 0}
+            onChange={(v) =>
+              onChange({ ...kind, bands: kind.bands.map((b, i) => (i === 0 ? { ...b, toKmh: v } : b)) })
+            }
+          />
+        </>
+      );
     default:
-      // laneChange, beforeLaneChange and speedBand exist and are used by the motorway scenarios;
-      // they have no editor yet because no junction exercise needs one. Saying so beats a blank.
       return <p className="builder-note">Deze regel heeft hier geen instellingen.</p>;
   }
 }

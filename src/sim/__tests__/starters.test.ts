@@ -6,7 +6,7 @@ import { describe, expect, test } from 'vitest';
 import { STARTERS } from '../starters';
 import { buildRoutes } from '../route';
 import { referenceRide } from '../referenceRide';
-import { findObstructions, findOffRoad, routePath } from '../validate';
+import { findObstructions, findOffRoad, riddenPath, routePath } from '../validate';
 import { exportScenario, toSource } from '../scenarioExport';
 import type { Scenario } from '../types';
 
@@ -23,6 +23,25 @@ describe('lege startpunten', () => {
     const s = scenario as Scenario;
     expect(findOffRoad(s.world, routePath(buildRoutes(s)), EXTENT)).toEqual([]);
     expect(findObstructions(s.world, buildRoutes(s), EXTENT)).toEqual([]);
+  });
+
+  test.each(cases)('%s heeft ook asfalt onder de gereden lijn, niet alleen onder de route', (_l, scenario) => {
+    // The route is the spine; after a lane change the machine is metres to the left of it, and a
+    // motorway starter's ride is nine hundred metres long. Asking about the route rather than the
+    // ride is how the builder came to tell anyone starting a blank motorway that the road ran out
+    // after a hundred and seventy metres — the extent it asked with framed the picture, not the ride.
+    const s = scenario as Scenario;
+    const { record, error } = referenceRide(s);
+    expect(error).toBeNull();
+    const path = riddenPath(record.samples);
+    const margin = 20;
+    const bounds = {
+      minX: Math.min(...path.map((p) => p.x)) - margin,
+      maxX: Math.max(...path.map((p) => p.x)) + margin,
+      minY: Math.min(...path.map((p) => p.y)) - margin,
+      maxY: Math.max(...path.map((p) => p.y)) + margin,
+    };
+    expect(findOffRoad(s.world, path, bounds)).toEqual([]);
   });
 
   test.each(cases)('%s beoordeelt nog niets, en dat is de bedoeling', (_l, scenario) => {
