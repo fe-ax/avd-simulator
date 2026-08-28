@@ -25,9 +25,16 @@
  * apex of the haaientanden and a metre onto the carriageway. Missing a hazard that only misses you
  * because the other driver saved it is a `kritiek`.
  *
- * **How early it arrives is the tightest number here.** Six metres further back and the two miss
- * rather than collide, and the exercise stops being about anything; the sweep that found 167 is in
- * the PR. Move this and re-run `zicht.test.ts`, which asserts the overlap rather than trusting it.
+ * **At 87,5 km/h it is a very near miss rather than a collision, and that is a ceiling not a
+ * choice.** A car that would actually be on top of a rider who never slows has to start 210 m out,
+ * and `FORWARD_VIEW.maxDist` is 130 — so it is not seen until after it has begun braking, which is
+ * the trick question this scenario already shipped once. The two are cleanly separated: visible up
+ * to a start of 206, colliding from 210. Being unseeable is the worse failure, so it starts at 204
+ * and misses by about two metres.
+ *
+ * Getting the overlap back means dropping to roughly 70 km/h, shortening the approach so a fast
+ * car is closer when it matters, or re-measuring `maxDist` — which is meant to be a measurement of
+ * the rendered scene and may well be conservative. `zicht.test.ts` carries the same note.
  *
  * `zicht.test.ts` holds all of that: the sight line, the collision course, both clearances.
  *
@@ -75,20 +82,28 @@ export const autoVanRechts: Scenario = {
       kind: 'auto',
       label: 'Auto van rechts',
       from: {
-        x: 167,
+        x: 204,
         y: 1.5,
       },
       to: {
         x: -40,
         y: 1.5,
       },
-      speed: 70 / 3.6,
+      speed: 87.5 / 3.6,
       length: 4.4,
       cues: [
         {
-          atDist: 139,
+          atDist: 162.7,
           action: 'stop',
           decel: 8,
+        },
+        {
+          // Having stopped over the line, he sits there a beat and then backs off it. The pause is
+          // the realisation, and it is the only cue here anchored to the clock rather than to the
+          // road — there is no distance left for a stopped car to reach.
+          atDist: 197.6,
+          action: 'reverse',
+          afterSeconds: 1,
         },
       ],
     },

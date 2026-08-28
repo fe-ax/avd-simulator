@@ -57,6 +57,16 @@ const ACTOR_ACCEL = 1.5;
  * that seam allows.
  */
 export const ACTOR_BRAKE = 5.0;
+
+/**
+ * How fast an actor backs up, in m/s.
+ *
+ * Walking pace. A driver who has overshot a give-way line and is reversing off it is going slowly
+ * and looking over their shoulder, and from the saddle the point is that it moves at all — a car
+ * that has stopped somewhere it should not be, correcting itself, reads very differently from one
+ * that simply parked there.
+ */
+const ACTOR_REVERSE = 1.6;
 /**
  * How long before the rider reaches the fietspad the actor starts to worry. A snorfietser does
  * not stamp on the brakes because a motorbike is merely approaching a crossing — they brake when
@@ -193,6 +203,8 @@ function makeActorState(spec: ActorSpec): ActorState {
     cuesFired: 0,
     cueUntil: null,
     cueDecel: null,
+    stoppedAt: null,
+    reverseTo: null,
     perceived: false,
     perceivedAt: null,
     emergencyBraked: false,
@@ -641,10 +653,26 @@ export class SimEngine {
           // A cue may ask for harder than the ordinary stop; a conflict never does, because the
           // director braking for the rider is a driver reacting, not one standing on everything.
           actor.speed = Math.max(0, actor.speed - (actor.cueDecel ?? ACTOR_BRAKE) * dt);
-          if (actor.speed === 0) actor.mode = 'stopped';
+          if (actor.speed === 0) {
+            actor.mode = 'stopped';
+            actor.stoppedAt = this.t;
+          }
           break;
         case 'stopped':
           actor.speed = 0;
+          break;
+        case 'reversing':
+          // Backwards along its own path, so `dist` falls. Speed stays positive: it is how fast
+          // the thing is moving, and the direction is the mode.
+          actor.speed = ACTOR_REVERSE;
+          actor.dist -= ACTOR_REVERSE * dt;
+          if (actor.reverseTo !== null && actor.dist <= actor.reverseTo) {
+            actor.dist = actor.reverseTo;
+            actor.reverseTo = null;
+            actor.speed = 0;
+            actor.mode = 'stopped';
+            actor.stoppedAt = this.t;
+          }
           break;
         case 'resuming':
           actor.speed = Math.min(cruise, actor.speed + ACTOR_ACCEL * dt);
@@ -659,7 +687,7 @@ export class SimEngine {
           );
       }
 
-      actor.dist += actor.speed * dt;
+      if (actor.mode !== 'reversing') actor.dist += actor.speed * dt;
       const spec = actor.spec;
       const len = Math.hypot(spec.to.x - spec.from.x, spec.to.y - spec.from.y);
       const u = Math.min(1, actor.dist / len);
@@ -678,6 +706,25 @@ export class SimEngine {
   private applyCues(actor: ActorState) {
     const cues = actor.spec.cues;
     if (cues) {
+      // A reverse cannot wait for a distance. Everything else here fires when the actor reaches a
+      // point on its own path, which is what keeps a hazard in the same place however the rider
+      // rides — but a car that has stopped will never reach another point, and `atDist` on a
+      // reverse means where to come back *to*. So it waits on the clock instead, from the moment
+      // the thing actually came to rest.
+      const next = cues[actor.cuesFired];
+      if (next?.action === 'reverse') {
+        if (
+          actor.mode === 'stopped' &&
+          actor.stoppedAt !== null &&
+          this.t - actor.stoppedAt >= (next.afterSeconds ?? 0)
+        ) {
+          actor.cuesFired += 1;
+          actor.reverseTo = next.atDist;
+          actor.mode = 'reversing';
+        }
+        return;
+      }
+
       while (actor.cuesFired < cues.length && actor.dist >= cues[actor.cuesFired].atDist) {
         const cue = cues[actor.cuesFired];
         actor.cuesFired += 1;
@@ -696,6 +743,9 @@ export class SimEngine {
             actor.cueUntil = null;
             actor.cueDecel = null;
             actor.mode = 'resuming';
+            break;
+          case 'reverse':
+            // Handled above, on the clock rather than on the road.
             break;
         }
       }
