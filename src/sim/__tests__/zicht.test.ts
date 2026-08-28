@@ -15,60 +15,48 @@
 import { describe, expect, it } from 'vitest';
 import { referenceRide } from '../referenceRide';
 import { autoVanRechts } from '../scenario.auto-van-rechts';
-import { roadSurfaces } from '../roadSurfaces';
-import type { Vec2 } from '../types';
+import { findHiddenReveals } from '../validate';
 
 const EXTENT = { minX: -140, maxX: 260, minY: -160, maxY: 140 };
-
-/** Anything a car hides behind. A one-metre hedge does not hide one from a rider 1,6 m up. */
-function tallThings(): Vec2[][] {
-  return roadSurfaces(autoVanRechts.world, EXTENT)
-    .filter((s) => s.height > 2)
-    .map((s) => s.points);
-}
-
-function lineBlocked(a: Vec2, b: Vec2, boxes: Vec2[][]): boolean {
-  for (let t = 0.02; t < 1; t += 0.01) {
-    const x = a.x + (b.x - a.x) * t;
-    const y = a.y + (b.y - a.y) * t;
-    for (const box of boxes) {
-      const xs = box.map((p) => p.x);
-      const ys = box.map((p) => p.y);
-      if (x >= Math.min(...xs) && x <= Math.max(...xs) && y >= Math.min(...ys) && y <= Math.max(...ys)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
 
 describe('auto van rechts: de zichtlijn', () => {
   const { record } = referenceRide(autoVanRechts);
   const track = record.actorTracks['weggebruiker-1'];
-  const boxes = tallThings();
-
-  /** First moment the car is unobstructed and stays that way. */
-  let unobstructed: number | null = null;
-  for (const s of record.samples) {
-    const a = track.find((x) => x.t >= s.t);
-    if (!a) continue;
-    if (lineBlocked({ x: s.x, y: s.y }, { x: a.x, y: a.y }, boxes)) unobstructed = null;
-    else if (unobstructed === null) unobstructed = s.t;
-  }
   const brakesAt = track.find((a) => a.mode === 'braking')?.t ?? null;
   const perceivedAt = track.find((a) => a.perceived)?.t ?? null;
+  const unobstructed = perceivedAt;
 
   it('de auto is echt te zien, niet alleen volgens het model', () => {
-    expect(unobstructed).not.toBeNull();
-    // Within half a second of when perception credits it. Further apart than that and the model is
-    // marking a look the screen makes impossible, which is the whole failure this file exists for.
-    expect(Math.abs(unobstructed! - perceivedAt!)).toBeLessThan(0.6);
+    // Asked through the same function the builder's panel uses, rather than a second copy of the
+    // idea living in a test. The first copy here had the bug that one had: it took the start of the
+    // *last* unbroken sight line, so a house crossing the line after the encounter reported the car
+    // as never visible. One definition, one behaviour.
+    const labels = Object.fromEntries(autoVanRechts.actors.map((a) => [a.id, a.label]));
+    expect(findHiddenReveals(autoVanRechts.world, record, labels, EXTENT)).toEqual([]);
   });
 
-  it('en ruim vóórdat hij op de rem gaat, want dát is de les', () => {
-    // The rider has to watch it come at them too fast and decide. Being shown a car that is already
-    // stopping teaches nothing: the reading has been done for you.
-    expect(brakesAt! - unobstructed!).toBeGreaterThan(2.5);
+  it('en vóórdat hij op de rem gaat', () => {
+    // Being shown a car that is already stopping teaches nothing: the reading has been done for you.
+    //
+    // This used to demand two and a half seconds, from when the lesson was "read a car coming at
+    // you too fast". The exercise is a different shape now — he arrives, brakes and is standing
+    // across your lane before you get to the junction — so what the rider watches is the whole
+    // event rather than an approach. The budget is fixed and small: the model rider first looks
+    // right at 3,4 s and reaches the junction at 8,5, and braking from 87,5 km/h at 8 m/s² eats
+    // three of those five seconds on its own.
+    expect(brakesAt! - unobstructed!).toBeGreaterThan(0.5);
+  });
+
+  it('en staat stil vóórdat de rijder het kruispunt bereikt — dat is de opdracht', () => {
+    // The headline of this design, and the reason the numbers are where they are: the whole thing
+    // is over before you arrive, so what you meet is a car parked across your lane rather than one
+    // still coming. Measured against the rider who never slows, because they get there first.
+    const { record } = referenceRide(autoVanRechts, { anticipate: false });
+    const stopped = record.actorTracks['weggebruiker-1'].find((a) => a.mode === 'stopped');
+    const arrives = record.samples.find((s) => s.d <= 0);
+    expect(stopped).toBeDefined();
+    expect(arrives).toBeDefined();
+    expect(arrives!.t - stopped!.t).toBeGreaterThan(0.5);
   });
 
   it('en hij remt als een noodstop, niet als iemand die je zag aankomen', () => {
@@ -135,30 +123,20 @@ describe('auto van rechts: de bijna-aanrijding', () => {
     return { gap: best, record: r };
   };
 
-  it('zonder die noodstop was het rakelings, en dat is zo ver als het gaat', () => {
-    // This used to assert an overlap — the car genuinely on top of a rider who never slows. At
-    // 87,5 km/h it cannot: a collision course puts the car 210 m out when the rider first looks
-    // right, and `FORWARD_VIEW.maxDist` is 130, so it is not seen until after it has begun braking.
-    // The two requirements are cleanly separated — visible up to a start of 206, colliding from 210
-    // — and being unseeable is the worse of the two failures, so visibility wins and this is a very
-    // near miss rather than a hit.
-    //
-    // Getting the overlap back means one of: dropping the speed to about 70, shortening the
-    // approach so a fast car is closer when it matters, or re-measuring `maxDist`, which is
-    // supposed to be a measurement of the rendered scene and may well be conservative.
-    const noCue = {
-      ...autoVanRechts,
-      actors: autoVanRechts.actors.map((a) => ({ ...a, cues: undefined })),
-    };
-    const r = referenceRide(noCue, { anticipate: false }).record;
-    const t = r.actorTracks['weggebruiker-1'];
-    let worst = Infinity;
-    for (const s of r.samples) {
-      const a = t.find((x) => x.t >= s.t);
-      if (a) worst = Math.min(worst, gap(s.x, s.y, a.x, a.y));
-    }
-    expect(worst).toBeLessThan(2.5);
+  it('en de rijder moet er echt omheen: hij staat er nog als je aankomt', () => {
+    // A rider who keeps going meets it stopped and squeezes past with centimetres. Not a collision
+    // — it is stationary and they pass behind its nose — but nothing about it is comfortable.
+    const { gap: g } = closest({ anticipate: false });
+    expect(g).toBeGreaterThan(0);
+    expect(g).toBeLessThan(1);
   });
+
+  // What used to be here: "zonder die noodstop had hij de rijder geraakt", asserting that an
+  // unbraked car and the rider genuinely overlap. That was true of a design where the car arrived
+  // *with* the rider. It does not arrive with them any more — it is finished and standing still
+  // before they get to the junction — so an unbraked car is twenty metres clear and the assertion
+  // was measuring nothing. What replaced it is above: it has to be stopped before the rider
+  // arrives, and the rider has to get past it.
 
   it('wie gewoon doorrijdt, scheert er rakelings langs', () => {
     const { gap: g } = closest({ anticipate: false });

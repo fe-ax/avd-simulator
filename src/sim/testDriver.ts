@@ -302,6 +302,27 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
         nearest = Math.min(nearest, Math.abs(toMeeting / other.speed - mine));
       }
       closing = nearest < (closing ? 4 : 2.5);
+
+      // Something stopped across your path is also a reason to ease off, and the test above cannot
+      // see it: it asks who will be at the meeting point when you are, and a car that has already
+      // stopped there is not going to be anywhere at all. It is simply in the way.
+      //
+      // Measured to the near edge rather than the centre, because a car sitting across your lane
+      // presents its length to you: sixteen metres of lorry broadside is not four metres away just
+      // because its middle is.
+      const cos = Math.cos(bike.pose.heading);
+      const sin = Math.sin(bike.pose.heading);
+      for (const other of engine.actors) {
+        if (other.speed > 1) continue;
+        const dx = other.x - bike.pose.x;
+        const dy = other.y - bike.pose.y;
+        const along = dx * cos + dy * sin;
+        if (along <= 0 || along > BLOCKING_LOOKAHEAD_M) continue;
+        const across = -dx * sin + dy * cos;
+        const half = (other.spec.length ?? 1.8) / 2;
+        const reach = Math.abs(across) - half * Math.abs(Math.sin(other.heading - bike.pose.heading));
+        if (reach < BLOCKING_WIDTH_M) closing = true;
+      }
     } else {
       closing = false;
     }
@@ -403,6 +424,12 @@ export interface MergePlan {
 
 /** How far off the rider's line another vehicle has to be before it is somebody else's problem. */
 const SAME_LANE_M = 2;
+
+/** How far ahead a stopped obstruction starts to matter. About a rider's thinking distance at 50. */
+const BLOCKING_LOOKAHEAD_M = 45;
+
+/** How close to your line it has to reach before you would slow for it. */
+const BLOCKING_WIDTH_M = 1.5;
 
 /**
  * Seconds to whatever is in front, in this lane. Infinity when the road ahead is clear.
