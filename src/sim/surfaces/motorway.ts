@@ -286,8 +286,14 @@ function offRamp(out: Surface[], world: MotorwayWorld, lanes: ReturnType<typeof 
   });
 
   // Starts where the strook ends, heading north, and sweeps away right.
+  //
+  // Both ends sit near pi, and which side of it they fall on is the whole difference between an
+  // exit and a spur pointing back down the carriageway. Going *up* from pi drives sin negative, so
+  // the ramp was drawn 56 m behind where the strook ends — the mirror of `onRamp` in the wrong
+  // axis. Down from pi keeps sin positive: forward, and rightward as cos climbs off −1. The seam
+  // stays above pi so the first quad overlaps the strook rather than meeting it exactly.
   const from = Math.PI + SEAM / exit.radius;
-  const to = Math.PI + (exit.sweepDeg * Math.PI) / 180;
+  const to = Math.PI - (exit.sweepDeg * Math.PI) / 180;
   const steps = Math.max(2, Math.ceil(Math.abs(((to - from) * 180) / Math.PI / RAMP_STEP_DEG)));
 
   for (let i = 0; i < steps; i++) {
@@ -414,10 +420,14 @@ export function motorwaySurfaces(world: MotorwayWorld, ext: RoadExtent): Surface
       width: lanes.blockTo - lanes.blockFrom,
     });
   }
-  // The same band on an exit, over the strook's own length. It is what tells you the lane beside
-  // you is a lane you may cross into rather than one you are already sharing.
+  // The same band on an exit, and it starts where the road starts splitting rather than where the
+  // strook reaches full width. Those are `EXIT_LEAD_M` apart, and in between sat a widening wedge of
+  // bare tarmac with no marking on it at all — which from the saddle reads as a shoulder, not as a
+  // lane you may cross into. The blocks running up the gore are what say otherwise, and they are
+  // what a rider sees first: the band arrives before the lane it belongs to is wide enough to hold
+  // anything.
   if (exit) {
-    dashedAlongY(out, (lanes.blockFrom + lanes.blockTo) / 2, { ...ext, minY: exitFrom, maxY: exitTo }, {
+    dashedAlongY(out, (lanes.blockFrom + lanes.blockTo) / 2, { ...ext, minY: exitLeadFrom, maxY: exitTo }, {
       dash: BLOCK.length,
       gap: BLOCK.gap,
       width: lanes.blockTo - lanes.blockFrom,

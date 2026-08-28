@@ -20,10 +20,27 @@ import { analyseScenario, referenceRide } from '../referenceRide';
 import { unscoredActors } from '../referenceRide';
 import { findHiddenReveals, findOffRoad } from '../validate';
 import { driveExit } from '../testDriver';
+import { roadSurfaces } from '../roadSurfaces';
+import { motorwayLanes } from '../surfaces/motorway';
 import { scoreRun } from '../scoring';
 import type { ExitPlan } from '../testDriver';
 
-const EXTENT = { minX: -60, maxX: 60, minY: -520, maxY: 420 };
+/**
+ * Bounds derived from where the machine actually went, not typed in.
+ *
+ * A hardcoded frame is the bug this project has already had twice: lengthen the approach and the
+ * first sixty metres of the ride fall outside the extent, so the road is never generated there and
+ * `findOffRoad` reports its own blind spot as verge. It said 69 points the moment the exercise grew.
+ */
+function extentOfRide(path: readonly { x: number; y: number }[]) {
+  const xs = path.map((p) => p.x);
+  const ys = path.map((p) => p.y);
+  const margin = 120;
+  return {
+    minX: Math.min(...xs) - margin, maxX: Math.max(...xs) + margin,
+    minY: Math.min(...ys) - margin, maxY: Math.max(...ys) + margin,
+  };
+}
 
 /** Ride it with one thing deliberately wrong, and report what the uitvoegen rule made of it. */
 function exitRule(plan: ExitPlan) {
@@ -44,13 +61,14 @@ describe('Uitvoegen op de A12', () => {
   it('heeft onder de hele rit asfalt', () => {
     const { record } = referenceRide(uitvoegenSnelweg);
     const path = record.samples.map((v) => ({ x: v.x, y: v.y }));
-    expect(findOffRoad(uitvoegenSnelweg.world, path, EXTENT)).toEqual([]);
+    expect(findOffRoad(uitvoegenSnelweg.world, path, extentOfRide(path))).toEqual([]);
   });
 
   it('verstopt niets achter iets anders — het is een snelweg', () => {
     const { record } = referenceRide(uitvoegenSnelweg);
     const labels = Object.fromEntries(uitvoegenSnelweg.actors.map((a) => [a.id, a.label]));
-    expect(findHiddenReveals(uitvoegenSnelweg.world, record, labels, EXTENT)).toEqual([]);
+    const path = record.samples.map((v) => ({ x: v.x, y: v.y }));
+    expect(findHiddenReveals(uitvoegenSnelweg.world, record, labels, extentOfRide(path))).toEqual([]);
   });
 
   it('laat elke regel door een slordige rijder missen', () => {
@@ -66,6 +84,79 @@ describe('Uitvoegen op de A12', () => {
     // a rule, so the unscored check names them here rather than being quietly widened to pass.
     expect(unscoredActors(uitvoegenSnelweg, referenceRide(uitvoegenSnelweg).record).map((a) => a.id))
       .toEqual(['weggebruiker-1', 'weggebruiker-2']);
+  });
+});
+
+describe('hoe de afrit er ligt', () => {
+  const EXT = { minX: -80, maxX: 120, minY: -760, maxY: 480 };
+  const strook = { mouth: 0, end: 300 };
+  const lanes = motorwayLanes(
+    (uitvoegenSnelweg.world as Extract<typeof uitvoegenSnelweg.world, { kind: 'motorway' }>).road,
+  );
+
+  it('buigt vooruit en naar rechts, niet terug langs de weg', () => {
+    // Both ends of the arc sit near pi, and which side of it they fall on is the entire difference
+    // between an exit and a spur pointing back down the carriageway. Sweeping *up* from pi drives
+    // sin negative, which drew the ramp 56 m behind where the strook ends — it read as an inverted
+    // corner from the saddle and as a slip road going the wrong way in plan view.
+    const ramp = roadSurfaces(uitvoegenSnelweg.world, EXT).filter(
+      (s) => s.kind === 'asphalt' && s.height === 0 && s.points.every((p) => p.x > lanes.mergeTo - 0.01),
+    );
+    expect(ramp.length).toBeGreaterThan(0);
+    const ys = ramp.flatMap((s) => s.points.map((p) => p.y));
+    expect(Math.min(...ys)).toBeGreaterThan(strook.end);
+  });
+
+  it('en de blokmarkering begint waar de weg begint te splitsen', () => {
+    // Not where the strook reaches full width. Between the two sat a widening wedge of bare tarmac,
+    // which from the saddle reads as a shoulder rather than as a lane you may cross into.
+    const band = roadSurfaces(uitvoegenSnelweg.world, EXT)
+      .filter((s) => s.kind === 'paint' && s.height === 0)
+      .filter((s) => {
+        const w = Math.max(...s.points.map((p) => p.x)) - Math.min(...s.points.map((p) => p.x));
+        return Math.abs(w - lanes.blockTo + lanes.blockFrom) < 0.01;
+      });
+    expect(band.length).toBeGreaterThan(0);
+    const first = Math.min(...band.map((b) => Math.min(...b.points.map((p) => p.y))));
+    expect(first).toBeLessThan(strook.mouth);
+  });
+});
+
+describe('je moet wel achter ze gaan hangen', () => {
+  /** Clear space between the rider's nose and the rearmost lorry's tail, over the whole ride. */
+  function gapToConvoy(record: ReturnType<typeof driveExit>) {
+    const track = record.actorTracks['weggebruiker-3'];
+    const half = (uitvoegenSnelweg.actors.find((a) => a.id === 'weggebruiker-3')?.length ?? 0) / 2;
+    return record.samples.map((s) => {
+      const a = track.find((x) => Math.abs(x.t - s.t) < 0.03);
+      return a ? { t: s.t, d: s.d, gap: a.y - s.y - half } : null;
+    }).filter((x): x is { t: number; d: number; gap: number } => x !== null);
+  }
+
+  it('wie 105 blijft rijden, rijdt achterop de vrachtwagen vóór de afrit', () => {
+    // The whole exercise, in one assertion. The first build of this scenario put the convoy far
+    // enough ahead that holding 105 reached the exit with room to spare and scored *geslaagd* — you
+    // could ignore the lesson entirely and pass. The approach is now long enough that the road runs
+    // out first: contact comes before the mouth, not somewhere down the strook.
+    const record = driveExit(uitvoegenSnelweg, { holdSpeed: true });
+    const contact = gapToConvoy(record).find((s) => s.gap <= 0);
+    expect(contact).toBeDefined();
+    expect(contact!.d).toBeGreaterThan(0); // still short of the strook, so there is no exit to take
+    expect(scoreRun(record, uitvoegenSnelweg).verdict).toBe('gezakt');
+  });
+
+  it('en wie wél terugvalt, hangt er een flinke tijd achter voordat de afrit komt', () => {
+    // "Slow down and sit behind them for a while" is the thing being taught, so it has to be a
+    // stretch of the ride rather than a moment. Fifteen seconds is most of the approach.
+    const record = driveExit(uitvoegenSnelweg);
+    const behind = record.samples.filter((s) => s.d > 0 && s.speed * 3.6 < 95).length / 20;
+    expect(behind).toBeGreaterThan(15);
+  });
+
+  it('zonder dat de modelrijder ooit te dicht komt', () => {
+    const record = driveExit(uitvoegenSnelweg);
+    const inWindow = gapToConvoy(record).filter((s) => s.d <= 200 && s.d >= -100);
+    expect(Math.min(...inWindow.map((s) => s.gap))).toBeGreaterThan(40);
   });
 });
 

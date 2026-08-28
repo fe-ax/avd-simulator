@@ -23,8 +23,10 @@ Five scenarios:
 5. *Uitvoegen op de A12* — three lorries nose to tail at 90, a clear left lane, and an afrit whose
    uitvoegstrook you are meant to be in inside its first fifth. Teaches that the fast, available,
    obviously-fun option — past all three at 130, back across, into the strook halfway down — is the
-   fault being taught, and that sitting behind a wall of lorry is the answer. **Built entirely in
-   the scenario builder** and exported unedited, like scenario 2.
+   fault being taught, and that sitting behind a wall of lorry is the answer. The approach is 620 m
+   with the convoy 80 m ahead, and those two numbers are the exercise: **hold 105 and you reach the
+   back of the lorry before you reach the exit.** Shorter, and you could ignore the whole lesson and
+   still pass. **Built entirely in the scenario builder** and exported unedited, like scenario 2.
 
 The UI is Dutch. Code, comments and commit messages are English.
 
@@ -93,7 +95,7 @@ scenario 3        full reeks        truck first seen at        3.8s   (left mirr
 
 scenario 4        every column identical: lorries at 0.0s and 4.8s, cars at 3.0s and 6.0s
 
-scenario 5        every column identical: lead lorry 5.2s, the other two 0.0s
+scenario 5        every column identical: all three lorries at 0.0s
 ```
 
 **Perception has no occlusion.** `perception.ts` is purely angular — bearing, distance, a frustum —
@@ -117,10 +119,16 @@ the same moment whatever you do with your head. What the mirrors change is not *
 traffic but *whether you know it is safe to move* — which is why that scenario's proof is the
 incident tests (`ignoreTraffic` puts two cars on the brakes) rather than this table.
 
-Scenario 5 is flat for scenario 4's reason, and its one non-zero number is a measurement rather than
-a knob: the lead lorry starts 160 m ahead, beyond `FORWARD_VIEW.maxDist`, so it enters view at 5,2 s
-because the rider closes on it and not because anybody looked. Its proof is the lane-change bands —
-four tests in `uitvoegen.test.ts` ride it deliberately badly and check which band catches them.
+Scenario 5 is flat for scenario 4's reason, and completely so: the convoy sits close enough that
+even the lead lorry's tail is inside `FORWARD_VIEW.maxDist` from the first frame. It was not always
+— the first build put the convoy 160 m out, and that showed here as a lone 5,2 s while the exercise
+itself was broken. **A row that is the odd one out is worth chasing before you explain it.** Holding
+105 reached the exit with room to spare and scored *geslaagd*, so the rider could ignore the entire
+lesson and pass; the approach is now 620 m and the convoy 80 m ahead, which means the road runs out
+before the exit does. `uitvoegen.test.ts` asserts that contact happens while `d > 0`.
+
+Its proof is the lane-change bands rather than this table — four tests ride it deliberately badly
+and check which band catches them.
 
 If those move, something about the view changed. That is either the point of your change or a bug;
 know which.

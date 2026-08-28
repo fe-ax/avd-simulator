@@ -9,7 +9,7 @@ export const uitvoegenSnelweg: Scenario = {
   id: 'uitvoegen-snelweg-v1',
   title: 'Uitvoegen op de A12',
   briefing: {
-    situation: 'Je rijdt 105 op rijstrook 1 van de A12, waar 100 is toegestaan. Vóór je rijden drie vrachtwagens vlak achter elkaar, alle drie op 90. Rijstrook 2 is leeg. Over ruim vierhonderd meter ligt de afrit die je moet hebben.',
+    situation: 'Je rijdt 105 op rijstrook 1 van de A12, waar 100 is toegestaan. Vóór je rijden drie vrachtwagens vlak achter elkaar, alle drie op 90 — je loopt dus op ze in. Rijstrook 2 is leeg. Over ruim zeshonderd meter ligt de afrit die je moet hebben.',
     assignment: 'Neem de afrit. Voeg meteen aan het begin van de uitvoegstrook uit.',
     hints: [
       'Er houdt je niets tegen om er met 130 langs te gaan — behalve dat je dan van rijstrook 2 dwars naar de uitvoegstrook moet, met die strook al half op. Achter drie vrachtwagens blijven hangen voelt traag en is hier het goede antwoord.',
@@ -27,7 +27,7 @@ export const uitvoegenSnelweg: Scenario = {
     },
     stretch: {
       kind: 'afrit',
-      startY: -450,
+      startY: -620,
       strookStartY: 0,
       strookLengthM: 300,
       exit: {
@@ -49,11 +49,11 @@ export const uitvoegenSnelweg: Scenario = {
       label: 'Voorste vrachtwagen',
       from: {
         x: 5.55,
-        y: -290,
+        y: -485,
       },
       to: {
         x: 5.55,
-        y: 1310,
+        y: 1115,
       },
       speed: 90 / 3.6,
       length: 16.5,
@@ -64,11 +64,11 @@ export const uitvoegenSnelweg: Scenario = {
       label: 'Tweede vrachtwagen',
       from: {
         x: 5.55,
-        y: -315,
+        y: -510,
       },
       to: {
         x: 5.55,
-        y: 1285,
+        y: 1090,
       },
       speed: 90 / 3.6,
       length: 16.5,
@@ -79,11 +79,11 @@ export const uitvoegenSnelweg: Scenario = {
       label: 'Derde vrachtwagen',
       from: {
         x: 5.55,
-        y: -340,
+        y: -535,
       },
       to: {
         x: 5.55,
-        y: 1260,
+        y: 1065,
       },
       speed: 90 / 3.6,
       length: 16.5,

@@ -4,7 +4,7 @@ Vijf oefeningen: **Rechtsaf de Kerkstraat in** (afslaan over een vrijliggend fie
 **Auto van rechts remt** (rechtdoor over een kruispunt terwijl er van rechts een auto veel te hard
 aan komt en vol op de rem gaat), **Invoegen op de A12** (van de oprit het gat in tussen een auto
 vóór je en een vrachtwagen achter je), **Inhalen op de A12** (twee vrachtwagens kort achter
-elkaar, druk op de linkerrijstrook) en **Uitvoegen op de A12** (drie vrachtwagens op 90, een lege
+elkaar, druk op de linkerrijstrook) en **Uitvoegen op de A12** (drie vrachtwagens op 90 waar je op inloopt, een lege
 linkerrijstrook, en een afrit die je meteen aan het begin op moet). Je kiest ze in de briefing,
 vóór elke rit.
 
