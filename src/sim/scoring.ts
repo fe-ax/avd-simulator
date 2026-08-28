@@ -509,6 +509,38 @@ function auditLooks(events: ControlEvent[], scenario: Scenario): LookAudit {
   return { total: looks.length, offending };
 }
 
+/**
+ * Which looks are the same look done twice.
+ *
+ * A repeat of the same control inside `minRepeatSeconds` tells the rider nothing new — that is the
+ * premise of the discipline rule — so for crediting it is one observation, not two. Grouping them
+ * is what lets a second schouderblik count towards the step its first one was too early for,
+ * without letting a double-tap satisfy two separate steps.
+ */
+function lookClusters(events: ControlEvent[], scenario: Scenario): Map<ControlEvent, ControlEvent[]> {
+  const gap = scenario.lookDiscipline.minRepeatSeconds;
+  const byControl = new Map<ControlId, ControlEvent[]>();
+  for (const e of events) {
+    if (e.phase !== 'press' || !isLookControl(e.control) || e.rejected) continue;
+    byControl.set(e.control, [...(byControl.get(e.control) ?? []), e]);
+  }
+
+  const out = new Map<ControlEvent, ControlEvent[]>();
+  for (const presses of byControl.values()) {
+    let run: ControlEvent[] = [];
+    const flush = () => {
+      if (run.length > 1) for (const e of run) out.set(e, run.filter((o) => o !== e));
+      run = [];
+    };
+    for (const e of presses) {
+      if (run.length > 0 && e.t - run[run.length - 1].t >= gap) flush();
+      run.push(e);
+    }
+    flush();
+  }
+  return out;
+}
+
 function reportLookDiscipline(audit: LookAudit, scenario: Scenario): ActionResult | null {
   const rules = scenario.lookDiscipline;
   const violations = audit.offending.size;
@@ -841,17 +873,38 @@ export function scoreRun(record: RunRecord, scenario: Scenario): ScoredRun {
   const samples = record.samples;
   const results: ActionResult[] = [];
 
-  // A look that breaks the discipline rules is discarded before anything is credited.
+  // A look that happened is a look that happened.
+  //
+  // Every burst-breaker used to be deleted before anything was credited, which closed a real
+  // loophole — mashing every control hits every window by accident — and opened a worse one. A
+  // rider doing the reeks briskly, or checking the dode hoek twice because that is the habit being
+  // taught, trips `maxInBurst` and then reads "je keek niet in je rechterspiegel" as a **fout**,
+  // about a mirror they demonstrably used. That turns a remark about scanning into faults for not
+  // looking, which is the opposite of what the discarding was for.
+  //
+  // The scenario already says where looking stops and scanning starts: `faultAt`. So the discard
+  // follows that one declaration rather than a second, hidden rule at every local burst. Under it
+  // a rider keeps their looks; over it they were not looking, and bank nothing.
   const audit = auditLooks(record.events, scenario);
-  const credited = record.events.filter((e) => !audit.offending.has(e));
+  const scanning = audit.offending.size >= scenario.lookDiscipline.faultAt;
+  const credited = scanning ? record.events.filter((e) => !audit.offending.has(e)) : record.events;
 
   // Expectations are walked in scenario order and each claims its press, so two steps that share
   // a control — the two schouderblikken rechts — can never be satisfied by the same look, and a
   // missed step cannot report an earlier step's press as a stray.
   const consumed = new Set<ControlEvent>();
+  const sameLook = lookClusters(credited, scenario);
   for (const expected of scenario.expected) {
     if (expected.onlyWhenManualSteering && record.autoSteer) continue;
+    const before = new Set(consumed);
     const result = scoreExpected(expected, record, scenario, credited, samples, consumed);
+    // Claiming one press of a rapid same-control pair claims both. Two schouderblikken a second
+    // apart are one check done twice, not two checks — so they cannot satisfy two steps between
+    // them, which is the door left open by no longer discarding the repeat.
+    for (const press of consumed) {
+      if (before.has(press)) continue;
+      for (const mate of sameLook.get(press) ?? []) consumed.add(mate);
+    }
     if (result) results.push(result);
   }
 
