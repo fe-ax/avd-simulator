@@ -51,6 +51,8 @@ describe('de scenariokiezer', () => {
         timeScale={1}
         onTimeScaleChange={vi.fn()}
         autoSteer
+        conditions="helder"
+        onConditions={vi.fn()}
         onAutoSteerChange={vi.fn()}
       />,
     );
@@ -74,6 +76,8 @@ describe('de scenariokiezer', () => {
         timeScale={1}
         onTimeScaleChange={vi.fn()}
         autoSteer
+        conditions="helder"
+        onConditions={vi.fn()}
         onAutoSteerChange={vi.fn()}
       />,
     );

@@ -2,6 +2,7 @@ import { RESERVED_IDS } from '../sim/scenarios';
 import type { Scenario } from '../sim/types';
 import { CONTROLS, controlLabels, GROUP_ORDER, groupLabel } from './controls';
 import { formatTempo, RideSettings } from './RideSettings';
+import type { Conditions } from '../scene/sky';
 
 interface Props {
   scenario: Scenario;
@@ -13,6 +14,8 @@ interface Props {
   timeScale: number;
   onTimeScaleChange: (value: number) => void;
   autoSteer: boolean;
+  conditions: Conditions;
+  onConditions: (value: Conditions) => void;
   onAutoSteerChange: (value: boolean) => void;
 }
 
@@ -26,6 +29,8 @@ export function BriefingModal({
   onTimeScaleChange,
   autoSteer,
   onAutoSteerChange,
+  conditions,
+  onConditions,
 }: Props) {
   if (countdown !== null) {
     return (
@@ -120,6 +125,8 @@ export function BriefingModal({
               timeScale={timeScale}
               onTimeScale={onTimeScaleChange}
               autoSteer={autoSteer}
+              conditions={conditions}
+              onConditions={onConditions}
               onAutoSteer={onAutoSteerChange}
             />
           </div>
