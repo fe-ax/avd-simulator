@@ -9,6 +9,7 @@
 import type { Obstruction } from '../../sim/validate';
 import type { ActorSpec, Vec2 } from '../../sim/types';
 import type { Reveal, RuleDiscrimination } from '../../sim/referenceRide';
+import type { HiddenReveal } from '../../sim/validate';
 import type { RunRecord } from '../../sim/types';
 
 export interface Validation {
@@ -24,6 +25,8 @@ export interface Validation {
   reveals: Reveal[];
   /** Which rules any deliberately sloppy rider actually missed. Empty when nothing could be ridden. */
   discrimination: RuleDiscrimination[];
+  /** Road users the model credits as seen while a house is in the way. */
+  hidden: HiddenReveal[];
 }
 
 function seconds(v: number | null): string {
@@ -87,6 +90,7 @@ export function ValidationPanel({
   inheritedFrom,
   reveals,
   discrimination,
+  hidden,
 }: Validation) {
   if (error) {
     return (
@@ -187,6 +191,34 @@ export function ValidationPanel({
           </ul>
           <p className="builder-note">
             Decor mag, maar als dit je gevaar is, meet de oefening het niet.
+          </p>
+        </section>
+      )}
+
+      {hidden.length > 0 && (
+        <section className="builder-panel builder-panel-bad">
+          <h3>Dit verkeer staat achter een huis</h3>
+          <p>
+            De simulator rekent een blik hierop goed, want die kijkt naar richting en afstand en niet
+            naar gebouwen. Op het scherm is er niets te zien:
+          </p>
+          <ul className="builder-faults">
+            {hidden.map((h) => (
+              <li key={h.actorId}>
+                <strong>{h.label}</strong>
+                <span>
+                  {h.visibleAt === null
+                    ? 'komt de hele rit niet vrij in beeld'
+                    : `telt als gezien vanaf ${seconds(h.perceivedAt)}, maar is pas ${seconds(
+                        h.visibleAt,
+                      )} echt zichtbaar`}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="builder-note">
+            Zo wordt de oefening een strikvraag: je beoordeelt iemand op iets wat hij niet kon zien.
+            Zet de hoek open waar dit verkeer vandaan komt, of verplaats het.
           </p>
         </section>
       )}

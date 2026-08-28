@@ -416,6 +416,14 @@ moving a rung changes what the rule means, and the arrows in `BandEditor` are no
 Anything matching no rung at all falls through to the rule's own `missed`, which the editor shows as
 a final rung nobody wrote rather than leaving invisible.
 
+**The validator asks what perception cannot.** `findHiddenReveals` traces the line of sight from
+rider to actor against anything tall enough to hide a car, and says when the model credits a look
+at something standing behind a house. That question lives in `validate.ts` rather than in
+`perception.ts` on purpose: making perception itself occlude would change what every existing
+scenario scores, while a check that changes nothing and tells the author the truth costs nothing.
+It is the check that would have caught *Auto van rechts remt* being a trick question, and closing
+that scenario's open corner in the builder makes it fire.
+
 **And the loop now closes without a compiler.** `Bewaar` puts a scenario in the browser's library,
 where it appears in the ride picker beside the four that ship, marked as your own. `Download` writes
 a small `.avd.json` you can email to another instructor; `Open bestand` reads one back. A ride

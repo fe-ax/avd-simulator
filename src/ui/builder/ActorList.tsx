@@ -7,6 +7,7 @@
  * place whether the rider arrives early, late, or never — which is what keeps it the other
  * driver's mistake rather than a response to yours.
  */
+import { ACTOR_BRAKE } from '../../sim/engine';
 import type { ActorCue, ActorKind, ActorSpec } from '../../sim/types';
 
 /*
@@ -26,6 +27,9 @@ const KINDS: { id: ActorKind; label: string; length: number; speedKmh: number }[
   { id: 'fietser', label: 'Fietser', length: 1.8, speedKmh: 18 },
   { id: 'voetganger', label: 'Voetganger', length: 0.6, speedKmh: 5 },
 ];
+
+/** Roughly what dry tarmac gives you with everything locked up. */
+const EMERGENCY = 8;
 
 const ACTIONS: { id: ActorCue['action']; label: string }[] = [
   { id: 'brake', label: 'Remmen' },
@@ -126,6 +130,15 @@ function CueRow({
           step={0.5}
           value={cue.forSeconds ?? 2}
           onChange={(v) => onChange({ ...cue, forSeconds: Math.max(0.1, v) })}
+        />
+      )}
+      {cue.action !== 'resume' && (
+        <Field
+          label="Hoe hard"
+          unit="m/s²"
+          step={0.5}
+          value={cue.decel ?? ACTOR_BRAKE}
+          onChange={(v) => onChange({ ...cue, decel: Math.max(0.5, v) })}
         />
       )}
       <button type="button" className="ghost-btn tiny" onClick={onRemove}>
@@ -246,10 +259,16 @@ export function ActorList({ actors, onPatch, onAdd, onRemove, selected, onSelect
                 ))
               )}
               {cues.length > 0 && (
-                <p className="builder-note">
-                  Gemeten vanaf zijn eigen startpunt, niet vanaf jou — daarom gebeurt het elke rit
-                  op dezelfde plek, of je er nu vroeg of laat bent.
-                </p>
+                <>
+                  <p className="builder-note">
+                    Gemeten vanaf zijn eigen startpunt, niet vanaf jou — daarom gebeurt het elke rit
+                    op dezelfde plek, of je er nu vroeg of laat bent.
+                  </p>
+                  <p className="builder-note">
+                    {ACTOR_BRAKE} is stevig remmen: iemand die je laat zag. {EMERGENCY} is een
+                    noodstop met alles op slot — iemand die je helemaal niet zag.
+                  </p>
+                </>
               )}
             </div>
           </div>
