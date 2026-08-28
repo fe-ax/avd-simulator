@@ -7,6 +7,7 @@
  * rides carefully arrives later and must not be marked down for it.
  */
 import { isLookControl } from './perception';
+import { conflictPointName } from './route';
 import type {
   ActionResult,
   ActorSample,
@@ -222,7 +223,8 @@ function scoreExpected(
         : null;
       const strayNote = stray
         ? ` Je drukte hier wel op, op ${stray.t.toFixed(1).replace('.', ',')}s en ` +
-          `${Math.round(stray.d)} m vóór het fietspad, maar dat valt buiten het venster voor ` +
+          `${Math.round(stray.d)} m vóór ${conflictPointName(scenario.world)}, maar dat valt ` +
+          `buiten het venster voor ` +
           'deze handeling.'
         : '';
       return {

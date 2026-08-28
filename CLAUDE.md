@@ -268,6 +268,12 @@ commit.
   `HEDGE_GAP = 4.5`). A hedge that looks fine in plan view because the road is painted over it is
   a green wall across the road you are turning into.
 - **Four lamp posts, one per quadrant**, clear of both the fietspad and the side road.
+- **The junction's corners are a kerb radius, not squares.** `KERB_RADIUS` in `surfaces/junction.ts`
+  is tangent to both kerb lines, so the straights stop exactly where the arc meets them. They were
+  four squares out to `CORNER_GAP` with the kerbs simply stopping short, which meant two six-metre
+  roads met in a seventeen-metre paved area with no edge anywhere in it — invisible from the saddle,
+  and a car park from above. A turn still has to have tarmac under it: `findOffRoad` over the
+  *ridden* path, for all three manoeuvres, is what caught the arc being wrong the first time.
 - **The fietspad red stops at the crossing** and blokmarkering takes over, same number of blocks
   on each edge.
 - **The mirror glass tilt is derived from `EYE_HEIGHT`**, not a constant. See below.
@@ -462,7 +468,11 @@ schouderblik, and says why).
   register; do not add restating comments.
 - **Commit messages are prose**, present tense, explaining the reasoning and stating what was
   measured. Look at `git log` before writing one.
-- Dutch for anything the student reads; English for everything else.
+- Dutch for anything the student reads; English for everything else. **Prose the student reads must
+  come from the scenario or be derived from its world** — never written into a component. The
+  debrief described every window as "vóór het fietspad", on roads that have no fietspad, because
+  one scenario had one when the line was written. `conflictPointName` in `route.ts` lives next to
+  the code that decides where that point is.
 - `src/palette.ts` holds every colour both renderers share.
 - Keep `README.md` (Dutch, written for the student and for a future maintainer) current when
   behaviour changes.
