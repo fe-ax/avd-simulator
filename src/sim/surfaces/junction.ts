@@ -20,6 +20,7 @@ import {
   type Surface,
 } from '../roadSurfaces';
 import type { JunctionRoad } from '../types';
+import { sign } from './signs';
 
 const KERB_HEIGHT = 0.12;
 
@@ -226,5 +227,60 @@ export function junctionGiveWay(
     sharkTeethAlongX(out, -sideHalfWidth - 0.6, 0.25, halfWidth - 0.1, -1);
     sharkTeethAlongX(out, sideHalfWidth + 0.6, -halfWidth + 0.1, -0.25, 1);
   }
+  return out;
+}
+
+/**
+ * How far out in the verge a sign stands, as a fraction of the verge's width, and how far back
+ * along the road the approach signs sit. Corner signs clear `CORNER_GAP` so they stand on grass
+ * rather than in the paved mouth.
+ */
+const SIGN_VERGE = { across: 0.45, beforeJunction: 34, pastCorner: 3 };
+
+/**
+ * What the crossroads says standing up.
+ *
+ * **Both signs come off `giveWay`, the same field the haaientanden come off.** That is the whole
+ * point of deriving them: paint and plate cannot end up telling opposite stories, and flipping the
+ * priority moves all three together. `haaientanden.test.ts` already refuses to hardcode a side for
+ * the teeth for exactly this reason, and the sign test does the same.
+ *
+ * Which side of an arm a B6 stands on follows from which way its traffic is heading — rotate the
+ * heading a quarter turn clockwise and that is the driver's right. Traffic reaching the east mouth
+ * is heading west, so its sign is on the *north* verge, which is also the half the teeth are
+ * painted across.
+ */
+export function junctionSigns(
+  road: JunctionRoad,
+  giveWay: 'side' | 'main' | 'none',
+  speedLimitKmh?: number,
+): Surface[] {
+  const { halfWidth, sideHalfWidth, vergeTo } = road;
+  const out: Surface[] = [];
+  const acrossMain = halfWidth + vergeTo * SIGN_VERGE.across;
+  const acrossSide = sideHalfWidth + vergeTo * SIGN_VERGE.across;
+  const pastCorner = CORNER_GAP + SIGN_VERGE.pastCorner;
+
+  // The limit is the road the rider is on, so it stands on their right, before the junction.
+  if (speedLimitKmh !== undefined) {
+    out.push(...sign({ x: acrossMain, y: -SIGN_VERGE.beforeJunction }, {
+      type: 'speedLimit',
+      kmh: speedLimitKmh,
+    }));
+  }
+
+  if (giveWay === 'side') {
+    // You have priority: B1 on your own approach, B6 facing whoever comes out of the side road.
+    out.push(...sign({ x: acrossMain, y: -SIGN_VERGE.beforeJunction + 10 }, { type: 'priorityRoad' }));
+    // Traffic reaching the east mouth is heading west, so its sign looks east, back at it — and
+    // stands on the north verge, which is the driver's right and the half the teeth are across.
+    out.push(...sign({ x: pastCorner, y: acrossSide }, { type: 'giveWay' }, 'east'));
+    out.push(...sign({ x: -pastCorner, y: -acrossSide }, { type: 'giveWay' }, 'west'));
+  } else if (giveWay === 'main') {
+    // The other way round: the side road has priority and you are the one giving way.
+    out.push(...sign({ x: acrossMain, y: -pastCorner }, { type: 'giveWay' }));
+    out.push(...sign({ x: -acrossMain, y: pastCorner }, { type: 'priorityRoad' }));
+  }
+
   return out;
 }

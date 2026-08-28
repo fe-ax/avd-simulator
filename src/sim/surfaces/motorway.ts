@@ -8,6 +8,7 @@
  * Pure geometry; see `../roadSurfaces.ts` for the vocabulary.
  */
 import { dashedAlongY, rect, SEAM, type RoadExtent, type Surface } from '../roadSurfaces';
+import { sign } from './signs';
 import type { MotorwayRoad, ScenarioWorld } from '../types';
 
 type MotorwayWorld = Extract<ScenarioWorld, { kind: 'motorway' }>;
@@ -70,6 +71,15 @@ const MIDDENBERM_TREES = { from: -24, to: -6 };
 
 /** The wood in the right-hand berm: this far clear of the berm's outer edge, and this deep. */
 const BERM_TREES = { clearance: 2, depth: 10 };
+
+/**
+ * Where signs stand, as fractions of the berm's width and metres along the road.
+ *
+ * Fractions rather than metres across, so a wider berm moves the signs out with it instead of
+ * leaving them stranded on the hard shoulder. The board sits further out than the A1 because it is
+ * four metres wide and would otherwise overhang the kantstreep.
+ */
+const SIGN_BERM = { limit: 0.45, board: 0.6, limitAfterStart: 60, boardBeforeStrook: 220 };
 
 /**
  * A few degrees of extra arc behind where the route starts, so the rider does not begin on the
@@ -448,6 +458,59 @@ export function motorwaySurfaces(world: MotorwayWorld, ext: RoadExtent): Surface
     // The oprit swings out through this band; a wood standing in it would be a wood on the road.
     entry ? [ext.minY, entry.ramp.strookStartY + 4] : undefined,
   );
+
+  return out;
+}
+
+/**
+ * The signs a stretch of motorway carries.
+ *
+ * Kept apart from `motorwaySurfaces` because they answer a different question: that function
+ * describes the road, this one describes what the road tells you about itself. Both are derived
+ * from the same layout, so neither can drift from the other.
+ *
+ * Placement is in the berm, outboard of the hectometerpaaltjes and inboard of the wood — the strip
+ * a real sign stands in. Nothing here picks an x of its own: they all come off `motorwayLanes()`,
+ * for the same reason no marking does.
+ */
+export function motorwaySigns(
+  world: MotorwayWorld,
+  ext: RoadExtent,
+  speedLimitKmh?: number,
+): Surface[] {
+  const lanes = motorwayLanes(world.road);
+  const stretch = world.stretch;
+  const exit = stretch.kind === 'afrit' ? stretch : null;
+  const roadEdgeX = stretch.kind === 'doorgaand' ? lanes.rightEdgeX : lanes.mergeTo;
+  const vergeX = roadEdgeX + world.road.bermWidth * SIGN_BERM.limit;
+  const out: Surface[] = [];
+
+  // Where the ride begins, whatever kind of stretch this is. An A1 is only worth standing up where
+  // a rider will pass it, and the three kinds start in three different places.
+  const startY =
+    stretch.kind === 'oprit' ? stretch.ramp.strookStartY : stretch.startY;
+
+  const inView = (y: number) => y >= ext.minY && y <= ext.maxY;
+
+  if (speedLimitKmh !== undefined && inView(startY + SIGN_BERM.limitAfterStart)) {
+    out.push(...sign({ x: vergeX, y: startY + SIGN_BERM.limitAfterStart }, {
+      type: 'speedLimit',
+      kmh: speedLimitKmh,
+    }));
+  }
+
+  // The board goes well before the gore opens, which is where one stands on a real afrit: it has to
+  // be read and acted on while there is still road left to act in.
+  if (exit) {
+    const boardY = exit.strookStartY - SIGN_BERM.boardBeforeStrook;
+    if (inView(boardY)) {
+      out.push(...sign({ x: roadEdgeX + world.road.bermWidth * SIGN_BERM.board, y: boardY }, {
+        type: 'exit',
+        destination: exit.destination,
+        ...(exit.exitNumber === undefined ? {} : { exitNumber: exit.exitNumber }),
+      }));
+    }
+  }
 
   return out;
 }

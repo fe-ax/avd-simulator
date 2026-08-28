@@ -34,6 +34,8 @@ export const uitvoegenSnelweg: Scenario = {
         radius: 150,
         sweepDeg: 22,
       },
+      destination: 'Deventer',
+      exitNumber: '23',
     },
   },
   speedLimitKmh: 100,

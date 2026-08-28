@@ -16,6 +16,8 @@ import {
   type Surface,
   type SurfaceKind,
 } from '../sim/roadSurfaces';
+import { PLATE, signGroups, type SignGroup } from '../sim/surfaces/signs';
+import { signMaterial } from './signFaces';
 import { buildRoutes, poseAt } from '../sim/route';
 import type { Scenario } from '../sim/types';
 
@@ -84,6 +86,7 @@ const LAYER: Record<SurfaceKind, number> = {
   guardrail: 0,
   hectometerPost: 0,
   tree: 0,
+  sign: 0,
 };
 
 /**
@@ -396,6 +399,47 @@ const TREE = {
   trunkSpread: 0.05,
 };
 
+/**
+ * The post a sign stands on. The plate is not here: it needs a texture of its own and this path
+ * merges by colour, which is exactly the thing a "50" cannot survive.
+ */
+function signPostGeometry(surface: Surface): Part[] {
+  const fp = footprint(surface);
+  const post = new THREE.BoxGeometry(SIGN_POST.side, surface.height, SIGN_POST.side);
+  post.translate(fp.x, surface.height / 2, -fp.y);
+  return [{ geometry: post, group: 'sign' }];
+}
+
+const SIGN_POST = { side: 0.12 };
+
+/** How far the plate stands off the post, so it does not z-fight with it. */
+const PLATE_PROUD = 0.05;
+
+/**
+ * One plate for one sign. Which posts belong to it is `signGroups`' answer, not this file's — the
+ * plan view has to reach the same one, and two renderers each deciding how many signs there are is
+ * the drift `roadSurfaces` exists to rule out.
+ */
+function plateMesh({ face, at, top, facing }: SignGroup): THREE.Mesh {
+  const spec = PLATE[face.type];
+  const cx = at.x;
+  const cy = at.y;
+
+  const geometry = new THREE.PlaneGeometry(spec.width, spec.height);
+  const mesh = new THREE.Mesh(geometry, signMaterial(face));
+  mesh.name = 'sign';
+  // Hung from the top of the post downward, so a taller post raises the plate rather than
+  // stretching it — the same reading as `PLATE.post` in the sim.
+  mesh.position.set(cx, top - spec.height / 2, -cy);
+  // A plane already looks down scene +z, which is world −y: back along the road at a northbound
+  // rider. The other three are quarter turns from there.
+  mesh.rotation.y =
+    facing === 'south' ? 0 : facing === 'north' ? Math.PI : facing === 'east' ? Math.PI / 2 : -Math.PI / 2;
+  mesh.position.x += facing === 'east' ? PLATE_PROUD : facing === 'west' ? -PLATE_PROUD : 0;
+  mesh.position.z += facing === 'south' ? PLATE_PROUD : facing === 'north' ? -PLATE_PROUD : 0;
+  return mesh;
+}
+
 function treeGeometry(surface: Surface): Part[] {
   const fp = footprint(surface);
   const height = surface.height > 0 ? surface.height : TREE.fallbackHeight;
@@ -431,6 +475,7 @@ const DETAILS: Partial<Record<SurfaceKind, (surface: Surface) => Part[]>> = {
   guardrail: guardrailGeometry,
   hectometerPost: hectometerPostGeometry,
   tree: treeGeometry,
+  sign: signPostGeometry,
 };
 
 /** Only what stands up casts; the ground it stands on receives. */
@@ -645,6 +690,8 @@ export function buildWorld(scenario: Scenario): THREE.Group {
   ground.receiveShadow = true;
   world.add(ground);
 
+  // Signs are collected rather than merged: each face is its own texture, keyed by what it says.
+  const signSurfaces: Surface[] = [];
   const byKind = new Map<string, THREE.BufferGeometry[]>();
   const byDetail = new Map<string, THREE.BufferGeometry[]>();
   const push = (group: string, geometry: THREE.BufferGeometry) => {
@@ -653,8 +700,9 @@ export function buildWorld(scenario: Scenario): THREE.Group {
     byKind.set(group, list);
   };
 
-  for (const surface of roadSurfaces(scenario.world, ext)) {
+  for (const surface of roadSurfaces(scenario.world, ext, scenario.speedLimitKmh)) {
     if (surface.kind === 'roof') continue;
+    if (surface.sign) signSurfaces.push(surface);
     // Neighbouring houses alternate render, exactly as they do in plan view. Merging them all
     // into one mesh would throw that away and leave a terrace of identical beige blocks.
     const group =
@@ -697,6 +745,7 @@ export function buildWorld(scenario: Scenario): THREE.Group {
     [HECTOMETER_BAND]: PALETTE.paint,
     tree: PALETTE.tree,
     [TREE_TRUNK]: TRUNK_COLOUR,
+    sign: PALETTE.signPost,
   };
 
   for (const [group, geometries] of byKind) {
@@ -706,6 +755,8 @@ export function buildWorld(scenario: Scenario): THREE.Group {
     mesh.receiveShadow = !mesh.castShadow;
     world.add(mesh);
   }
+
+  for (const group of signGroups(signSurfaces)) world.add(plateMesh(group));
 
   for (const [colour, geometries] of byDetail) {
     const isRoof = colour === ROOF_COLOUR;
