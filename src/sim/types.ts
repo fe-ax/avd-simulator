@@ -297,8 +297,16 @@ export type ExpectedKind =
    * drop in three seconds clear, bank the credit, then close right up.
    */
   | { type: 'headway'; actorId: string; bands: HeadwayBand[] }
-  /** The machine has to move this way once. Missing it is the manoeuvre never happening. */
-  | { type: 'laneChange'; direction: 'left' | 'right' }
+  /**
+   * The machine has to move this way once. Missing it is the manoeuvre never happening.
+   *
+   * With `bands`, *where* it happened is judged too: an ordered list of ranges in metres before the
+   * conflict point, first match winning, anything outside falling through to `missed`. Without
+   * them the rule is the old one and only asks whether it happened at all — which is right for a
+   * merge, where the deadline is the end of the strook and anywhere before it will do, and wrong
+   * for an exit, where taking it late is the fault being taught.
+   */
+  | { type: 'laneChange'; direction: 'left' | 'right'; bands?: LaneChangeBand[] }
   /**
    * A control must have been used within `withinSeconds` before the machine moved that way.
    *
@@ -333,6 +341,19 @@ export interface HeadwayBand {
  * Bands rather than a limit because "how fast should you be going" is rarely one number: on a
  * motorway there is a range that is fine, a range that is untidy, and everything else.
  */
+/**
+ * One rung of a lane-change rule, in metres before the conflict point.
+ *
+ * Same shape as `SpeedBand` and `HeadwayBand`, and deliberately: three rules now say "an ordered
+ * list of ranges to outcomes, first match wins", and one editor draws all three.
+ */
+export interface LaneChangeBand {
+  /** The range, as distance-to-conflict. Negative is past it, as everywhere else. */
+  fromD: number;
+  toD: number;
+  outcome: Outcome | { praise: string };
+}
+
 export interface SpeedBand {
   /** Applies when the held speed is inside this range, in km/h. */
   fromKmh: number;
@@ -590,6 +611,31 @@ export type MotorwayStretch =
       kind: 'doorgaand';
       startY: number;
       endY: number;
+    }
+  | {
+      /**
+       * An exit: through lanes with an uitvoegstrook opening on the right.
+       *
+       * The mirror of `oprit` and it reuses its geometry — `motorwayLanes` already returns a lane
+       * to the right of rijstrook 1 behind a band of blokmarkering, which is what an invoegstrook
+       * is and equally what this is. What differs is where it sits and which way you cross it.
+       *
+       * The conflict point is the **mouth** of the strook rather than its end, which is what lets
+       * the whole reeks be written the way an instructor says it: the checks are so many metres
+       * before the exit begins, and where you enter is a negative window, which is "after".
+       */
+      kind: 'afrit';
+      startY: number;
+      /** y at which the uitvoegstrook opens. The anchor every window is measured from. */
+      strookStartY: number;
+      /** How long it runs before the afrit curves away. */
+      strookLengthM: number;
+      /**
+       * The curve beyond the strook. **Drawn, never ridden**: the ride ends at its mouth, because
+       * a lane is a constant offset from a straight spine and one that bends is machinery for a
+       * stretch of road nobody is scored on. It is there so the exit reads as an exit.
+       */
+      exit: { radius: number; sweepDeg: number };
     };
 
 export interface Scenario {

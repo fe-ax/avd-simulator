@@ -289,6 +289,8 @@ export class SimEngine {
 
   private freshBike(): BikeState {
     const speed = this.scenario.startSpeedKmh * KMH;
+    const startLane = this.routes.kind === 'motorway' ? this.routes.startLaneIndex : 0;
+    const startLaneOffset = this.routes.kind === 'motorway' ? this.routes.laneOffsets[startLane] : 0;
     return {
       s: 0,
       speed,
@@ -300,12 +302,19 @@ export class SimEngine {
       branch: 'approach',
       steerArmed: false,
       speedRamp: null,
-      laneOffset: 0,
-      laneIndex: 0,
-      laneFromOffset: 0,
-      laneTargetOffset: 0,
+      // Where you begin is a property of the road, not always zero: leaving by an exit is the one
+      // case where the strook exists and you start a lane to its left.
+      //
+      // The offset has to be set alongside the index, because the offset is what actually puts the
+      // machine somewhere — set the index alone and the rider rides the whole way down the middle
+      // of a lane they were supposed to move into, which looks like a working scenario until you
+      // ask what is under the wheels.
+      laneOffset: startLaneOffset,
+      laneIndex: startLane,
+      laneFromOffset: startLaneOffset,
+      laneTargetOffset: startLaneOffset,
       laneU: 1,
-      laneChangeFrom: 0,
+      laneChangeFrom: startLane,
       laneChangeStartedAt: 0,
       pose: poseAt(this.routes.turn, 0),
     };

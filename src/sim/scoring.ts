@@ -147,7 +147,32 @@ function scoreExpected(
       return scoreHeadway(expected, kind, record, scenario, samples, windowT, windowD);
     case 'laneChange': {
       const move = record.laneChanges.find((c) => c.direction === kind.direction);
-      return outcomeRow(expected, move !== undefined, windowT, windowD, move?.completedAt ?? null);
+      if (!kind.bands || move === undefined) {
+        // No bands, or no manoeuvre at all: the old question, which is still the right one. A
+        // manoeuvre that never happened cannot have happened in the wrong place.
+        return outcomeRow(expected, move !== undefined, windowT, windowD, move?.completedAt ?? null);
+      }
+
+      // Where it began, not where it finished. The rider commits when they start moving over, and
+      // judging the end would mark a slow, tidy lane change worse than a quick sloppy one.
+      const at = samples.find((s) => s.t >= move.startedAt) ?? samples[samples.length - 1];
+      const band = kind.bands.find((b) => at.d <= b.fromD && at.d >= b.toD);
+      const outcome = band?.outcome;
+      const praise = outcome && 'praise' in outcome ? outcome.praise : null;
+      const fault: Outcome | null = outcome && !('praise' in outcome) ? outcome : null;
+      const where = Math.round(Math.abs(at.d));
+      return {
+        ...base(expected),
+        status: praise ? 'goed' : 'ongewenst',
+        severity: praise ? null : (fault?.severity ?? expected.missed.severity),
+        explanation:
+          (praise ?? fault?.explanation ?? expected.missed.explanation) +
+          (praise ? '' : ` Je ging er ${where} m voorbij het begin ervan in.`),
+        windowT,
+        windowD,
+        actualT: move.startedAt,
+        actualD: at.d,
+      };
     }
     case 'beforeLaneChange': {
       const move = record.laneChanges.find((c) => c.direction === kind.direction);

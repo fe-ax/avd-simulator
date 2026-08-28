@@ -236,9 +236,78 @@ function StretchFields({
   stretch: MotorwayStretch;
   onChange: (next: MotorwayStretch) => void;
 }) {
+  // Which kind of motorway this is, and it is a choice rather than a fact about which scenario you
+  // happened to derive from. Without this the two kinds that existed were reachable only by
+  // starting from the right base, and a third would not have been reachable at all.
+  const kindChoice = (
+    <Choice
+      label="Wat voor stuk"
+      value={stretch.kind}
+      options={[
+        ['doorgaand', 'Open weg'],
+        ['oprit', 'Oprit'],
+        ['afrit', 'Afrit'],
+      ]}
+      onChange={(v) => onChange(v === stretch.kind ? stretch : blankStretch(v as MotorwayStretch['kind']))}
+    />
+  );
+
+  if (stretch.kind === 'afrit') {
+    return (
+      <>
+        {kindChoice}
+        <h4 className="builder-subhead">Afrit</h4>
+        <Num
+          label="Start"
+          unit="m"
+          step={10}
+          value={stretch.startY}
+          onChange={(v) => onChange({ ...stretch, startY: v })}
+        />
+        <Num
+          label="Strook begint"
+          unit="m"
+          step={10}
+          value={stretch.strookStartY}
+          onChange={(v) => onChange({ ...stretch, strookStartY: v })}
+        />
+        <Num
+          label="Strooklengte"
+          unit="m"
+          step={10}
+          value={stretch.strookLengthM}
+          onChange={(v) => onChange({ ...stretch, strookLengthM: Math.max(20, v) })}
+        />
+        <Num
+          label="Boogstraal"
+          unit="m"
+          step={5}
+          value={stretch.exit.radius}
+          onChange={(v) => onChange({ ...stretch, exit: { ...stretch.exit, radius: Math.max(10, v) } })}
+        />
+        <Num
+          label="Boog"
+          unit="°"
+          value={stretch.exit.sweepDeg}
+          onChange={(v) => onChange({ ...stretch, exit: { ...stretch.exit, sweepDeg: v } })}
+        />
+        <p className="builder-note">
+          De uitvoegstrook opent rechts van rijstrook 1, achter blokmarkering. Waar hij begint is
+          het punt waar alle vensters vandaan gemeten worden: de controles staan er zoveel meter
+          vóór, en waar je hem in gaat is een venster erná — dus met een minteken.
+        </p>
+        <p className="builder-note">
+          De bocht erachter wordt wel getekend maar niet gereden: de rit eindigt bij de monding
+          ervan. Hij staat er zodat een afrit er van opzij als een afrit uitziet.
+        </p>
+      </>
+    );
+  }
+
   if (stretch.kind === 'doorgaand') {
     return (
       <>
+        {kindChoice}
         <h4 className="builder-subhead">Doorgaande weg</h4>
         <Num
           label="Start"
@@ -264,6 +333,7 @@ function StretchFields({
 
   return (
     <>
+      {kindChoice}
       <h4 className="builder-subhead">Oprit</h4>
       <Num
         label="Boogstraal"
@@ -435,6 +505,36 @@ const CORNERS: [keyof NonNullable<JunctionRoad['openCorners']>, string][] = [
   ['sw', 'Linksvoor'],
   ['nw', 'Linksachter'],
 ];
+
+/**
+ * A workable road of each kind, for when the author switches between them.
+ *
+ * Switching replaces the stretch rather than merging, because the three share almost no fields —
+ * an oprit's ramp means nothing to an open road. Carrying values across would leave numbers nobody
+ * chose sitting in the export, which is a bug this builder has already had twice.
+ */
+function blankStretch(kind: MotorwayStretch['kind']): MotorwayStretch {
+  switch (kind) {
+    case 'doorgaand':
+      return { kind, startY: 0, endY: 900 };
+    case 'oprit':
+      return {
+        kind,
+        ramp: { radius: 120, sweepDeg: 18, strookStartY: -150 },
+        mergeEndY: 0,
+        taperM: 100,
+        runOutM: 120,
+      };
+    case 'afrit':
+      return {
+        kind,
+        startY: -450,
+        strookStartY: 0,
+        strookLengthM: 300,
+        exit: { radius: 150, sweepDeg: 22 },
+      };
+  }
+}
 
 /** A short list of named alternatives. Segmented rather than a dropdown: there are never many. */
 function Choice({

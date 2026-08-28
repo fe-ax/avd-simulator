@@ -28,7 +28,7 @@ import type {
 } from '../../sim/types';
 import { CONTROLS } from '../controls';
 import { Choice, Num } from './fields';
-import { HeadwayBands, SpeedBands } from './BandEditor';
+import { HeadwayBands, LaneChangeBands, SpeedBands } from './BandEditor';
 
 /** The rule kinds an author can reach for, and a workable starting point for each. */
 const RECIPES: {
@@ -210,7 +210,9 @@ const MEASURES: Record<ExpectedKind['type'], string> = {
   gearAtMost: 'De versnelling op het punt waar het venster eindigt.',
   afterTurn: 'De knop moet binnen zoveel seconden ná de manoeuvre komen.',
   headway: 'De kleinste volgafstand die je een halve seconde lang vasthoudt.',
-  laneChange: 'Of je die kant op één keer van rijstrook wisselt. Geen venster.',
+  laneChange:
+    'Of je die kant op van strook wisselt — en met treden erbij, waar je dat doet. Gemeten op het ' +
+    'moment dat je begint te sturen.',
   beforeLaneChange: 'De knop moet binnen zoveel seconden vóór de strookwissel komen. Geen venster.',
   speedBand: 'De snelheid die je binnen het venster vasthoudt, tegen een reeks bandbreedtes.',
 };
@@ -290,15 +292,21 @@ function KindFields({
       );
     case 'laneChange':
       return (
-        <Choice
-          label="Richting"
-          value={kind.direction}
-          options={[
-            { id: 'left' as const, label: 'Naar links' },
-            { id: 'right' as const, label: 'Naar rechts' },
-          ]}
-          onChange={(v) => onChange({ ...kind, direction: v })}
-        />
+        <>
+          <Choice
+            label="Richting"
+            value={kind.direction}
+            options={[
+              { id: 'left' as const, label: 'Naar links' },
+              { id: 'right' as const, label: 'Naar rechts' },
+            ]}
+            onChange={(v) => onChange({ ...kind, direction: v })}
+          />
+          <LaneChangeBands
+            bands={kind.bands ?? []}
+            onChange={(bands) => onChange({ ...kind, bands: bands.length ? bands : undefined })}
+          />
+        </>
       );
     case 'beforeLaneChange':
       return (
