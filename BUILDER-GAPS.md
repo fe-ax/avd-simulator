@@ -4,14 +4,67 @@ A running list, kept from actually trying to build things with it rather than fr
 That is the whole method: every item here was found by sitting down to build an exercise and being
 unable to, and not one of them was found by reading a file.
 
-**Nothing is open.** The list has emptied twice now — at pull request #14, and again here — and
-both times it refilled because somebody rode a scenario and said it felt wrong, which is the only
-way it ever has. It will refill again the same way. Sit down and make an exercise you have not made
-before, a roundabout or a pedestrian crossing or something at night, and write down what you could
-not do. Reading the code will not produce the next entry.
+The list has emptied twice — at pull request #14 and again at #17 — and refilled both times the
+moment somebody tried to make something new with it. This is the third filling, and the first that
+came from setting out to build a named exercise rather than from riding one that felt wrong.
+
+**The shakedown:** *"you are in rijstrook 1 at 105 behind three lorries doing 90, an exit is coming
+up, rijstrook 2 is clear. Fall in behind them, do the checks, and be in the uitvoegstrook inside its
+first fifth — rather than blasting past all three at 130 and cutting in halfway down."*
+
+**Result: not possible, and it stops early.** Three lorries can be put on a `doorgaand` road and
+that is as far as it goes. There is no exit to aim at and no way to say a lane change belongs in a
+particular stretch of road, which between them are the whole exercise.
 
 Every rule in every shipped scenario is missed by at least one deliberately sloppy rider, and
 `discrimination.test.ts` asserts that with no exceptions list.
+
+---
+
+## Open
+
+### There is no exit
+
+`MotorwayStretch` is `oprit | doorgaand`. An `oprit` is a slip road you join *from*; nothing
+anywhere describes one you leave *by*. So the central object of the exercise — an uitvoegstrook
+opening on the right, which you have to be in and be in early — cannot be placed on any road the
+simulator can build.
+
+The lane geometry is closer than it looks: `motorwayLanes` already returns a lane to the right of
+rijstrook 1 with its blokmarkering band, because that is how the invoegstrook is built. What is
+missing is a stretch that puts one *there*, a route that can reach it, and surfaces that draw it.
+
+### The kind of motorway cannot be changed
+
+Found while looking for somewhere to put the exit, and it is the more general problem. The road
+form has fields for whichever stretch the base happens to be — a `doorgaand` road offers Start and
+Einde, an `oprit` offers the ramp and the strook — and **no control anywhere switches between
+them**. The kind is decided entirely by which scenario you derived from.
+
+So even the two kinds that already exist are only reachable by starting from the right base, and
+adding a third would not by itself make it reachable at all. A `Nieuwe snelweg` starter can never
+become an oprit, and a scenario about an exit would need a shipped scenario about an exit to derive
+from before anybody could build a second one.
+
+### A lane change cannot be told where to happen
+
+`laneChange` asks only whether a change in that direction ever happened. It is handed a window and
+ignores it, and the builder says so in the sentence under the rule: *"Of je die kant op één keer van
+rijstrook wisselt. Geen venster."*
+
+The whole lesson here is *where* — first fifth of the strook good, middle a remark, past halfway a
+fault. None of that is expressible, and the difference between a clean exit and the fault being
+taught is invisible to the scoring.
+
+It wants the shape `speedBand` and `headway` already use: an ordered list of ranges to outcomes,
+first match wins, anything outside falling through to `missed`. `BandEditor` already draws exactly
+that, which is a good sign for it and the reason this is smaller than it sounds.
+
+### Small, found on the way
+
+The **Invoegstrook** width field shows on a `doorgaand` road, which has no invoegstrook. It is a
+real property of `MotorwayRoad` and it does nothing there, so the form offers a number that changes
+nothing on the road in front of you.
 
 ---
 
