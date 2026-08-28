@@ -25,21 +25,16 @@
  * apex of the haaientanden and a metre onto the carriageway. Missing a hazard that only misses you
  * because the other driver saved it is a `kritiek`.
  *
- * **At 87,5 km/h it is a very near miss rather than a collision, and that is a ceiling not a
- * choice.** A car that would actually be on top of a rider who never slows has to start 210 m out,
- * and `FORWARD_VIEW.maxDist` is 130 — so it is not seen until after it has begun braking, which is
- * the trick question this scenario already shipped once. The two are cleanly separated: visible up
- * to a start of 206, colliding from 210. Being unseeable is the worse failure, so it starts at 204
- * and misses by about two metres.
+ * **The whole thing is over before the rider gets there.** He is seen at 3,4 s, brakes at 4,5,
+ * and is standing still across the lane at 7,5 — a second before a rider who never slows reaches
+ * the junction, and five before one who read it. So what you meet is not a car still coming at you
+ * but a car parked where it should have stopped, and the job is to get past it.
  *
- * Getting the overlap back means dropping to roughly 70 km/h, shortening the approach so a fast
- * car is closer when it matters, or re-measuring `maxDist` — which is meant to be a measurement of
- * the rendered scene and may well be conservative. `zicht.test.ts` carries the same note.
- *
- * `zicht.test.ts` holds all of that: the sight line, the collision course, both clearances.
- *
- * Two of those three edits had to be made here rather than in the builder, which had no form field
- * for either — see `BUILDER-GAPS.md`.
+ * That budget is fixed and small. The model rider first looks right at 3,4 s and reaches the
+ * junction at 8,5, and braking from 87,5 km/h at 8 m/s² eats three of those five seconds on its
+ * own — which is why he is seen only a second before he brakes. Wanting a longer approach at this
+ * speed means either a later stop, which is the thing this design is for, or looking right sooner,
+ * which is the reeks.
  */
 
 import type { Scenario } from './types';
@@ -82,7 +77,7 @@ export const autoVanRechts: Scenario = {
       kind: 'auto',
       label: 'Auto van rechts',
       from: {
-        x: 204,
+        x: 150,
         y: 1.5,
       },
       to: {
@@ -93,7 +88,7 @@ export const autoVanRechts: Scenario = {
       length: 4.4,
       cues: [
         {
-          atDist: 162.7,
+          atDist: 108.7,
           action: 'stop',
           decel: 8,
         },
@@ -101,7 +96,7 @@ export const autoVanRechts: Scenario = {
           // Having stopped over the line, he sits there a beat and then backs off it. The pause is
           // the realisation, and it is the only cue here anchored to the clock rather than to the
           // road — there is no distance left for a stopped car to reach.
-          atDist: 197.6,
+          atDist: 143.6,
           action: 'reverse',
           afterSeconds: 1,
         },
