@@ -4,7 +4,7 @@
  * input paths can never drift apart.
  */
 import { steeringIsInert, type SteeringScenario } from '../sim/steering';
-import type { ControlGroup, ControlId } from '../sim/types';
+import type { ControlGroup, ControlId, LookControl } from '../sim/types';
 
 export interface ControlDef {
   id: ControlId;
@@ -42,6 +42,24 @@ const LANE_GROUP_LABELS: Partial<Record<ControlGroup, string>> = {
  * Only the machine's controls live here. Looking is done by looking — see the gaze targets — so
  * there is no key for it, and the briefing must not offer one.
  */
+/**
+ * The six looks, in the order the strip shows them.
+ *
+ * Separate from `CONTROLS` because they are not buttons — you do them with your head, and the HUD
+ * has nothing to press. They belong here anyway: a rule in the reeks editor can be about a look
+ * just as easily as about the richtingaanwijzer, and while this list lived privately inside
+ * `CheckStrip` the editor's control picker offered eleven buttons and not one look. Six of the
+ * Kerkstraat's nine steps are looks, and none of them could be authored.
+ */
+export const LOOKS: { id: LookControl; short: string }[] = [
+  { id: 'EYE_LEFT', short: 'Blik L' },
+  { id: 'MIRROR_LEFT', short: 'Spiegel L' },
+  { id: 'EYE_RIGHT', short: 'Blik R' },
+  { id: 'MIRROR_RIGHT', short: 'Spiegel R' },
+  { id: 'SHOULDER_LEFT', short: 'Schoud. L' },
+  { id: 'SHOULDER_RIGHT', short: 'Schoud. R' },
+];
+
 export const CONTROLS: ControlDef[] = [
   { id: 'INDICATOR_LEFT', label: 'Richting links', short: 'Richting L', group: 'richting', code: 'Digit1', keyHint: '1' },
   { id: 'INDICATOR_OFF', label: 'Richting uit', short: 'Uit', group: 'richting', code: 'Digit2', keyHint: '2' },

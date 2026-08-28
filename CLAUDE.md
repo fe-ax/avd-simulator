@@ -5,7 +5,7 @@ practical exam. It is not a driving game: it exists so a student can rehearse **
 looking and acting in traffic**, and then see afterwards exactly when they looked versus when they
 should have.
 
-Four scenarios:
+Five scenarios:
 
 1. *Rechtsaf de Kerkstraat in* — a right turn across a vrijliggend fietspad, with a snorfiets
    coming up the inside. Teaches the look sequence and the dode hoek.
@@ -20,6 +20,11 @@ Four scenarios:
    truck coming up behind. Teaches speed matching and following distance.
 4. *Inhalen op de A12* — open motorway, two lorries nose to tail at 90, busy left lane. Teaches
    waiting for a gap, and **not** tucking back in between the lorries.
+5. *Uitvoegen op de A12* — three lorries nose to tail at 90, a clear left lane, and an afrit whose
+   uitvoegstrook you are meant to be in inside its first fifth. Teaches that the fast, available,
+   obviously-fun option — past all three at 130, back across, into the strook halfway down — is the
+   fault being taught, and that sitting behind a wall of lorry is the answer. **Built entirely in
+   the scenario builder** and exported unedited, like scenario 2.
 
 The UI is Dutch. Code, comments and commit messages are English.
 
@@ -87,6 +92,8 @@ scenario 3        full reeks        truck first seen at        3.8s   (left mirr
                   no looks at all                             never   (see below)
 
 scenario 4        every column identical: lorries at 0.0s and 4.8s, cars at 3.0s and 6.0s
+
+scenario 5        every column identical: lead lorry 5.2s, the other two 0.0s
 ```
 
 **Perception has no occlusion.** `perception.ts` is purely angular — bearing, distance, a frustum —
@@ -109,6 +116,11 @@ Scenario 4's flat table is not a bug either, and it is a different flatness from
 the same moment whatever you do with your head. What the mirrors change is not *when you see* the
 traffic but *whether you know it is safe to move* — which is why that scenario's proof is the
 incident tests (`ignoreTraffic` puts two cars on the brakes) rather than this table.
+
+Scenario 5 is flat for scenario 4's reason, and its one non-zero number is a measurement rather than
+a knob: the lead lorry starts 160 m ahead, beyond `FORWARD_VIEW.maxDist`, so it enters view at 5,2 s
+because the rider closes on it and not because anybody looked. Its proof is the lane-change bands —
+four tests in `uitvoegen.test.ts` ride it deliberately badly and check which band catches them.
 
 If those move, something about the view changed. That is either the point of your change or a bug;
 know which.

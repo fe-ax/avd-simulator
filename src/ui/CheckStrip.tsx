@@ -6,6 +6,7 @@
  * green while it is still fresh, fading as the information goes off. Nothing here says what to do
  * next; working that out is most of the exercise.
  */
+import { LOOKS } from './controls';
 import type { LookControl } from '../sim/types';
 
 export interface CheckState {
@@ -15,14 +16,8 @@ export interface CheckState {
   freshness: number;
 }
 
-const ORDER: { control: LookControl; label: string }[] = [
-  { control: 'EYE_LEFT', label: 'Blik L' },
-  { control: 'MIRROR_LEFT', label: 'Spiegel L' },
-  { control: 'EYE_RIGHT', label: 'Blik R' },
-  { control: 'MIRROR_RIGHT', label: 'Spiegel R' },
-  { control: 'SHOULDER_LEFT', label: 'Schoud. L' },
-  { control: 'SHOULDER_RIGHT', label: 'Schoud. R' },
-];
+/** One list, in `controls.ts`, so the strip and the reeks editor call a look the same thing. */
+const ORDER = LOOKS.map((l) => ({ control: l.id, label: l.short }));
 
 interface Props {
   states: readonly CheckState[];

@@ -945,8 +945,10 @@ export function driveExit(scenario: Scenario, plan: ExitPlan = {}): RunRecord {
     if (p.neverExit) continue;
 
     // The checks belong before the strook opens, so they are done on the approach rather than in
-    // the two seconds after it does.
-    if (d < 120) {
+    // the two seconds after it does — but not so far before that they have gone stale by the time
+    // the rider moves over. At ninety km/h, ninety metres is about three and a half seconds, which
+    // is inside the window a `beforeLaneChange` rule would reasonably ask for.
+    if (d < 90) {
       once('mirrorR', () => p.mirror && dispatch('MIRROR_RIGHT'));
       once('shoulderR', () => p.shoulder && dispatch('SHOULDER_RIGHT'));
       once('indicatorR', () => p.indicator && dispatch('INDICATOR_RIGHT'));

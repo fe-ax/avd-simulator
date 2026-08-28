@@ -145,6 +145,21 @@ export function Builder({ onExit, onRide }: { onExit: () => void; onRide: (id: s
   // is a courtesy to the drag rather than a necessity.
   useEffect(() => {
     const id = setTimeout(() => {
+      try {
+        analyse();
+      } catch (err) {
+        // A draft that throws is still a draft somebody is holding. `referenceRide` catches its own
+        // failures and reports them as `error`, but everything downstream of it — the sloppy rides,
+        // the sight lines, the road under the ride — can still throw on geometry that is halfway
+        // through being typed. Unguarded, that unmounts the builder and takes the author's work off
+        // the screen. Saying "onrijdbaar" is the same thing this panel says about a scenario the
+        // model rider cannot finish, and it keeps the form and the drag handles alive.
+        setValidation({ ...EMPTY, error: err instanceof Error ? err.message : String(err) });
+      }
+    }, SETTLE_MS);
+    return () => clearTimeout(id);
+
+    function analyse() {
       const { model, reveals, unscored, discrimination, hidden } = analyseScenario(draft);
       const { record, error } = model;
       if (error) {
@@ -183,8 +198,7 @@ export function Builder({ onExit, onRide }: { onExit: () => void; onRide: (id: s
         discrimination,
         hidden,
       });
-    }, SETTLE_MS);
-    return () => clearTimeout(id);
+    }
   }, [draft, routes, base.title, starter]);
 
   useEffect(() => {
