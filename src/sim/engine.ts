@@ -184,6 +184,7 @@ function makeActorState(spec: ActorSpec): ActorState {
     mode: 'cruise',
     cuesFired: 0,
     cueUntil: null,
+    cueDecel: null,
     perceived: false,
     perceivedAt: null,
     emergencyBraked: false,
@@ -629,7 +630,9 @@ export class SimEngine {
 
       switch (actor.mode) {
         case 'braking':
-          actor.speed = Math.max(0, actor.speed - ACTOR_BRAKE * dt);
+          // A cue may ask for harder than the ordinary stop; a conflict never does, because the
+          // director braking for the rider is a driver reacting, not one standing on everything.
+          actor.speed = Math.max(0, actor.speed - (actor.cueDecel ?? ACTOR_BRAKE) * dt);
           if (actor.speed === 0) actor.mode = 'stopped';
           break;
         case 'stopped':
@@ -673,14 +676,17 @@ export class SimEngine {
         switch (cue.action) {
           case 'brake':
             actor.mode = 'braking';
+            actor.cueDecel = cue.decel ?? null;
             actor.cueUntil = cue.forSeconds === undefined ? null : this.t + cue.forSeconds;
             break;
           case 'stop':
             actor.mode = 'braking';
+            actor.cueDecel = cue.decel ?? null;
             actor.cueUntil = Infinity;
             break;
           case 'resume':
             actor.cueUntil = null;
+            actor.cueDecel = null;
             actor.mode = 'resuming';
             break;
         }
@@ -688,6 +694,7 @@ export class SimEngine {
     }
     if (actor.cueUntil !== null && actor.cueUntil !== Infinity && this.t >= actor.cueUntil) {
       actor.cueUntil = null;
+      actor.cueDecel = null;
       if (actor.mode === 'braking' || actor.mode === 'stopped') actor.mode = 'resuming';
     }
   }

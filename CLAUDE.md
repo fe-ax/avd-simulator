@@ -10,9 +10,12 @@ Four scenarios:
 1. *Rechtsaf de Kerkstraat in* — a right turn across a vrijliggend fietspad, with a snorfiets
    coming up the inside. Teaches the look sequence and the dode hoek.
 2. *Auto van rechts remt* — a plain crossroads, straight on, with priority; a car arrives from the
-   right far too fast and stands on its brakes. Teaches that having priority is not the same as
-   being given it. **Built entirely in the scenario builder**, and shipped as its export — the
-   provenance is in the header of `scenario.auto-van-rechts.ts`.
+   right far too fast and stops with its front wheels over the haaientanden. **Without that
+   emergency stop it would hit you** — `zicht.test.ts` takes the cue away and checks the two bodies
+   genuinely overlap — so the rider who reads it and eases off is the only reason it is dull.
+   Teaches that having priority is not the same as being given it. Built in the scenario builder;
+   the provenance and what has been hand-edited since are in the header of
+   `scenario.auto-van-rechts.ts`.
 3. *Invoegen op de A12* — a motorway merge from an on-ramp into a gap between a car ahead and a
    truck coming up behind. Teaches speed matching and following distance.
 4. *Inhalen op de A12* — open motorway, two lorries nose to tail at 90, busy left lane. Teaches
@@ -77,7 +80,7 @@ scenario 1        full reeks        snorfiets first seen at   8.1s   (right mirr
 
 scenario 2        full reeks        car from the right at      3.4s   (through the windscreen)
                   no mirrors                                  3.4s   (mirrors cannot see it)
-                  no looks at all                             7.8s   (as it arrives)
+                  no looks at all                             7.7s   (as it arrives)
 
 scenario 3        full reeks        truck first seen at        3.8s   (left mirror)
                   no mirror                                   never   (see below)
@@ -85,6 +88,16 @@ scenario 3        full reeks        truck first seen at        3.8s   (left mirr
 
 scenario 4        every column identical: lorries at 0.0s and 4.8s, cars at 3.0s and 6.0s
 ```
+
+**Perception has no occlusion.** `perception.ts` is purely angular — bearing, distance, a frustum —
+so a house standing between the rider and an actor is something the screen shows and the model does
+not know about. Nothing in the suite notices, because every check downstream of perception believes
+it. On scenario 2 that gap *was* the exercise: the terraces hid the car until 7,4 s, it started
+braking at 6,5 s, and the model credited the look at 3,4 s. A trick question that measured as a
+clean ride. The junction's `openCorners` is the answer for now — the sight line as scenario data,
+per corner, so opening the one the rider must look into does not flatten the other three — and
+`zicht.test.ts` traces the actual line and fails if the two drift apart again. Real occlusion in
+`perception.ts` would be the proper fix and is a much bigger change.
 
 Scenario 2's flat mirror column is not a bug: the car comes from the right, through the windscreen,
 so no mirror can reach it and the two columns *should* agree. The column that carries the lesson
@@ -255,8 +268,20 @@ commit.
   `HEDGE_GAP = 4.5`). A hedge that looks fine in plan view because the road is painted over it is
   a green wall across the road you are turning into.
 - **Four lamp posts, one per quadrant**, clear of both the fietspad and the side road.
+- **The junction's corners are a kerb radius, not squares.** `KERB_RADIUS` in `surfaces/junction.ts`
+  is tangent to both kerb lines, so the straights stop exactly where the arc meets them. They were
+  four squares out to `CORNER_GAP` with the kerbs simply stopping short, which meant two six-metre
+  roads met in a seventeen-metre paved area with no edge anywhere in it — invisible from the saddle,
+  and a car park from above. A turn still has to have tarmac under it: `findOffRoad` over the
+  *ridden* path, for all three manoeuvres, is what caught the arc being wrong the first time.
 - **The fietspad red stops at the crossing** and blokmarkering takes over, same number of blocks
   on each edge.
+- **Haaientanden go in the lane that is arriving, with the apex pointing outwards.** Both halves of
+  that were wrong from the day the junction was written: the rows sat in the lanes *leaving* the
+  junction, aimed at the traffic with priority. Nothing noticed, because teeth are paint — no test
+  about routes, obstructions or tarmac ever looks at them, and from the saddle a row a metre out of
+  place still reads as a row. `haaientanden.test.ts` derives the correct lane from `junctionLanes`
+  rather than hardcoding a sign, so it stays true if the traffic ever changes sides.
 - **The mirror glass tilt is derived from `EYE_HEIGHT`**, not a constant. See below.
 - **A clean ride scores Geslaagd 0/0/0**, in both scenarios. Anything else means the windows or the
   targets moved, not the rules.
@@ -449,7 +474,11 @@ schouderblik, and says why).
   register; do not add restating comments.
 - **Commit messages are prose**, present tense, explaining the reasoning and stating what was
   measured. Look at `git log` before writing one.
-- Dutch for anything the student reads; English for everything else.
+- Dutch for anything the student reads; English for everything else. **Prose the student reads must
+  come from the scenario or be derived from its world** — never written into a component. The
+  debrief described every window as "vóór het fietspad", on roads that have no fietspad, because
+  one scenario had one when the line was written. `conflictPointName` in `route.ts` lives next to
+  the code that decides where that point is.
 - `src/palette.ts` holds every colour both renderers share.
 - Keep `README.md` (Dutch, written for the student and for a future maintainer) current when
   behaviour changes.

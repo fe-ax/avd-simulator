@@ -131,6 +131,7 @@ export class ReplayPlayer {
       // here: every position and speed on screen came off the recording.
       cuesFired: 0,
       cueUntil: null,
+    cueDecel: null,
       perceived: a.perceived,
       perceivedAt: null,
       emergencyBraked: false,

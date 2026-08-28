@@ -165,6 +165,27 @@ export type ScenarioRoutes =
  * `P(theta) = C + R(cos theta, sin theta)` with theta decreasing, the tangent is
  * `(sin theta, -cos theta)`: heading north at theta = pi, heading east at theta = pi/2.
  */
+/**
+ * What the windows are measured back from, in the student's own words.
+ *
+ * Every window is "so many metres before the conflict point", and the debrief has to name that
+ * point or the number means nothing. It said "vóór het fietspad" everywhere, which is true of the
+ * Kerkstraat and of nothing else: a plain crossroads has no fietspad and a motorway certainly does
+ * not. The name belongs next to the code that decides where the point *is*.
+ */
+export function conflictPointName(world: ScenarioWorld): string {
+  switch (world.kind) {
+    case 'urbanCrossing':
+      return 'het fietspad';
+    case 'junction':
+      return 'het kruispunt';
+    case 'motorway':
+      return world.stretch.kind === 'oprit'
+        ? 'het einde van de invoegstrook'
+        : 'het einde van het traject';
+  }
+}
+
 export function buildRoutes(scenario: Scenario): ScenarioRoutes {
   switch (scenario.world.kind) {
     case 'motorway':

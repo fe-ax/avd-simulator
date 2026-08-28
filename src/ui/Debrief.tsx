@@ -1,4 +1,6 @@
 import type { ActionResult, RunRecord, Severity } from '../sim/types';
+import { conflictPointName } from '../sim/route';
+import { scenarioById } from '../sim/scenarios';
 import { formatTempo } from './RideSettings';
 
 interface Props {
@@ -28,16 +30,34 @@ function formatT(t: number | null): string {
   return t === null ? '—' : `${t.toFixed(1).replace('.', ',')}s`;
 }
 
+/**
+ * A window in metres, as something a student can read.
+ *
+ * Windows are stored as distance-to-go, so a window that ends past the conflict point is negative
+ * — and printing that straight out gave "-15–-45 m vóór het kruispunt", which asks the reader to
+ * work out that minus-before means after. Say "ná" and drop the signs.
+ */
+function formatWindowD([from, to]: [number, number], anchor: string): string {
+  const m = (v: number) => Math.abs(Math.round(v));
+  if (from <= 0 && to <= 0) return `${m(from)}–${m(to)} m ná ${anchor}`;
+  if (from > 0 && to > 0) return `${m(from)}–${m(to)} m vóór ${anchor}`;
+  // Straddles the point: it starts before and ends after, so both halves have to be said.
+  return `${m(from)} m vóór tot ${m(to)} m ná ${anchor}`;
+}
+
 function ResultRow({
   r,
   selected,
   onSelect,
   onSeek,
+  anchorName,
 }: {
   r: ActionResult;
   selected: boolean;
   onSelect: () => void;
   onSeek: (t: number) => void;
+  /** What the window is measured back from. Never empty: a bare "vóór" reads as a typo. */
+  anchorName: string;
 }) {
   return (
     <li className={`result${selected ? ' selected' : ''} sev-${r.severity ?? 'none'}`}>
@@ -58,7 +78,7 @@ function ResultRow({
           {r.windowT && (
             <span>
               verwacht {formatT(r.windowT[0])}–{formatT(r.windowT[1])}
-              {r.windowD ? ` (${Math.round(r.windowD[0])}–${Math.round(r.windowD[1])} m vóór het fietspad)` : ''}
+              {r.windowD ? ` (${formatWindowD(r.windowD, anchorName)})` : ''}
             </span>
           )}
           <span>jij: {formatT(r.actualT)}</span>
@@ -71,6 +91,12 @@ function ResultRow({
 export function Debrief({ record, selectedId, onSelect, onSeek }: Props) {
   const passed = record.verdict === 'geslaagd';
   const good = record.results.filter((r) => r.severity === null);
+  // Resolved from the run's own scenario id, never from whatever is on screen — a debrief can be
+  // reopened long after the session moved on. A run whose scenario has been deleted still has a
+  // debrief worth reading, so it falls back to a name rather than to nothing: the alternative was
+  // dropping the word and printing "60–20 m vóór)", which reads as a bug.
+  const owner = scenarioById(record.scenarioId);
+  const anchorName = owner ? conflictPointName(owner.world) : 'het meetpunt';
 
   return (
     <div className="debrief">
@@ -118,6 +144,7 @@ export function Debrief({ record, selectedId, onSelect, onSeek }: Props) {
                   selected={selectedId === r.expectedId}
                   onSelect={() => onSelect(selectedId === r.expectedId ? null : r.expectedId)}
                   onSeek={onSeek}
+                  anchorName={anchorName}
                 />
               ))}
             </ul>
@@ -138,6 +165,7 @@ export function Debrief({ record, selectedId, onSelect, onSeek }: Props) {
                 selected={selectedId === r.expectedId}
                 onSelect={() => onSelect(selectedId === r.expectedId ? null : r.expectedId)}
                 onSeek={onSeek}
+                anchorName={anchorName}
               />
             ))}
           </ul>

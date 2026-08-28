@@ -146,6 +146,15 @@ export interface ActorCue {
   action: 'brake' | 'stop' | 'resume';
   /** For `brake`: how long to stand on them. Omitted means until stopped. */
   forSeconds?: number;
+  /**
+   * How hard, in m/s². Omitted means the ordinary firm stop every actor makes.
+   *
+   * Scenario data because it is the difference between two exercises. A car that sheds speed at
+   * five is a driver who saw you late; one that sheds it at eight has locked everything up and is
+   * a driver who did not see you at all, and the second is what "veel te hard aan komen rijden"
+   * looks like from the saddle. Roughly 0.8g is what dry tarmac gives you.
+   */
+  decel?: number;
 }
 
 export interface ActorSpec {
@@ -217,6 +226,8 @@ export interface ActorState {
   cuesFired: number;
   /** Set while a timed cue is running; the actor holds that behaviour until then. */
   cueUntil: number | null;
+  /** How hard the cue that is running asked for, in m/s². Null is the ordinary firm stop. */
+  cueDecel: number | null;
   /** True once the actor had to brake hard because the rider took its right of way. */
   emergencyBraked: boolean;
   emergencyBrakedAt: number | null;
@@ -456,6 +467,21 @@ export interface JunctionRoad {
   sideHalfWidth: number;
   /** How far the verge reaches beyond the kerb, before the hedges and the houses. */
   vergeTo: number;
+  /**
+   * How far back the terraces stand at each corner, in metres. Omitted corners stay close-built.
+   *
+   * The sight line, expressed as data — and a teaching decision rather than scenery. Perception is
+   * purely angular: `perception.ts` asks about bearing and distance and knows nothing about
+   * buildings, so a house in the way is something the rider sees and the model does not. That
+   * divergence is invisible until you build an exercise about reading traffic on the side road, at
+   * which point the scenario credits a look the screen makes impossible.
+   *
+   * Per corner rather than one number, because opening all four to fix one sight line turns a
+   * street into a field. Only the quadrant the rider has to look into needs to be open, and on a
+   * crossing where the hazard comes from the right that is `se` — the two terraces the diagonal
+   * from rider to car passes through.
+   */
+  openCorners?: Partial<Record<'ne' | 'nw' | 'se' | 'sw', number>>;
 }
 
 export type RoadLayout = UrbanRoad | MotorwayRoad | JunctionRoad;
