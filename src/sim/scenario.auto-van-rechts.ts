@@ -14,8 +14,18 @@
  * 3,4 s. You were marked on reading a hazard that was behind a house until after it had reacted,
  * and every check in the suite called that a clean ride.
  *
- * So the south-east corner is open now, the car starts further back and stands on everything at
- * 8 m/s² instead of coasting to a halt at 5. `zicht.test.ts` holds the sight line where it is.
+ * So the south-east corner is open now, and the car stands on everything at 8 m/s² instead of
+ * coasting to a halt at 5.
+ *
+ * **And it is aimed at you.** As built it stopped short of the carriageway, so a rider who ignored
+ * it entirely sailed through with room to spare and passed — nothing was ever nearly hit, and the
+ * reason to read the road was theoretical. Its start is now set so that an unbraked car reaches the
+ * crossing point at the exact moment a rider who never slows gets there: take the cue away and the
+ * two bodies overlap. It stops with its nose at x=2,23 — front wheels a good half metre past the
+ * apex of the haaientanden and a metre onto the carriageway — one second after that rider has gone
+ * past. Missing a hazard that only misses you because the other driver saved it is a `kritiek`.
+ *
+ * `zicht.test.ts` holds all of that: the sight line, the collision course, both clearances.
  *
  * Two of those three edits had to be made here rather than in the builder, which had no form field
  * for either — see `BUILDER-GAPS.md`.
@@ -61,7 +71,7 @@ export const autoVanRechts: Scenario = {
       kind: 'auto',
       label: 'Auto van rechts',
       from: {
-        x: 175,
+        x: 173,
         y: 1.5,
       },
       to: {
@@ -72,7 +82,7 @@ export const autoVanRechts: Scenario = {
       length: 4.4,
       cues: [
         {
-          atDist: 146,
+          atDist: 145,
           action: 'stop',
           decel: 8,
         },
@@ -94,8 +104,12 @@ export const autoVanRechts: Scenario = {
       },
       praise: 'Je nam gas terug toen die auto aan kwam. Precies goed: eerst kijken wat hij doet.',
       missed: {
-        severity: 'fout',
-        explanation: 'Je reed onverminderd door terwijl er van rechts een auto veel te hard aan kwam. Je hebt voorrang, maar voorrang krijg je pas als de ander hem geeft — en dat kon je van hier af zien.',
+        severity: 'kritiek',
+        explanation:
+          'Je reed onverminderd door terwijl er van rechts een auto veel te hard aan kwam. Dat het ' +
+          'goed afliep is zíjn verdienste: had hij niet vol op de rem gestaan, dan had hij je ' +
+          'geraakt. Je hebt voorrang, maar voorrang krijg je pas als de ander hem geeft — en dat ' +
+          'kon je van hier af zien aankomen.',
       },
     },
     {

@@ -79,10 +79,83 @@ describe('auto van rechts: de zichtlijn', () => {
     expect((from.speed - to.speed) / 1).toBeGreaterThan(7);
   });
 
-  it('en staat stil vóór de rijbaan, niet erop', () => {
+  it('en komt met zijn voorwielen ruim over de haaientanden tot stilstand', () => {
+    // The teeth run from x=3.6 to their apex at x=3.0, and the carriageway edge is x=3. A car that
+    // stops before them has given way, which is not what this driver does: he arrives far too fast,
+    // stands on everything, and ends up over the line and into the junction. Front axle is roughly
+    // 0,7 m behind the nose.
     const stopped = track.find((a) => a.mode === 'stopped');
     expect(stopped).toBeDefined();
-    // halfWidth is 3, so anything under that is on the carriageway the rider is using.
-    expect(stopped!.x).toBeGreaterThan(4);
+    const nose = stopped!.x - 2.2;
+    const frontAxle = nose + 0.7;
+    expect(frontAxle).toBeLessThan(3.0);
+    // But not so far that he is parked in the wheel track — see the clearance test below.
+    expect(nose).toBeGreaterThan(1.9);
+  });
+});
+
+/**
+ * The point of the exercise: it only ends well because he stopped.
+ *
+ * As first built the car stopped short of the carriageway and a rider who ignored it entirely
+ * sailed through with room to spare and a pass. Nothing was ever nearly hit, so the reason to read
+ * the road was theoretical.
+ */
+describe('auto van rechts: de bijna-aanrijding', () => {
+  const CAR_L = 4.4, CAR_W = 1.8, BIKE_L = 2.3, BIKE_W = 0.8;
+  /** Both bodies are axis-aligned here — one heads north, the other west. */
+  const gap = (bx: number, by: number, ax: number, ay: number) =>
+    Math.max(
+      Math.abs(ax - bx) - (CAR_L / 2 + BIKE_W / 2),
+      Math.abs(ay - by) - (CAR_W / 2 + BIKE_L / 2),
+    );
+
+  const closest = (plan: object) => {
+    const r = referenceRide(autoVanRechts, plan).record;
+    const t = r.actorTracks['weggebruiker-1'];
+    let best = Infinity;
+    for (const s of r.samples) {
+      const a = t.find((x) => x.t >= s.t);
+      if (a) best = Math.min(best, gap(s.x, s.y, a.x, a.y));
+    }
+    return { gap: best, record: r };
+  };
+
+  it('zonder die noodstop had hij de rijder geraakt', () => {
+    // The whole claim, and it has to be checked against a car that never brakes: take the cue away
+    // and the two bodies genuinely overlap. Anything less and "hij had je geraakt" is a story the
+    // briefing tells rather than something the geometry does.
+    const noCue = {
+      ...autoVanRechts,
+      actors: autoVanRechts.actors.map((a) => ({ ...a, cues: undefined })),
+    };
+    const r = referenceRide(noCue, { anticipate: false }).record;
+    const t = r.actorTracks['weggebruiker-1'];
+    let worst = Infinity;
+    for (const s of r.samples) {
+      const a = t.find((x) => x.t >= s.t);
+      if (a) worst = Math.min(worst, gap(s.x, s.y, a.x, a.y));
+    }
+    expect(worst).toBeLessThan(0);
+  });
+
+  it('wie gewoon doorrijdt, scheert er rakelings langs', () => {
+    const { gap: g } = closest({ anticipate: false });
+    expect(g).toBeGreaterThan(0);
+    expect(g).toBeLessThan(4);
+  });
+
+  it('en zakt daarvoor, want alleen zijn rem heeft dat opgelost', () => {
+    const { record: r } = closest({ anticipate: false });
+    expect(r.verdict).toBe('gezakt');
+    expect(r.counts.kritiek).toBe(1);
+  });
+
+  it('wie hem wél leest, komt er langs zonder dat het spannend wordt', () => {
+    const { gap: g, record: r } = closest({});
+    expect(r.verdict).toBe('geslaagd');
+    expect(r.counts).toEqual({ opmerking: 0, fout: 0, kritiek: 0 });
+    // Still has to pick its way past a car stopped over the line, which is the point.
+    expect(g).toBeGreaterThan(0);
   });
 });

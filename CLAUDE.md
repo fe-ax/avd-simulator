@@ -10,9 +10,12 @@ Four scenarios:
 1. *Rechtsaf de Kerkstraat in* — a right turn across a vrijliggend fietspad, with a snorfiets
    coming up the inside. Teaches the look sequence and the dode hoek.
 2. *Auto van rechts remt* — a plain crossroads, straight on, with priority; a car arrives from the
-   right far too fast and stands on its brakes. Teaches that having priority is not the same as
-   being given it. **Built entirely in the scenario builder**, and shipped as its export — the
-   provenance is in the header of `scenario.auto-van-rechts.ts`.
+   right far too fast and stops with its front wheels over the haaientanden. **Without that
+   emergency stop it would hit you** — `zicht.test.ts` takes the cue away and checks the two bodies
+   genuinely overlap — so the rider who reads it and eases off is the only reason it is dull.
+   Teaches that having priority is not the same as being given it. Built in the scenario builder;
+   the provenance and what has been hand-edited since are in the header of
+   `scenario.auto-van-rechts.ts`.
 3. *Invoegen op de A12* — a motorway merge from an on-ramp into a gap between a car ahead and a
    truck coming up behind. Teaches speed matching and following distance.
 4. *Inhalen op de A12* — open motorway, two lorries nose to tail at 90, busy left lane. Teaches
@@ -77,7 +80,7 @@ scenario 1        full reeks        snorfiets first seen at   8.1s   (right mirr
 
 scenario 2        full reeks        car from the right at      3.4s   (through the windscreen)
                   no mirrors                                  3.4s   (mirrors cannot see it)
-                  no looks at all                             7.9s   (as it arrives)
+                  no looks at all                             7.7s   (as it arrives)
 
 scenario 3        full reeks        truck first seen at        3.8s   (left mirror)
                   no mirror                                   never   (see below)
