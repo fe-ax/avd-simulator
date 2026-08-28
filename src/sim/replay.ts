@@ -132,6 +132,8 @@ export class ReplayPlayer {
       cuesFired: 0,
       cueUntil: null,
     cueDecel: null,
+    stoppedAt: null,
+    reverseTo: null,
       perceived: a.perceived,
       perceivedAt: null,
       emergencyBraked: false,

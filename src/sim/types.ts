@@ -141,9 +141,14 @@ export type ActorKind = 'snorfiets' | 'auto' | 'fietser' | 'voetganger' | 'vrach
  * first.
  */
 export interface ActorCue {
-  /** Metres along this actor's own from → to path. */
+  /**
+   * Metres along this actor's own from → to path.
+   *
+   * For `reverse` this is where to come *back* to rather than where to act, since a car that has
+   * stopped is not going to reach any further distance on its own.
+   */
   atDist: number;
-  action: 'brake' | 'stop' | 'resume';
+  action: 'brake' | 'stop' | 'resume' | 'reverse';
   /** For `brake`: how long to stand on them. Omitted means until stopped. */
   forSeconds?: number;
   /**
@@ -155,6 +160,15 @@ export interface ActorCue {
    * looks like from the saddle. Roughly 0.8g is what dry tarmac gives you.
    */
   decel?: number;
+  /**
+   * For `reverse`: how long to sit there first.
+   *
+   * Time rather than distance, and the only cue that is. Everything else here is anchored to the
+   * road so it happens in the same place whether the rider is early or late — but a driver who has
+   * overshot the haaientanden and is about to back off them is reacting to having stopped, and
+   * there is no distance left to anchor to. The pause is the realisation.
+   */
+  afterSeconds?: number;
 }
 
 export interface ActorSpec {
@@ -202,7 +216,7 @@ export interface ActorSpec {
   };
 }
 
-export type ActorMode = 'cruise' | 'braking' | 'stopped' | 'resuming' | 'done';
+export type ActorMode = 'cruise' | 'braking' | 'stopped' | 'reversing' | 'resuming' | 'done';
 
 /** A cue that has fired and is still running. */
 export interface ActiveCue {
@@ -228,6 +242,10 @@ export interface ActorState {
   cueUntil: number | null;
   /** How hard the cue that is running asked for, in m/s². Null is the ordinary firm stop. */
   cueDecel: number | null;
+  /** When this actor came to rest, so a cue can wait a moment before acting on it. */
+  stoppedAt: number | null;
+  /** Where a running `reverse` cue is backing up to, in metres along its own path. */
+  reverseTo: number | null;
   /** True once the actor had to brake hard because the rider took its right of way. */
   emergencyBraked: boolean;
   emergencyBrakedAt: number | null;
