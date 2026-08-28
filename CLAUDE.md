@@ -67,11 +67,9 @@ Git itself pushes over SSH and does not care; this is only `gh`.
 
 **Perception is a consequence of geometry, not a model of it.**
 
-The first version of this project — commit `00f2b76`, the second in this history, top-down only and
-with no `src/scene/` at all — had six hand-authored gaze cones and a `perceived` flag that a button
-press flipped. Every round of tuning
-was an argument about where to put the edge of an abstraction. The blind spot was the gap between
-two numbers.
+An earlier version of this had six hand-authored gaze cones and a `perceived` flag that a button
+press flipped. Every round of tuning was an argument about where to put the edge of an abstraction.
+The blind spot was the gap between two numbers.
 
 Now there is one forward view — the camera's own field — and two mirrors that are real cameras
 rendering real reflections. An actor is perceived when it is genuinely on screen. The dode hoek is
