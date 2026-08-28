@@ -415,21 +415,37 @@ const SIGN_POST = { side: POST.side };
 /** How far the plate stands off the post's centre. The rule lives with the post; see `signs.ts`. */
 const PLATE_PROUD = PLATE_CLEARANCE;
 
+/** How far the sign's back sits behind its face. Enough not to z-fight, small enough to read flat. */
+const BACK_GAP = 0.01;
+
 /**
  * One plate for one sign. Which posts belong to it is `signGroups`' answer, not this file's — the
  * plan view has to reach the same one, and two renderers each deciding how many signs there are is
  * the drift `roadSurfaces` exists to rule out.
  */
-function plateMesh({ face, at, top, facing }: SignGroup): THREE.Mesh {
+function plateMesh({ face, at, top, facing }: SignGroup): THREE.Object3D {
   const spec = PLATE[face.type];
   const cx = at.x;
   const cy = at.y;
 
   const geometry = new THREE.PlaneGeometry(spec.width, spec.height);
   const mesh = new THREE.Mesh(geometry, signMaterial(face));
-  mesh.name = 'sign';
+  // Not 'sign': that is the merged mesh of every post, and one name for both cost two rounds of
+  // confusion when measuring the scene. The posts are the kind; this is the face.
+  mesh.name = 'signFace';
   // Which sign this is, for anything measuring the scene rather than looking at it.
   mesh.userData.sign = face;
+
+  // The back of the sign, in the grey of its own post.
+  //
+  // A plate is one single-sided plane, so from behind you looked straight through it — signs on the
+  // far side of a crossroads, and every sign at all once you had passed it, were holes. Turning the
+  // material double-sided would show the artwork through the back, mirrored: a "Deventer" reading
+  // backwards is worse than a gap. A real sign has an unpainted back, so it gets one.
+  const back = new THREE.Mesh(geometry, material('signBack', PALETTE.signPost));
+  back.name = 'signBack';
+  back.rotation.y = Math.PI;
+  back.position.z = -BACK_GAP;
   // Hung from the top of the post downward, so a taller post raises the plate rather than
   // stretching it — the same reading as `PLATE.post` in the sim.
   mesh.position.set(cx, top - spec.height / 2, -cy);
@@ -439,6 +455,8 @@ function plateMesh({ face, at, top, facing }: SignGroup): THREE.Mesh {
     facing === 'south' ? 0 : facing === 'north' ? Math.PI : facing === 'east' ? Math.PI / 2 : -Math.PI / 2;
   mesh.position.x += facing === 'east' ? PLATE_PROUD : facing === 'west' ? -PLATE_PROUD : 0;
   mesh.position.z += facing === 'south' ? PLATE_PROUD : facing === 'north' ? -PLATE_PROUD : 0;
+  // Parented to the face, so it inherits the aim rather than repeating the four-way rotation.
+  mesh.add(back);
   return mesh;
 }
 
