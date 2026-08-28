@@ -30,6 +30,7 @@ const base: Validation = {
   inheritedFrom: null,
   reveals: [],
   discrimination: [],
+  hidden: [],
 };
 
 const rule = (over: Partial<Validation['discrimination'][number]>) => ({
@@ -137,6 +138,35 @@ describe('wanneer zie je ze', () => {
   it('en zegt het als iemand nooit in beeld komt', () => {
     render(<ValidationPanel {...base} reveals={[reveal({ full: null })]} />);
     expect(screen.getByText(/komt nooit in beeld/)).toBeInTheDocument();
+  });
+});
+
+describe('verkeer achter een huis', () => {
+  it('wordt gemeld, met het verschil tussen model en scherm', () => {
+    render(
+      <ValidationPanel
+        {...base}
+        hidden={[{ actorId: 'a', label: 'Auto van rechts', perceivedAt: 3.4, visibleAt: 7.4 }]}
+      />,
+    );
+    expect(screen.getByText(/achter een huis/)).toBeInTheDocument();
+    expect(screen.getByText(/telt als gezien vanaf 3,4s/)).toBeInTheDocument();
+    expect(screen.getByText(/pas 7,4s echt zichtbaar/)).toBeInTheDocument();
+  });
+
+  it('en zegt het apart als iemand de hele rit onzichtbaar blijft', () => {
+    render(
+      <ValidationPanel
+        {...base}
+        hidden={[{ actorId: 'a', label: 'Auto', perceivedAt: 3.4, visibleAt: null }]}
+      />,
+    );
+    expect(screen.getByText(/de hele rit niet vrij in beeld/)).toBeInTheDocument();
+  });
+
+  it('en zwijgt als er niets achter een huis staat', () => {
+    render(<ValidationPanel {...base} />);
+    expect(screen.queryByText(/achter een huis/)).not.toBeInTheDocument();
   });
 });
 

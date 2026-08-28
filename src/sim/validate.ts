@@ -119,6 +119,104 @@ export function findOffRoad(world: ScenarioWorld, path: readonly Vec2[], extent:
 }
 
 /**
+ * Road users the model says you saw through a building.
+ *
+ * `perception.ts` is purely angular — bearing, distance, a frustum — and knows nothing about
+ * houses. That is deliberate and it is fine for the thing perception is for, but it means the two
+ * halves of the tool can disagree: the model credits a look that the screen makes impossible, and
+ * every check downstream believes the model. *Auto van rechts remt* shipped doing exactly that, and
+ * the exercise was a trick question that measured as a clean ride.
+ *
+ * So this asks the question scoring cannot, and it belongs to validation rather than to perception
+ * for a reason: making perception itself occlude would change what every existing scenario scores.
+ * Telling an author their hazard is behind a house changes nothing and is what they need to know.
+ *
+ * Sampled along the line of sight against the footprints of anything tall enough to hide a car.
+ * Crude, and enough — the gap it looks for is measured in whole seconds.
+ */
+export interface HiddenReveal {
+  actorId: string;
+  label: string;
+  /** When the model says it was first seen. */
+  perceivedAt: number;
+  /** When it was first genuinely in view, or null if a building hid it for the whole ride. */
+  visibleAt: number | null;
+}
+
+/** Anything a car can hide behind. A one-metre hedge does not hide one from a rider 1,6 m up. */
+const HIDES_A_CAR = 2;
+
+/** How long a sight line has to hold before it counts as having come into view. */
+const HOLD_S = 0.5;
+
+function segmentHitsBox(a: Vec2, b: Vec2, box: Vec2[]): boolean {
+  const xs = box.map((p) => p.x);
+  const ys = box.map((p) => p.y);
+  const [x0, x1] = [Math.min(...xs), Math.max(...xs)];
+  const [y0, y1] = [Math.min(...ys), Math.max(...ys)];
+  const steps = 60;
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const x = a.x + (b.x - a.x) * t;
+    const y = a.y + (b.y - a.y) * t;
+    if (x >= x0 && x <= x1 && y >= y0 && y <= y1) return true;
+  }
+  return false;
+}
+
+export function findHiddenReveals(
+  world: ScenarioWorld,
+  record: {
+    samples: readonly { t: number; x: number; y: number }[];
+    actorTracks: Record<string, readonly { t: number; x: number; y: number; perceived: boolean }[]>;
+  },
+  labels: Record<string, string>,
+  extent: RoadExtent,
+  /** Seconds of disagreement worth mentioning. Below this it is sampling noise. */
+  tolerance = 1,
+): HiddenReveal[] {
+  const boxes = roadSurfaces(world, extent)
+    .filter((s) => s.height > HIDES_A_CAR)
+    .map((s) => s.points);
+  const out: HiddenReveal[] = [];
+
+  const clearAt = (t: number, track: readonly { t: number; x: number; y: number }[]) => {
+    const s = record.samples.find((x) => x.t >= t);
+    const a = track.find((x) => x.t >= t);
+    if (!s || !a) return true;
+    return !boxes.some((b) => segmentHitsBox(s, a, b));
+  };
+
+  for (const [id, track] of Object.entries(record.actorTracks)) {
+    const perceived = track.find((a) => a.perceived);
+    if (!perceived) continue;
+
+    // The only question worth asking: at the instant the model credits the look, was there a
+    // building in the way? Anything later is not a disagreement — traffic passes behind houses all
+    // the time once you have seen it, and the Kerkstraat's snorfiets does exactly that on the far
+    // side of the turn, which an earlier version of this reported as a fault.
+    if (clearAt(perceived.t, track)) continue;
+
+    // It was hidden. Find when it stops being, and require it to stay clear rather than flicker
+    // through a gap between two houses.
+    let visibleAt: number | null = null;
+    for (const s of record.samples) {
+      if (s.t <= perceived.t) continue;
+      if (!clearAt(s.t, track)) continue;
+      if (clearAt(s.t + HOLD_S, track)) {
+        visibleAt = s.t;
+        break;
+      }
+    }
+
+    if (visibleAt === null || visibleAt - perceived.t > tolerance) {
+      out.push({ actorId: id, label: labels[id] ?? id, perceivedAt: perceived.t, visibleAt });
+    }
+  }
+  return out;
+}
+
+/**
  * The route's own line, for asking about a road before anyone has ridden it.
  *
  * Careful with this one on a motorway: the route is the *spine*, and after a lane change the

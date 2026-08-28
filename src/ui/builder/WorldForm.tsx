@@ -8,6 +8,7 @@
  * which is the same move that took the mirror tilt out of a hand-picked constant.
  */
 import type {
+  JunctionRoad,
   Manoeuvre,
   MotorwayStretch,
   Scenario,
@@ -345,6 +346,31 @@ function JunctionFields({
         onChange={(v) => setWorld({ ...world, road: { ...world.road, vergeTo: v } })}
       />
 
+      <h4 className="builder-subhead">Zicht op de hoeken</h4>
+      <p className="builder-note">
+        Hoe ver de huizen bij elke hoek terugstaan. Dit is geen aankleding: wat je niet kunt zien,
+        kun je ook niet lezen — en de simulator rekent een blik wél goed, want die kijkt naar
+        richting en afstand en niet naar huizen. Zet de hoek open waar het gevaar vandaan komt.
+      </p>
+      {CORNERS.map(([key, label]) => (
+        <Num
+          key={key}
+          label={label}
+          unit="m"
+          step={5}
+          value={world.road.openCorners?.[key] ?? world.road.vergeTo + 4}
+          onChange={(v) =>
+            setWorld({
+              ...world,
+              road: {
+                ...world.road,
+                openCorners: { ...world.road.openCorners, [key]: Math.max(0, v) },
+              },
+            })
+          }
+        />
+      ))}
+
       <h4 className="builder-subhead">Route</h4>
       <Num
         label="Start"
@@ -395,6 +421,20 @@ function JunctionFields({
     </section>
   );
 }
+
+/**
+ * The four corners, named the way somebody looking at the plan view would name them.
+ *
+ * North is up there and the rider comes from the bottom, so "rechtsvoor" is the corner on their
+ * right as they arrive — which on a crossing where the hazard comes from the right is the one that
+ * has to be open.
+ */
+const CORNERS: [keyof NonNullable<JunctionRoad['openCorners']>, string][] = [
+  ['se', 'Rechtsvoor'],
+  ['ne', 'Rechtsachter'],
+  ['sw', 'Linksvoor'],
+  ['nw', 'Linksachter'],
+];
 
 /** A short list of named alternatives. Segmented rather than a dropdown: there are never many. */
 function Choice({

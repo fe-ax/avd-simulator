@@ -4,38 +4,16 @@ A running list, kept from actually trying to build things with it rather than fr
 That is the whole method: every item here was found by sitting down to build an exercise and being
 unable to, and not one of them was found by reading a file.
 
-The list emptied once, at pull request #14, and refilled the moment somebody rode *Auto van rechts
-remt* and said it felt like a trick question. Fixing that needed two things the builder could not
-express, which is exactly how this is supposed to work: **the list refills by building something
-with it**, not by reading code. Sit down to make an exercise you have not made before — a
-roundabout, a pedestrian crossing, something at night — and write down what you could not do.
+**Nothing is open.** The list has emptied twice now — at pull request #14, and again here — and
+both times it refilled because somebody rode a scenario and said it felt wrong, which is the only
+way it ever has. It will refill again the same way. Sit down and make an exercise you have not made
+before, a roundabout or a pedestrian crossing or something at night, and write down what you could
+not do. Reading the code will not produce the next entry.
 
 Every rule in every shipped scenario is missed by at least one deliberately sloppy rider, and
 `discrimination.test.ts` asserts that with no exceptions list.
 
 ---
-
-## Open
-
-### The sight line cannot be edited
-
-`JunctionRoad.openCorners` decides how far back the terraces stand at each corner, and it is a
-teaching decision rather than scenery: perception is purely angular, so a house between the rider
-and the hazard is something the screen shows and the model does not know about. Get it wrong and
-the exercise credits a look that was impossible — which is what *Auto van rechts remt* shipped
-doing, and what `zicht.test.ts` now guards.
-
-The form has no field for it, so the one number that decides whether a hazard exercise is fair has
-to be typed into a file. It wants a control in `WorldForm`, and the validator ought to say when a
-scenario's traffic is hidden behind a house at the moment its reeks expects a look — which needs
-occlusion, which `perception.ts` does not have.
-
-### A cue cannot be told how hard to brake
-
-`ActorCue.decel` is the difference between a driver who saw you late and one who did not see you at
-all, and 8 m/s² against the default 5 is what "veel te hard aan komen rijden" looks like from the
-saddle. The cue editor offers *Remmen*, *Stoppen*, *Doorrijden* and a duration, and nothing about
-how hard.
 
 ## What this list has taught
 
@@ -72,6 +50,14 @@ They were saying the same thing about the oprit, so the temporal one looked free
 open motorway there is no manoeuvre to wait for, so sitting on the bumper of the lorry you are
 waiting to pass went unmeasured entirely. Removing it left every row on the merge scenario
 identical, which is the proof it had never been doing anything there.
+
+**A model that cannot see what the screen shows will be believed anyway.** Perception is angular
+and knows nothing about buildings, so *Auto van rechts remt* shipped crediting a look at a car four
+seconds before a terrace stopped hiding it — a trick question that measured as a clean ride, and
+that every check downstream of perception agreed with. The fix was not to make perception occlude,
+which would change what every existing scenario scores; it was to let the *validator* ask the
+question and tell the author. A check that changes nothing and says something true beats a change
+to the thing everybody trusts.
 
 **A rule that cannot be failed is more often a missing rider than a bad rule.** Three rules on the
 A12 sat on this list for two rounds under a confident explanation of why they were unfixable — the
