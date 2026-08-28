@@ -503,7 +503,6 @@ export interface UrbanRoad {
   /** Half width of the carriageway; the road runs from -halfWidth to +halfWidth. */
   halfWidth: number;
   laneCenterX: number;
-  kerbTo: number;
   fietspadFrom: number;
   fietspadTo: number;
   vergeTo: number;

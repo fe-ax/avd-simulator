@@ -25,6 +25,16 @@ const HOUSE_HEIGHT = 5.2;
  */
 const KERB_HEIGHT = 0.12;
 
+/**
+ * Width of the trottoirband along the fietspad's inner edge.
+ *
+ * A kerb is a band, not a strip of ground. This used to run the whole way from the carriageway to
+ * the fietspad — a metre and a half of raised paving between a road and a cycle path, which is not
+ * a thing any Dutch street has. What separates a *vrijliggend* fietspad from the rijbaan is berm,
+ * and the band is only the lip that holds the fietspad up. Widen this and you are paving the berm.
+ */
+const KERB_WIDTH = 0.2;
+
 const HEDGE_HEIGHT = 1;
 /** How far back from the side road's centreline a hedge stops, leaving an open corner. */
 const HEDGE_GAP = 4.5;
@@ -122,7 +132,7 @@ function buildings(out: Surface[], road: UrbanRoad, ext: RoadExtent) {
  * them slower.
  */
 export function urbanCrossingSurfaces(road: UrbanRoad, ext: RoadExtent): Surface[] {
-  const { halfWidth, kerbTo, fietspadFrom, fietspadTo, vergeTo, sideHalfWidth } = road;
+  const { halfWidth, fietspadFrom, fietspadTo, vergeTo, sideHalfWidth } = road;
   const out: Surface[] = [];
 
   // Hedges and houses first: everything after them is road, and road wins.
@@ -139,10 +149,14 @@ export function urbanCrossingSurfaces(road: UrbanRoad, ext: RoadExtent): Surface
   }
   buildings(out, road, ext);
 
-  // Kerb strips between carriageway and fietspad, interrupted where the side road crosses.
+  // The trottoirband along the fietspad's inner edge, interrupted where the side road crosses.
+  //
+  // Everything between it and the carriageway is left alone, so the ground shows through as berm —
+  // which is what separates a vrijliggend fietspad from the road it runs beside. This band used to
+  // span that whole gap, putting a metre and a half of raised paving between rijbaan and fietspad.
   for (const sign of [1, -1] as const) {
-    const inner = sign * (halfWidth - SEAM);
-    const outer = sign * (kerbTo + SEAM);
+    const inner = sign * (fietspadFrom - KERB_WIDTH);
+    const outer = sign * (fietspadFrom + SEAM);
     out.push(rect('kerb', inner, ext.minY, outer, -KERB_JUNCTION_GAP, KERB_HEIGHT));
     out.push(rect('kerb', inner, KERB_JUNCTION_GAP, outer, ext.maxY, KERB_HEIGHT));
   }
@@ -163,7 +177,7 @@ export function urbanCrossingSurfaces(road: UrbanRoad, ext: RoadExtent): Surface
         'asphalt',
         sign * (halfWidth - SEAM),
         -KERB_JUNCTION_GAP,
-        sign * (kerbTo + SEAM),
+        sign * (fietspadFrom + SEAM),
         KERB_JUNCTION_GAP,
       ),
     );
