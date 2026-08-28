@@ -16,11 +16,54 @@ const SNORFIETS = {
   brakeLight: '#ff3b30',
 };
 
+
+/**
+ * What a vehicle's surfaces are made of, by colour.
+ *
+ * The bodies were all one flat Lambert, which was the right answer while the world was flat too:
+ * the job was reading *where* a vehicle is, not what model. Now that the street takes light
+ * properly, an unlit box beside a textured kerb is the thing that looks wrong — so paint gets a
+ * sheen, glass gets a hard highlight and goes dark, tyres stay dead matte, and the lamps emit
+ * rather than merely being red.
+ *
+ * Keyed off the palette entries rather than an extra role argument at every call site: the colours
+ * already say what each part is, and threading a second parameter through `slab` and `pair` would
+ * touch every line of every vehicle for something the colour already knows.
+ */
+// Both vehicles share one glass colour; written as the literal because these sets are declared
+// before the palettes that use it, and a `const` cannot be read before it is initialised.
+const GLASS = new Set(['#2f3b47']);
+const TYRE = new Set(['#17171a', '#1b1d21', '#15161a']);
+const LAMP = new Map<string, number>([
+  ['#ff3b30', 2.6],
+  ['#7c1f18', 0.35],
+  ['#f0b429', 1.2],
+]);
+
+function vehicleMaterial(colour: string): THREE.MeshStandardMaterial {
+  const hit = vehicleMaterials.get(colour);
+  if (hit) return hit;
+
+  const emissive = LAMP.get(colour);
+  const material = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(colour),
+    // Glass is smooth and slightly reflective; paint has a clearcoat sheen; rubber and plastic
+    // have none. Metalness stays low on paint — car paint is a dielectric over metal, and taking
+    // it high turns a red car into a red mirror.
+    roughness: GLASS.has(colour) ? 0.08 : TYRE.has(colour) ? 0.95 : 0.38,
+    metalness: GLASS.has(colour) ? 0.2 : TYRE.has(colour) ? 0 : 0.12,
+    ...(emissive === undefined
+      ? {}
+      : { emissive: new THREE.Color(colour), emissiveIntensity: emissive }),
+  });
+  vehicleMaterials.set(colour, material);
+  return material;
+}
+
+const vehicleMaterials = new Map<string, THREE.MeshStandardMaterial>();
+
 function box(w: number, h: number, d: number, colour: string): THREE.Mesh {
-  return new THREE.Mesh(
-    new THREE.BoxGeometry(w, h, d),
-    new THREE.MeshLambertMaterial({ color: new THREE.Color(colour) }),
-  );
+  return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), vehicleMaterial(colour));
 }
 
 /** Modelled facing −z, so `headingToYaw` orients it without further correction. */
@@ -41,7 +84,7 @@ export function createSnorfiets(): THREE.Group {
 
   const helmet = new THREE.Mesh(
     new THREE.SphereGeometry(0.16, 12, 8),
-    new THREE.MeshLambertMaterial({ color: new THREE.Color(SNORFIETS.helmet) }),
+    vehicleMaterial(SNORFIETS.helmet),
   );
   helmet.position.set(0, 1.66, 0.02);
   group.add(helmet);
@@ -165,10 +208,7 @@ function solids() {
         const merged = mergeGeometries(geometries, false);
         geometries.forEach((g) => g.dispose());
         if (!merged) continue;
-        const mesh = new THREE.Mesh(
-          merged,
-          new THREE.MeshLambertMaterial({ color: new THREE.Color(colour) }),
-        );
+        const mesh = new THREE.Mesh(merged, vehicleMaterial(colour));
         mesh.name = name;
         out.push(mesh);
       }
