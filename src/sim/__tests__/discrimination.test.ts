@@ -14,6 +14,7 @@ import { analyseScenario, referenceRide } from '../referenceRide';
 import { autoVanRechts } from '../scenario.auto-van-rechts';
 import { rechtsafFietspad } from '../scenario.rechtsaf-fietspad';
 import { inhalenSnelweg } from '../scenario.inhalen-snelweg';
+import { uitvoegenSnelweg } from '../scenario.uitvoegen-snelweg';
 import { invoegenSnelweg } from '../scenario.invoegen-snelweg';
 import type { Scenario } from '../types';
 
@@ -79,6 +80,7 @@ describe('welke regels vangen iets', () => {
     ['auto-van-rechts-v1', autoVanRechts],
     ['invoegen-snelweg-v1', invoegenSnelweg],
     ['inhalen-snelweg-v1', inhalenSnelweg],
+    ['uitvoegen-snelweg-v1', uitvoegenSnelweg],
   ])('%s: elke regel wordt gemist door een slordige rijder, op de bekende na', (id, s) => {
     const open = analyseScenario(s as Scenario)
       .discrimination.filter((r) => r.failedBy.length === 0)

@@ -26,9 +26,9 @@ import type {
   Manoeuvre,
   Severity,
 } from '../../sim/types';
-import { CONTROLS } from '../controls';
+import { CONTROLS, LOOKS } from '../controls';
 import { Choice, Num } from './fields';
-import { HeadwayBands, SpeedBands } from './BandEditor';
+import { HeadwayBands, LaneChangeBands, SpeedBands } from './BandEditor';
 
 /** The rule kinds an author can reach for, and a workable starting point for each. */
 const RECIPES: {
@@ -210,10 +210,24 @@ const MEASURES: Record<ExpectedKind['type'], string> = {
   gearAtMost: 'De versnelling op het punt waar het venster eindigt.',
   afterTurn: 'De knop moet binnen zoveel seconden ná de manoeuvre komen.',
   headway: 'De kleinste volgafstand die je een halve seconde lang vasthoudt.',
-  laneChange: 'Of je die kant op één keer van rijstrook wisselt. Geen venster.',
+  laneChange:
+    'Of je die kant op van strook wisselt — en met treden erbij, waar je dat doet. Gemeten op het ' +
+    'moment dat je begint te sturen.',
   beforeLaneChange: 'De knop moet binnen zoveel seconden vóór de strookwissel komen. Geen venster.',
   speedBand: 'De snelheid die je binnen het venster vasthoudt, tegen een reeks bandbreedtes.',
 };
+
+/**
+ * Everything a rule can be about: the looks first, then the buttons.
+ *
+ * Looks lead because most reeks steps are looks — six of the Kerkstraat's nine — and because they
+ * were the ones missing. The picker offered the eleven things you press and none of the six you do
+ * with your head, so an exercise about looking could be ridden and not written.
+ */
+const PICKABLE: { id: ControlId; label: string }[] = [
+  ...LOOKS.map((l) => ({ id: l.id as ControlId, label: l.short })),
+  ...CONTROLS.map((c) => ({ id: c.id as ControlId, label: c.short })),
+];
 
 const GROUPS: { id: ExpectedAction['group']; label: string }[] = [
   { id: 'kijken', label: 'Kijken' },
@@ -251,7 +265,7 @@ function KindFields({
         <Choice
           label="Handeling"
           value={kind.control}
-          options={CONTROLS.map((c) => ({ id: c.id as ControlId, label: c.short }))}
+          options={PICKABLE}
           onChange={(v) => onChange({ ...kind, control: v })}
         />
       );
@@ -261,7 +275,7 @@ function KindFields({
           <Choice
             label="Handeling"
             value={kind.control}
-            options={CONTROLS.map((c) => ({ id: c.id as ControlId, label: c.short }))}
+            options={PICKABLE}
             onChange={(v) => onChange({ ...kind, control: v })}
           />
           <Num label="Binnen" unit="s" value={kind.withinSeconds} onChange={(v) => onChange({ ...kind, withinSeconds: v })} />
@@ -290,15 +304,21 @@ function KindFields({
       );
     case 'laneChange':
       return (
-        <Choice
-          label="Richting"
-          value={kind.direction}
-          options={[
-            { id: 'left' as const, label: 'Naar links' },
-            { id: 'right' as const, label: 'Naar rechts' },
-          ]}
-          onChange={(v) => onChange({ ...kind, direction: v })}
-        />
+        <>
+          <Choice
+            label="Richting"
+            value={kind.direction}
+            options={[
+              { id: 'left' as const, label: 'Naar links' },
+              { id: 'right' as const, label: 'Naar rechts' },
+            ]}
+            onChange={(v) => onChange({ ...kind, direction: v })}
+          />
+          <LaneChangeBands
+            bands={kind.bands ?? []}
+            onChange={(bands) => onChange({ ...kind, bands: bands.length ? bands : undefined })}
+          />
+        </>
       );
     case 'beforeLaneChange':
       return (
@@ -306,7 +326,7 @@ function KindFields({
           <Choice
             label="Handeling"
             value={kind.control}
-            options={CONTROLS.map((c) => ({ id: c.id as ControlId, label: c.short }))}
+            options={PICKABLE}
             onChange={(v) => onChange({ ...kind, control: v })}
           />
           <Choice

@@ -4,20 +4,84 @@ A running list, kept from actually trying to build things with it rather than fr
 That is the whole method: every item here was found by sitting down to build an exercise and being
 unable to, and not one of them was found by reading a file.
 
-**Nothing is open.** The list has emptied twice now — at pull request #14, and again here — and
-both times it refilled because somebody rode a scenario and said it felt wrong, which is the only
-way it ever has. It will refill again the same way. Sit down and make an exercise you have not made
-before, a roundabout or a pedestrian crossing or something at night, and write down what you could
-not do. Reading the code will not produce the next entry.
+The list has emptied four times now — at pull requests #14, #17, #18 and #20 — and refilled every
+time somebody tried to make something new with it. The third filling came from setting out to build
+a named exercise rather than from riding one that felt wrong, and it is the one that has paid best:
+the four walls it found were the exit, the stretch-kind switch, the graded lane change and the
+missing look controls, and *Uitvoegen op de A12* now ships having been built through the form.
+
+**The shakedown:** *"you are in rijstrook 1 at 105 behind three lorries doing 90, an exit is coming
+up, rijstrook 2 is clear. Fall in behind them, do the checks, and be in the uitvoegstrook inside its
+first fifth — rather than blasting past all three at 130 and cutting in halfway down."*
+
+**Result: it can now be built end to end**, and was. The exported file went into `src/sim` unedited.
+The *second* half of that build — writing the reeks, rather than the road — found two more, and both
+are closed below.
 
 Every rule in every shipped scenario is missed by at least one deliberately sloppy rider, and
 `discrimination.test.ts` asserts that with no exceptions list.
 
 ---
 
+## Open
+
+**Nothing.** Emptied again by the two items the *second* half of the exit build ran into — and by
+one that turned out not to be a gap at all, which is recorded below because the mistake is more
+useful than the entry was.
+
+### Closed this round
+
+**A failing model rider now says why it failed.** The one that cost the most. The reeks was right,
+the road was right, and the panel said *"je ging van strook zonder dit eerst te controleren"* — the
+sentence written for the **student**. The truth was arithmetic: the model rider's schouderblik
+happened 5,8 s before the lane change and the rule allowed 5. Nothing on the screen carried a number
+that would have said so.
+
+A missed rule now carries a `MissReason` alongside the student's prose, and the builder prints it
+underneath: *"Schouderblik rechts gebeurde wél, op 13,0s, maar de strookwissel was op 17,6s — 4,6s
+ertussen, en deze regel staat 1,0s toe."* Four causes that produce **identical** debriefs are kept
+apart, because their fixes are opposites: a look that was too early is a window to widen or a rider
+to move, a look on the wrong side of the anchor is a reeks in the wrong order, a look that was
+*refused by a prerequisite* is a reeks in the wrong order for a different reason, and a look that
+never happened is none of those. Both anchors are covered — a lane change and a completed manoeuvre
+— and the reason carries which one it hangs off, so the sentence names the right thing. That last
+part is not fussiness: the debrief once described every window as "vóór het fietspad", on roads
+that have no fietspad.
+
+Note which way it was fixed when it fired for real. The obvious repair is to widen the window until
+the model rider passes, and that is how a rule quietly stops catching anybody — so the panel prints
+the gap and the allowance side by side and leaves the author to decide which of the two is wrong.
+
+**The Invoegstrook field is gone from roads that have no strook**, and named for the road it is on:
+*Invoegstrook* on an oprit, *Uitvoegstrook* on an afrit, and absent on a through road. One field on
+`MotorwayRoad`, three meanings, and on a doorgaand stretch it was a number that changed nothing in
+front of you — which teaches an author to distrust the whole form.
+
+### Withdrawn: "a rule can point at nobody and score silently"
+
+Written down after the exit build, where a Volgafstand rule sat with `actorId: ''` and measured
+nothing. A panel was built to report it. It was then deleted before shipping, because the builder
+**already** does this in three places and had all along: the recipe points a new rule at the first
+road user, `removeActor` deletes any rule aimed at one it removes, and the rule's own form says
+*"Deze regel wijst naar een weggebruiker die er niet is"* right beside the chooser that fixes it.
+Building both meant watching two notices appear at the same instant, saying the same thing, one of
+them further from the control that resolves it.
+
+What actually happened during the build is that the rule was created before the lorries existed, and
+the complaint that reached me was the discrimination panel's — *"ook een slordige rijder haalt dit"*
+— because I was reading the validation column and not the rule. The tool was right and the reader
+was in the wrong place.
+
+`findDanglingTargets` survives in `validate.ts` for the question those three do not answer: a
+scenario arriving from a file or from localStorage has never been through the form. A sweep asserts
+no shipped scenario has one, which is worth having — a rule that measures nothing is silent by
+construction and would pass every other check in the suite.
+
+---
+
 ## What this list has taught
 
-Six things worth keeping. What the rest of the closed items taught is in `CLAUDE.md`, next to the
+Eight things worth keeping. What the rest of the closed items taught is in `CLAUDE.md`, next to the
 code it applies to — these are the ones about *finding* the problem rather than about the code that
 had it.
 
@@ -41,8 +105,9 @@ reported its own tail as verge. A blank motorway opened with "de weg houdt op, 3
 **The case nobody has looked at is where the bug is.** That one survived as long as it did because
 every shipped motorway has traffic far enough up the road to stretch the frame past the ride. It
 showed only on the empty starter — the first thing a new author sees and the last thing anybody
-tests. Same shape as the reveal table in `CLAUDE.md` having gone stale for exactly one scenario: the
-interesting case is the one that is not like the others.
+tests. Same shape as the reveal table in `CLAUDE.md` having gone stale for exactly one scenario, and
+the same shape again as a headway rule whose default target is nobody: the interesting case is the
+one that is not like the others.
 
 **Two checks that agree are one check and a trap.** The headway rule had a temporal gate — measure
 only after the manoeuvre — and a lateral one, refuse anything more than half a lane off your line.
@@ -66,3 +131,16 @@ were wrong. The schouderblik rules are about looking *too early*, which nothing 
 needed a weaver that actually fits between the lorries, and `cutInEarly` demanded sixty-five metres
 of clearance to enter a forty-three metre gap, so it cleared both and cut in front instead. Check
 that the mistake is really being made before concluding it cannot be.
+
+**The tool's own error message is written for the wrong reader.** Every sentence in the debrief is
+addressed to a student, and the builder reuses them to tell an *author* why their scenario does not
+work. It reads as a bug in the ride rather than a mismatch in the reeks, and it sends the author
+looking in the wrong place — as it did for most of an afternoon here. An authoring tool needs its
+own register: numbers, not encouragement.
+
+**Re-check an item before you fix it, not only before you write it.** The entry above was true of
+the afternoon it came from and false of the tool by the time anybody read it — the builder had
+covered it in three places, and one of those notices was on the screen at the moment I decided it
+was missing. The habit that keeps this file honest is trying to *reproduce* the gap first, from a
+clean draft, rather than trusting the note. Every wall in this round's list survived that test.
+The one that did not was the one written from memory.

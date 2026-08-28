@@ -156,6 +156,15 @@ export type ScenarioRoutes =
       laneOffsets: number[];
       /** Arc length from which a lane change is allowed: the straight part of the invoegstrook. */
       mergeFromS: number;
+      /**
+       * Which lane the rider starts in, as an index into `laneOffsets`.
+       *
+       * Zero everywhere except an afrit. On an oprit index 0 is the invoegstrook and that is where
+       * you begin; on an open road it is rijstrook 1 and likewise. Leaving by an exit is the one
+       * case where the strook exists and you are *not* in it — you start a lane to its left and
+       * have to move over — so where you begin stopped being derivable from the shape of the road.
+       */
+      startLaneIndex: number;
     });
 
 /**
@@ -180,9 +189,14 @@ export function conflictPointName(world: ScenarioWorld): string {
     case 'junction':
       return 'het kruispunt';
     case 'motorway':
-      return world.stretch.kind === 'oprit'
-        ? 'het einde van de invoegstrook'
-        : 'het einde van het traject';
+      switch (world.stretch.kind) {
+        case 'oprit':
+          return 'het einde van de invoegstrook';
+        case 'afrit':
+          return 'het begin van de uitvoegstrook';
+        case 'doorgaand':
+          return 'het einde van het traject';
+      }
   }
 }
 
@@ -306,6 +320,38 @@ function buildMotorwayRoutes(world: Extract<ScenarioWorld, { kind: 'motorway' }>
       laneOffsets: lanes.centres.map((c) => lanes.centres[0] - c),
       // Change lane whenever you like: it is an open road, not a slip road with a mouth.
       mergeFromS: 0,
+      startLaneIndex: 0,
+    };
+  }
+
+  if (stretch.kind === 'afrit') {
+    const { startY, strookStartY, strookLengthM } = stretch;
+    // The spine runs down the uitvoegstrook, exactly as the oprit's runs down the invoegstrook, so
+    // the lane offsets come out identical and index 0 is the strook in both. Before the mouth the
+    // strook is not there yet, but the spine is only a reference line — the rider is a lane to its
+    // left the whole way until they move over.
+    const spine = makeRoute([
+      {
+        kind: 'line',
+        from: { x: lanes.mergeCentre, y: startY },
+        to: { x: lanes.mergeCentre, y: strookStartY + strookLengthM },
+      },
+    ]);
+    return {
+      kind: 'motorway',
+      turn: spine,
+      straight: spine,
+      decisionS: spine.total + 1,
+      // The mouth, not the end. Every window then reads the way it would be said out loud: the
+      // checks are so many metres before the exit opens, and where you enter it is a window on the
+      // other side of that — which the existing convention already spells as negative.
+      conflictS: findSAtY(spine, strookStartY),
+      runOutM: strookLengthM,
+      laneOffsets: [0, ...lanes.centres.map((c) => lanes.mergeCentre - c)],
+      // Freely: the rider who blasts past has to be able to reach rijstrook 2 long before the exit,
+      // and where they may enter the *strook* is a question for scoring rather than for physics.
+      mergeFromS: 0,
+      startLaneIndex: 1,
     };
   }
 
@@ -346,6 +392,7 @@ function buildMotorwayRoutes(world: Extract<ScenarioWorld, { kind: 'motorway' }>
     // Index 0 is the invoegstrook itself, then each rijstrook further left.
     laneOffsets: [0, ...lanes.centres.map((c) => lanes.mergeCentre - c)],
     mergeFromS: findSAtY(spine, ramp.strookStartY),
+    startLaneIndex: 0,
   };
 }
 

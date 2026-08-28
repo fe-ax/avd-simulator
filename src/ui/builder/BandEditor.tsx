@@ -15,7 +15,7 @@
  * worst band and falls through to the rule's own `missed`; a headway below the last rung does the
  * same. So the editor shows that as a final, unremovable rung rather than letting it be invisible.
  */
-import type { HeadwayBand, Outcome, Severity, SpeedBand } from '../../sim/types';
+import type { HeadwayBand, LaneChangeBand, Outcome, Severity, SpeedBand } from '../../sim/types';
 import { Choice, Num } from './fields';
 
 const SEVERITIES: { id: Severity; label: string }[] = [
@@ -217,6 +217,75 @@ export function HeadwayBands({
             {
               atLeastSeconds: Math.max(0, (bands.at(-1)?.atLeastSeconds ?? 1) - 1),
               outcome: { severity: 'fout', explanation: 'Je zat te dicht erop om nog te kunnen reageren.' },
+            },
+          ])
+        }
+      >
+        + Tree
+      </button>
+    </div>
+  );
+}
+
+export function LaneChangeBands({
+  bands,
+  onChange,
+}: {
+  bands: readonly LaneChangeBand[];
+  onChange: (next: LaneChangeBand[]) => void;
+}) {
+  const patch = (i: number, over: Partial<LaneChangeBand>) =>
+    onChange(bands.map((b, j) => (j === i ? { ...b, ...over } : b)));
+
+  if (bands.length === 0) {
+    return (
+      <div className="builder-bands">
+        <p className="builder-note">
+          Nu telt alleen dát je van strook wisselt, niet waar. Voeg treden toe als het uitmaakt —
+          bij een afrit is dat het hele punt.
+        </p>
+        <button
+          type="button"
+          className="ghost-btn tiny"
+          onClick={() =>
+            onChange([
+              { fromD: 0, toD: -60, outcome: { praise: 'Je voegde meteen uit, aan het begin van de strook.' } },
+            ])
+          }
+        >
+          + Tree
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="builder-bands">
+      <OrderNote />
+      {bands.map((b, i) => (
+        <BandRow key={i} bands={bands} index={i} onChange={onChange}>
+          <Num label="Van" unit="m" step={10} value={b.fromD} onChange={(v) => patch(i, { fromD: v })} />
+          <Num label="tot" unit="m" step={10} value={b.toD} onChange={(v) => patch(i, { toD: v })} />
+        </BandRow>
+      ))}
+      <div className="builder-band-fall">
+        <strong>Anders</strong>
+        <span>valt terug op de uitleg bij gemist, onderaan deze regel.</span>
+      </div>
+      <p className="builder-note">
+        Afstanden zijn meters vóór het meetpunt, dus voorbij dat punt is negatief — bij een afrit is
+        alles hier negatief, want je voegt uit ná het begin van de strook.
+      </p>
+      <button
+        type="button"
+        className="ghost-btn tiny"
+        onClick={() =>
+          onChange([
+            ...bands,
+            {
+              fromD: bands.at(-1)?.toD ?? 0,
+              toD: (bands.at(-1)?.toD ?? 0) - 90,
+              outcome: { severity: 'fout', explanation: 'Je voegde veel te laat uit.' },
             },
           ])
         }

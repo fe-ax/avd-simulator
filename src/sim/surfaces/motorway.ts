@@ -75,6 +75,9 @@ const BERM_TREES = { clearance: 2, depth: 10 };
  * A few degrees of extra arc behind where the route starts, so the rider does not begin on the
  * raw cut end of the tarmac with grass in the mirrors.
  */
+/** How long the uitvoegstrook takes to widen from nothing to full width. */
+const EXIT_LEAD_M = 45;
+
 const RAMP_LEAD_DEG = 7;
 
 /** How finely the arc is chopped into quads. Half a degree is under a metre at these radii. */
@@ -254,6 +257,62 @@ function onRamp(out: Surface[], world: MotorwayWorld, lanes: ReturnType<typeof m
   }
 }
 
+/**
+ * The afrit curving away past the end of the uitvoegstrook.
+ *
+ * **Drawn and never ridden.** The ride ends at the mouth of the curve, because a lane in this
+ * engine is a constant offset from a straight spine and one that bends is machinery for a stretch
+ * of road nobody is scored on. It is here so that an exit reads as an exit from the saddle: without
+ * it the strook simply stops, which looks like a lay-by or a mistake.
+ *
+ * That makes it the one piece of tarmac in the project that is scenery, so it is worth saying
+ * plainly. `findOffRoad` asks about the ridden path and will never reach it — if a future change
+ * puts a rider on it, the route is wrong rather than this.
+ *
+ * Built as an annular sector about the same centre in the same way as `onRamp`, mirrored: the
+ * strook peels off to the *right*, so the centre sits to the right of it and the sweep runs the
+ * other way.
+ */
+function offRamp(out: Surface[], world: MotorwayWorld, lanes: ReturnType<typeof motorwayLanes>) {
+  if (world.stretch.kind !== 'afrit') return;
+  const { strookStartY, strookLengthM, exit } = world.stretch;
+  const half = world.road.mergeLaneWidth / 2;
+  const cx = lanes.mergeCentre + exit.radius;
+  const cy = strookStartY + strookLengthM;
+
+  const at = (angle: number, r: number) => ({
+    x: cx + Math.cos(angle) * r,
+    y: cy + Math.sin(angle) * r,
+  });
+
+  // Starts where the strook ends, heading north, and sweeps away right.
+  //
+  // Both ends sit near pi, and which side of it they fall on is the whole difference between an
+  // exit and a spur pointing back down the carriageway. Going *up* from pi drives sin negative, so
+  // the ramp was drawn 56 m behind where the strook ends — the mirror of `onRamp` in the wrong
+  // axis. Down from pi keeps sin positive: forward, and rightward as cos climbs off −1. The seam
+  // stays above pi so the first quad overlaps the strook rather than meeting it exactly.
+  const from = Math.PI + SEAM / exit.radius;
+  const to = Math.PI - (exit.sweepDeg * Math.PI) / 180;
+  const steps = Math.max(2, Math.ceil(Math.abs(((to - from) * 180) / Math.PI / RAMP_STEP_DEG)));
+
+  for (let i = 0; i < steps; i++) {
+    const a0 = from + ((to - from) * i) / steps;
+    const a1 = from + ((to - from) * (i + 1)) / steps;
+    for (const [kind, rIn, rOut] of [
+      ['asphalt', exit.radius - half, exit.radius + half],
+      ['paint', exit.radius - half - LINE_WIDTH / 2, exit.radius - half + LINE_WIDTH / 2],
+      ['paint', exit.radius + half - LINE_WIDTH / 2, exit.radius + half + LINE_WIDTH / 2],
+    ] as const) {
+      out.push({
+        kind,
+        height: 0,
+        points: [at(a0, rIn), at(a1, rIn), at(a1, rOut), at(a0, rOut)],
+      });
+    }
+  }
+}
+
 export function motorwaySurfaces(world: MotorwayWorld, ext: RoadExtent): Surface[] {
   const road: MotorwayRoad = world.road;
   const lanes = motorwayLanes(road);
@@ -264,6 +323,14 @@ export function motorwaySurfaces(world: MotorwayWorld, ext: RoadExtent): Surface
   guardrail(out, ext, lanes.leftEdgeX);
 
   const entry = world.stretch.kind === 'oprit' ? world.stretch : null;
+  // An exit is the same lane at the other end of its life: it opens rather than runs out, and you
+  // cross into it rather than out of it.
+  const exit = world.stretch.kind === 'afrit' ? world.stretch : null;
+  const exitFrom = exit ? exit.strookStartY : 0;
+  const exitTo = exit ? exit.strookStartY + exit.strookLengthM : 0;
+  // A short wedge so it opens rather than appearing. The scored mouth is `strookStartY`; this is
+  // the widening before it, which is what tells a rider at a distance that a lane is arriving.
+  const exitLeadFrom = exitFrom - EXIT_LEAD_M;
   const mergeEndY = entry ? entry.mergeEndY : ext.minY;
   const taperEnd = entry ? mergeEndY + entry.taperM : ext.minY;
 
@@ -300,6 +367,37 @@ export function motorwaySurfaces(world: MotorwayWorld, ext: RoadExtent): Surface
     ],
   });
   out.push(rect('paint', lanes.rightEdgeX - LINE_WIDTH / 2, taperEnd, lanes.rightEdgeX + LINE_WIDTH / 2, ext.maxY));
+  } else if (exit) {
+    // The wedge that opens it, then the strook at full width to where the afrit curves away.
+    out.push({
+      kind: 'asphalt',
+      height: 0,
+      points: [
+        { x: lanes.rightEdgeX - SEAM, y: exitLeadFrom },
+        { x: lanes.rightEdgeX - SEAM, y: exitFrom },
+        { x: lanes.mergeTo, y: exitFrom },
+      ],
+    });
+    // A seam past the end so the strook and the curve overlap instead of meeting exactly. Without
+    // it the last sample of the ride lands on the boundary and reads as off the road.
+    out.push(rect('asphalt', lanes.rightEdgeX - SEAM, exitFrom, lanes.mergeTo, exitTo + SEAM));
+
+    out.push(rect('paint', lanes.leftEdgeX - LINE_WIDTH / 2, ext.minY, lanes.leftEdgeX + LINE_WIDTH / 2, ext.maxY));
+
+    // The right kantstreep runs along the carriageway, out around the strook, and back again.
+    out.push(rect('paint', lanes.rightEdgeX - LINE_WIDTH / 2, ext.minY, lanes.rightEdgeX + LINE_WIDTH / 2, exitLeadFrom));
+    out.push({
+      kind: 'paint',
+      height: 0,
+      points: [
+        { x: lanes.rightEdgeX - LINE_WIDTH / 2, y: exitLeadFrom },
+        { x: lanes.rightEdgeX + LINE_WIDTH / 2, y: exitLeadFrom },
+        { x: lanes.mergeTo + LINE_WIDTH / 2, y: exitFrom },
+        { x: lanes.mergeTo - LINE_WIDTH / 2, y: exitFrom },
+      ],
+    });
+    out.push(rect('paint', lanes.mergeTo - LINE_WIDTH / 2, exitFrom, lanes.mergeTo + LINE_WIDTH / 2, exitTo));
+    out.push(rect('paint', lanes.rightEdgeX - LINE_WIDTH / 2, exitTo, lanes.rightEdgeX + LINE_WIDTH / 2, ext.maxY));
   } else {
     // Open road: the right-hand kantstreep is simply the edge of the carriageway, all the way.
     out.push(
@@ -322,10 +420,24 @@ export function motorwaySurfaces(world: MotorwayWorld, ext: RoadExtent): Surface
       width: lanes.blockTo - lanes.blockFrom,
     });
   }
+  // The same band on an exit, and it starts where the road starts splitting rather than where the
+  // strook reaches full width. Those are `EXIT_LEAD_M` apart, and in between sat a widening wedge of
+  // bare tarmac with no marking on it at all — which from the saddle reads as a shoulder, not as a
+  // lane you may cross into. The blocks running up the gore are what say otherwise, and they are
+  // what a rider sees first: the band arrives before the lane it belongs to is wide enough to hold
+  // anything.
+  if (exit) {
+    dashedAlongY(out, (lanes.blockFrom + lanes.blockTo) / 2, { ...ext, minY: exitLeadFrom, maxY: exitTo }, {
+      dash: BLOCK.length,
+      gap: BLOCK.gap,
+      width: lanes.blockTo - lanes.blockFrom,
+    });
+  }
 
   onRamp(out, world, lanes);
+  offRamp(out, world, lanes);
 
-  const roadEdgeX = entry ? lanes.mergeTo : lanes.rightEdgeX;
+  const roadEdgeX = entry || exit ? lanes.mergeTo : lanes.rightEdgeX;
   hectometerPosts(out, ext, roadEdgeX + HM_POST.offset);
   treeline(
     out,

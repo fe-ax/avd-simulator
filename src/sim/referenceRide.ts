@@ -16,9 +16,11 @@
  */
 import { buildRoutes } from './route';
 import {
+  driveExit,
   driveMerge,
   driveOvertake,
   driveRun,
+  type ExitPlan,
   type MergePlan,
   type OvertakePlan,
   type RidePlan,
@@ -88,7 +90,7 @@ function crossingPlanFor(scenario: Scenario): RidePlan {
 /** Ride it the way it is meant to be ridden. */
 export function referenceRide(
   scenario: Scenario,
-  override: RidePlan & MergePlan & OvertakePlan = {},
+  override: RidePlan & MergePlan & OvertakePlan & ExitPlan = {},
 ): ReferenceRide {
   try {
     // Which model rider fits is a question about the road, not about the scenario's name: an open
@@ -98,7 +100,9 @@ export function referenceRide(
         ? driveRun(scenario, { ...crossingPlanFor(scenario), ...override })
         : scenario.world.stretch.kind === 'doorgaand'
           ? driveOvertake(scenario, { ...override, cruiseKmh: override.cruiseKmh ?? scenario.startSpeedKmh })
-          : driveMerge(scenario, { ...mergePlanFor(scenario), ...override });
+          : scenario.world.stretch.kind === 'afrit'
+            ? driveExit(scenario, { ...override, cruiseKmh: override.cruiseKmh ?? scenario.startSpeedKmh })
+            : driveMerge(scenario, { ...mergePlanFor(scenario), ...override });
     return { record, error: null };
   } catch (e) {
     return { record: null as unknown as RunRecord, error: e instanceof Error ? e.message : String(e) };
@@ -106,9 +110,9 @@ export function referenceRide(
 }
 
 /** No mirrors, on any road: the two worlds spell the flag differently. */
-const REVEAL_NO_MIRRORS: RidePlan & MergePlan & OvertakePlan = { mirrors: false, mirror: false };
+const REVEAL_NO_MIRRORS: RidePlan & MergePlan & OvertakePlan & ExitPlan = { mirrors: false, mirror: false };
 
-const REVEAL_NO_LOOKS: RidePlan & MergePlan & OvertakePlan = {
+const REVEAL_NO_LOOKS: RidePlan & MergePlan & OvertakePlan & ExitPlan = {
   mirrors: false,
   mirror: false,
   eyes: false,
@@ -123,7 +127,7 @@ const REVEAL_NO_LOOKS: RidePlan & MergePlan & OvertakePlan = {
  * refused by the prerequisite, so they never pull out and never provoke the traffic they were
  * supposed to provoke. The second looks properly and then goes anyway.
  */
-const PROVOKING_RIDES: Array<RidePlan & MergePlan & OvertakePlan> = [
+const PROVOKING_RIDES: Array<RidePlan & MergePlan & OvertakePlan & ExitPlan> = [
   { ...REVEAL_NO_LOOKS, yieldToActor: false },
   { ignoreTraffic: true, yieldToActor: false },
 ];
@@ -153,9 +157,9 @@ export function revealTimeline(scenario: Scenario): Reveal[] {
 /** The three reveal columns, given some way of getting a ride for a plan. */
 function revealsFrom(
   scenario: Scenario,
-  ride: (plan: RidePlan & MergePlan & OvertakePlan) => ReferenceRide,
+  ride: (plan: RidePlan & MergePlan & OvertakePlan & ExitPlan) => ReferenceRide,
 ): Reveal[] {
-  const plans: Array<[keyof Omit<Reveal, 'actorId' | 'label'>, RidePlan & MergePlan & OvertakePlan]> = [
+  const plans: Array<[keyof Omit<Reveal, 'actorId' | 'label'>, RidePlan & MergePlan & OvertakePlan & ExitPlan]> = [
     ['full', {}],
     ['noMirrors', REVEAL_NO_MIRRORS],
     ['noLooks', REVEAL_NO_LOOKS],
@@ -191,7 +195,7 @@ function revealsFrom(
 export function unscoredActors(
   scenario: Scenario,
   record: RunRecord,
-  ride: (plan: RidePlan & MergePlan & OvertakePlan) => ReferenceRide = (plan) =>
+  ride: (plan: RidePlan & MergePlan & OvertakePlan & ExitPlan) => ReferenceRide = (plan) =>
     referenceRide(scenario, plan),
 ): ActorSpec[] {
   const involved = new Set<string>();
@@ -229,7 +233,7 @@ export function unscoredActors(
  */
 interface SloppyRider {
   label: string;
-  plan: RidePlan & MergePlan & OvertakePlan;
+  plan: RidePlan & MergePlan & OvertakePlan & ExitPlan;
 }
 
 /**
@@ -245,6 +249,17 @@ function sloppyRiders(scenario: Scenario): SloppyRider[] {
     // richtingaanwijzer prerequisite refuses the manoeuvre, so the rider never changes lane at all
     // and every rule about how they did it produces no row — the two mistakes mask each other, and
     // the reeks reads as un-missable when it is nothing of the kind. One mistake at a time.
+    if (scenario.world.stretch.kind === 'afrit') {
+      return [
+        { label: 'wie erlangs blaast', plan: { blastPast: true } },
+        { label: 'wie niet uitvoegt', plan: { neverExit: true } },
+        { label: 'wie te laat uitvoegt', plan: { exitAtM: 200 } },
+        { label: 'wie niet in de spiegel kijkt', plan: { mirror: false } },
+        { label: 'wie geen schouderblik doet', plan: { shoulder: false } },
+        { label: 'wie niet aangeeft', plan: { indicator: false } },
+        { label: 'wie niet terugvalt', plan: { holdSpeed: true } },
+      ];
+    }
     return scenario.world.stretch.kind === 'doorgaand'
       ? [
           { label: 'wie niet inhaalt', plan: { neverOvertake: true } },
@@ -313,7 +328,7 @@ export interface RuleDiscrimination {
 function discriminationOf(
   scenario: Scenario,
   model: ReferenceRide,
-  ride: (plan: RidePlan & MergePlan & OvertakePlan) => ReferenceRide,
+  ride: (plan: RidePlan & MergePlan & OvertakePlan & ExitPlan) => ReferenceRide,
 ): RuleDiscrimination[] {
   const missedBy = new Map<string, string[]>(scenario.expected.map((e) => [e.id, []]));
   const testedBy = new Map<string, string[]>(scenario.expected.map((e) => [e.id, []]));
@@ -387,7 +402,7 @@ export interface ScenarioAnalysis {
  */
 export function analyseScenario(scenario: Scenario): ScenarioAnalysis {
   const cache = new Map<string, ReferenceRide>();
-  const ride = (plan: RidePlan & MergePlan & OvertakePlan): ReferenceRide => {
+  const ride = (plan: RidePlan & MergePlan & OvertakePlan & ExitPlan): ReferenceRide => {
     const key = JSON.stringify(plan);
     let hit = cache.get(key);
     if (!hit) {

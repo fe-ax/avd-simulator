@@ -1,10 +1,12 @@
 # AVD Simulator
 
-Vier oefeningen: **Rechtsaf de Kerkstraat in** (afslaan over een vrijliggend fietspad),
+Vijf oefeningen: **Rechtsaf de Kerkstraat in** (afslaan over een vrijliggend fietspad),
 **Auto van rechts remt** (rechtdoor over een kruispunt terwijl er van rechts een auto veel te hard
 aan komt en vol op de rem gaat), **Invoegen op de A12** (van de oprit het gat in tussen een auto
-vóór je en een vrachtwagen achter je) en **Inhalen op de A12** (twee vrachtwagens kort achter
-elkaar, druk op de linkerrijstrook). Je kiest ze in de briefing, vóór elke rit.
+vóór je en een vrachtwagen achter je), **Inhalen op de A12** (twee vrachtwagens kort achter
+elkaar, druk op de linkerrijstrook) en **Uitvoegen op de A12** (drie vrachtwagens op 90 waar je op inloopt, een lege
+linkerrijstrook, en een afrit die je meteen aan het begin op moet). Je kiest ze in de briefing,
+vóór elke rit.
 
 Browser-simulator voor het **AVD-deel** (*Verkeersdeelneming*) van het Nederlandse
 motorrijexamen. Je zit op de motor, kijkt met de muis om je heen, en moet de bediening op het
@@ -18,7 +20,9 @@ neemt zijn scenario mee — anders kijkt de ontvanger naar een lege weg.
 
 Elke oefening heeft zijn eigen reeks: bij *rechtsaf de Kerkstraat in* zijn dat negen stappen,
 waarvan zes kijken; bij *auto van rechts remt* gaat het om twee — op tijd gas terugnemen, en daarna
-weer doorrijden.
+weer doorrijden. Bij *uitvoegen op de A12* zit de les niet in het kijken alleen maar in
+*waar* je uitvoegt: aan het begin van de uitvoegstrook is goed, in de tweede helft is een fout. Er
+staat niets in de weg om er met 130 langs te gaan — en dat is precies wat de oefening afstraft.
 
 ## Draaien
 

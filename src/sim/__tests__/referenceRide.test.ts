@@ -6,6 +6,7 @@ import { describe, expect, test } from 'vitest';
 import { referenceRide, revealTimeline } from '../referenceRide';
 import { rechtsafFietspad } from '../scenario.rechtsaf-fietspad';
 import { invoegenSnelweg } from '../scenario.invoegen-snelweg';
+import { uitvoegenSnelweg } from '../scenario.uitvoegen-snelweg';
 import { findObstructions, findOffRoad, riddenPath } from '../validate';
 import { buildRoutes } from '../route';
 import type { Scenario } from '../types';
@@ -16,6 +17,7 @@ describe('de modelrit', () => {
   test.each([
     ['Rechtsaf de Kerkstraat in', rechtsafFietspad],
     ['Invoegen op de A12', invoegenSnelweg],
+    ['Uitvoegen op de A12', uitvoegenSnelweg],
   ])('%s wordt foutloos gereden', (_label, scenario) => {
     const { record, error } = referenceRide(scenario as Scenario);
     expect(error).toBeNull();

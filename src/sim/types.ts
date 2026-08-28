@@ -297,8 +297,16 @@ export type ExpectedKind =
    * drop in three seconds clear, bank the credit, then close right up.
    */
   | { type: 'headway'; actorId: string; bands: HeadwayBand[] }
-  /** The machine has to move this way once. Missing it is the manoeuvre never happening. */
-  | { type: 'laneChange'; direction: 'left' | 'right' }
+  /**
+   * The machine has to move this way once. Missing it is the manoeuvre never happening.
+   *
+   * With `bands`, *where* it happened is judged too: an ordered list of ranges in metres before the
+   * conflict point, first match winning, anything outside falling through to `missed`. Without
+   * them the rule is the old one and only asks whether it happened at all — which is right for a
+   * merge, where the deadline is the end of the strook and anywhere before it will do, and wrong
+   * for an exit, where taking it late is the fault being taught.
+   */
+  | { type: 'laneChange'; direction: 'left' | 'right'; bands?: LaneChangeBand[] }
   /**
    * A control must have been used within `withinSeconds` before the machine moved that way.
    *
@@ -333,6 +341,19 @@ export interface HeadwayBand {
  * Bands rather than a limit because "how fast should you be going" is rarely one number: on a
  * motorway there is a range that is fine, a range that is untidy, and everything else.
  */
+/**
+ * One rung of a lane-change rule, in metres before the conflict point.
+ *
+ * Same shape as `SpeedBand` and `HeadwayBand`, and deliberately: three rules now say "an ordered
+ * list of ranges to outcomes, first match wins", and one editor draws all three.
+ */
+export interface LaneChangeBand {
+  /** The range, as distance-to-conflict. Negative is past it, as everywhere else. */
+  fromD: number;
+  toD: number;
+  outcome: Outcome | { praise: string };
+}
+
 export interface SpeedBand {
   /** Applies when the held speed is inside this range, in km/h. */
   fromKmh: number;
@@ -412,6 +433,46 @@ export interface UnwantedRule {
 
 export type ResultStatus = 'goed' | 'te vroeg' | 'te laat' | 'gemist' | 'ongewenst';
 
+/**
+ * Why a rule was missed, as facts rather than as the sentence a student reads.
+ *
+ * The debrief's prose is addressed to the rider — *"je ging van strook zonder dit eerst te
+ * controleren"* — and the builder reused it to tell an **author** why their scenario does not work.
+ * It reads as a bug in the ride rather than a mismatch in the reeks, and it sends them looking in
+ * the wrong place: the usual cause is a window that does not reach, not a rider who did not look.
+ * The numbers were always in the record; nothing put them on the screen.
+ *
+ * Optional, and only the builder reads it. A run saved before it existed simply has none, so this
+ * needs no migration in `recorder.ts`.
+ */
+/** What a timed rule hangs off, so a sentence about it can name the right thing. */
+export type MissAnchor = 'laneChange' | 'manoeuvre';
+
+export type MissReason =
+  /** The control was never used at all. The rule is fine; the rider really did not do it. */
+  | { kind: 'neverPressed'; control: ControlId }
+  /**
+   * It *was* done, on the wrong side of the anchor or too far from it. This is the one that reads
+   * as a bug: the author watched the model rider do the thing and be told it did not.
+   *
+   * `anchor` is carried because these rules hang off two different events — a lane change and a
+   * completed manoeuvre — and a sentence that names the wrong one is worse than no sentence. The
+   * debrief already made that mistake once, calling every window "vóór het fietspad" on roads that
+   * have none.
+   */
+  | {
+      kind: 'tooEarly';
+      control: ControlId;
+      pressedAt: number;
+      anchorAt: number;
+      anchor: MissAnchor;
+      allowedS: number;
+    }
+  /** Done, but on the far side of the anchor — which is not a check, it is a glance. */
+  | { kind: 'onTheWrongSide'; control: ControlId; pressedAt: number; anchorAt: number; anchor: MissAnchor }
+  /** Every press was refused by a prerequisite, so none of them could ever have counted. */
+  | { kind: 'refused'; control: ControlId; pressedAt: number };
+
 export interface ActionResult {
   expectedId: string;
   label: string;
@@ -424,6 +485,8 @@ export interface ActionResult {
   windowD: [number, number] | null;
   actualT: number | null;
   actualD: number | null;
+  /** Author-facing: the numbers behind a miss. Never shown to the student. */
+  why?: MissReason;
 }
 
 export type Verdict = 'geslaagd' | 'gezakt';
@@ -590,6 +653,31 @@ export type MotorwayStretch =
       kind: 'doorgaand';
       startY: number;
       endY: number;
+    }
+  | {
+      /**
+       * An exit: through lanes with an uitvoegstrook opening on the right.
+       *
+       * The mirror of `oprit` and it reuses its geometry — `motorwayLanes` already returns a lane
+       * to the right of rijstrook 1 behind a band of blokmarkering, which is what an invoegstrook
+       * is and equally what this is. What differs is where it sits and which way you cross it.
+       *
+       * The conflict point is the **mouth** of the strook rather than its end, which is what lets
+       * the whole reeks be written the way an instructor says it: the checks are so many metres
+       * before the exit begins, and where you enter is a negative window, which is "after".
+       */
+      kind: 'afrit';
+      startY: number;
+      /** y at which the uitvoegstrook opens. The anchor every window is measured from. */
+      strookStartY: number;
+      /** How long it runs before the afrit curves away. */
+      strookLengthM: number;
+      /**
+       * The curve beyond the strook. **Drawn, never ridden**: the ride ends at its mouth, because
+       * a lane is a constant offset from a straight spine and one that bends is machinery for a
+       * stretch of road nobody is scored on. It is there so the exit reads as an exit.
+       */
+      exit: { radius: number; sweepDeg: number };
     };
 
 export interface Scenario {

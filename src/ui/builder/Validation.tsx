@@ -7,7 +7,8 @@
  * Here it is a red panel that appears while you are still holding the thing you moved.
  */
 import type { Obstruction } from '../../sim/validate';
-import type { ActorSpec, Vec2 } from '../../sim/types';
+import type { ActorSpec, MissAnchor, MissReason, Vec2 } from '../../sim/types';
+import { CONTROLS, LOOKS } from '../controls';
 import type { Reveal, RuleDiscrimination } from '../../sim/referenceRide';
 import type { HiddenReveal } from '../../sim/validate';
 import type { RunRecord } from '../../sim/types';
@@ -32,6 +33,56 @@ export interface Validation {
 function seconds(v: number | null): string {
   return v === null ? '—' : `${v.toFixed(1).replace('.', ',')}s`;
 }
+
+// The full labels, not the strip's abbreviations: these end up mid-sentence.
+const CONTROL_NAME = new Map<string, string>([
+  ...LOOKS.map((l) => [l.id as string, l.label] as const),
+  ...CONTROLS.map((c) => [c.id as string, c.label] as const),
+]);
+
+/**
+ * The author's version of a missed rule: the numbers, not the encouragement.
+ *
+ * The debrief sentence beside this one is written for the rider — *"je ging van strook zonder dit
+ * eerst te controleren"* — and for an author it is actively misleading, because the commonest cause
+ * is a window that does not reach rather than a rider who did not look. That mismatch cost most of
+ * an afternoon on *Uitvoegen op de A12*: the model rider did the schouderblik, 5,8 s before moving
+ * over, and a rule that allowed five said it had not.
+ *
+ * Note which way that wants fixing. The obvious repair is to widen the window until the model rider
+ * passes, and that is how a rule quietly stops catching anybody — so this says the gap and the
+ * allowance side by side and lets the author decide which of the two is wrong.
+ */
+function whySentence(why: MissReason): string {
+  const name = 'control' in why ? (CONTROL_NAME.get(why.control) ?? why.control) : '';
+  // The two anchors these rules hang off. Naming the wrong one is worse than saying nothing: the
+  // debrief once called every window "vóór het fietspad", on roads that have no fietspad.
+  const anchorWord = (a: MissAnchor) => (a === 'laneChange' ? 'de strookwissel' : 'de manoeuvre');
+  switch (why.kind) {
+    case 'tooEarly': {
+      const gap = Math.abs(why.anchorAt - why.pressedAt);
+      return (
+        `${name} gebeurde wél, op ${seconds(why.pressedAt)}, maar ${anchorWord(why.anchor)} was op ` +
+        `${seconds(why.anchorAt)} — ${seconds(gap)} ertussen, en deze regel staat ${seconds(
+          why.allowedS,
+        )} toe.`
+      );
+    }
+    case 'onTheWrongSide':
+      return (
+        `${name} gebeurde op ${seconds(why.pressedAt)}, aan de verkeerde kant van ` +
+        `${anchorWord(why.anchor)} op ${seconds(why.anchorAt)}.`
+      );
+    case 'refused':
+      return (
+        `${name} werd op ${seconds(why.pressedAt)} geweigerd door een voorwaarde, dus die druk ` +
+        `kon nooit meetellen. Kijk naar de voorwaarden, niet naar het venster.`
+      );
+    case 'neverPressed':
+      return `${name} is de hele rit niet gebruikt.`;
+  }
+}
+
 
 /**
  * What this row's three numbers actually say — read off them, not asserted at them.
@@ -136,6 +187,7 @@ export function ValidationPanel({
                   <li key={f.expectedId}>
                     <strong>{f.label}</strong>
                     <span>{f.explanation}</span>
+                    {f.why && <span className="builder-why">{whySentence(f.why)}</span>}
                   </li>
                 ))}
               </ul>

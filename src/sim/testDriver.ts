@@ -826,3 +826,151 @@ export function driveOvertake(scenario: Scenario, plan: OvertakePlan = {}): RunR
   const scored = scoreRun(record, scenario);
   return { ...(record as RunRecord), ...scored };
 }
+
+export interface ExitPlan {
+  /** Cruise on the approach, in km/h. The rider arrives faster than the lorries and has to decide. */
+  cruiseKmh?: number;
+  /** What to settle at once tucked in behind them. */
+  followKmh?: number;
+  mirror?: boolean;
+  shoulder?: boolean;
+  indicator?: boolean;
+  /** Metres past the mouth of the strook at which to move over. */
+  exitAtM?: number;
+  /** Never take the exit at all. */
+  neverExit?: boolean;
+  /** Blast past the lorries in rijstrook 2 and cut in late — the fault this exercise is about. */
+  blastPast?: boolean;
+  /** Speed to do it at. */
+  blastKmh?: number;
+  /** Hold the approach speed rather than falling in behind them. */
+  holdSpeed?: boolean;
+}
+
+const EXIT_DEFAULTS: Required<ExitPlan> = {
+  cruiseKmh: 105,
+  followKmh: 90,
+  mirror: true,
+  shoulder: true,
+  indicator: true,
+  exitAtM: 25,
+  neverExit: false,
+  blastPast: false,
+  blastKmh: 130,
+  holdSpeed: false,
+};
+
+/**
+ * Leaving a motorway by an exit.
+ *
+ * The decision this rides is a small one and entirely about patience: three lorries at ninety, an
+ * exit coming up, and a clear lane to the left that would let you past all of them. Taking it means
+ * arriving at the strook having to cross back over, late, which is the fault. Not taking it means
+ * sitting behind a wall of lorry for half a minute, which is dull, correct, and the thing being
+ * taught.
+ */
+export function driveExit(scenario: Scenario, plan: ExitPlan = {}): RunRecord {
+  const p = { ...EXIT_DEFAULTS, ...plan };
+  const engine = new SimEngine(scenario);
+  let record: RunRecord | null = null;
+  engine.arm((r) => {
+    record = r;
+  }, '2026-01-01T12:00:00.000Z');
+
+  const done = new Set<string>();
+  let headHold = 0;
+  let lastSet = -1;
+  let lastSetAt = -99;
+  let outAt = -99;
+
+  const once = (key: string, fn: () => void) => {
+    if (done.has(key)) return;
+    done.add(key);
+    fn();
+  };
+  const dispatch = (control: Parameters<SimEngine['dispatch']>[0], value?: number) => {
+    if (isLookControl(control)) {
+      const aim = LOOK_DIRECTIONS[control];
+      engine.headPose.yaw = (aim.yaw * Math.PI) / 180;
+      engine.headPose.pitch = (aim.pitch * Math.PI) / 180;
+      headHold = GAZE_DURATION_S;
+    }
+    engine.dispatch(control, 'press', isLookControl(control) ? 'gaze' : 'keyboard', value);
+  };
+
+  for (let frame = 0; frame < MAX_FRAMES && record === null; frame++) {
+    engine.advance(DT);
+    if (engine.phase !== 'riding') continue;
+
+    if (headHold > 0) {
+      headHold -= DT;
+      if (headHold <= 0) {
+        engine.headPose.yaw = 0;
+        engine.headPose.pitch = 0;
+      }
+    }
+
+    once('cruise', () => dispatch('SET_SPEED', p.cruiseKmh));
+
+    // `d` counts down to the mouth of the strook and goes negative past it, like every other
+    // window in the project. Positive is still to come.
+    const d = engine.distanceToConflict();
+    const intoStrook = -d;
+
+    if (p.blastPast) {
+      // Out, past the lot at speed, and back in when the exit is already half gone.
+      once('outMirror', () => p.mirror && dispatch('MIRROR_LEFT'));
+      once('outShoulder', () => p.shoulder && dispatch('SHOULDER_LEFT'));
+      once('outIndicator', () => p.indicator && dispatch('INDICATOR_LEFT'));
+      once('out', () => {
+        dispatch('STEER_LEFT');
+        outAt = engine.t;
+      });
+      if (engine.t - outAt > 1) once('outOff', () => dispatch('INDICATOR_OFF'));
+      wantSpeed(p.blastKmh);
+      if (intoStrook > 175) {
+        once('backMirror', () => p.mirror && dispatch('MIRROR_RIGHT'));
+        once('backShoulder', () => p.shoulder && dispatch('SHOULDER_RIGHT'));
+        once('backIndicator', () => p.indicator && dispatch('INDICATOR_RIGHT'));
+        // Two lane changes to get from rijstrook 2 back across rijstrook 1 into the strook.
+        once('back1', () => dispatch('STEER_RIGHT'));
+        if (engine.world(false).bike.laneU >= 1) once('back2', () => dispatch('STEER_RIGHT'));
+      }
+      continue;
+    }
+
+    // Falling in behind them: ease to the lorries' speed rather than closing on their tailgate.
+    wantSpeed(p.holdSpeed ? p.cruiseKmh : gapAheadSeconds(engine) < 2.6 ? p.followKmh : p.cruiseKmh);
+
+    if (p.neverExit) continue;
+
+    // The checks belong before the strook opens, so they are done on the approach rather than in
+    // the two seconds after it does — but not so far before that they have gone stale by the time
+    // the rider moves over. At ninety km/h, ninety metres is about three and a half seconds, which
+    // is inside the window a `beforeLaneChange` rule would reasonably ask for.
+    if (d < 90) {
+      once('mirrorR', () => p.mirror && dispatch('MIRROR_RIGHT'));
+      once('shoulderR', () => p.shoulder && dispatch('SHOULDER_RIGHT'));
+      once('indicatorR', () => p.indicator && dispatch('INDICATOR_RIGHT'));
+    }
+    if (intoStrook >= p.exitAtM) {
+      once('exit', () => {
+        dispatch('STEER_RIGHT');
+        outAt = engine.t;
+      });
+      if (engine.t - outAt > 1.5) once('exitOff', () => dispatch('INDICATOR_OFF'));
+    }
+  }
+
+  function wantSpeed(kmh: number) {
+    if (Math.abs(kmh - lastSet) > 0.5 && engine.t - lastSetAt > 0.5) {
+      lastSet = kmh;
+      lastSetAt = engine.t;
+      dispatch('SET_SPEED', kmh);
+    }
+  }
+
+  if (record === null) throw new Error('rit is niet afgerond binnen de tijd');
+  const scored = scoreRun(record, scenario);
+  return { ...(record as RunRecord), ...scored };
+}
