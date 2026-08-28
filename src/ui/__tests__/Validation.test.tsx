@@ -177,3 +177,83 @@ describe('een onrijdbaar scenario', () => {
     expect(screen.getByText(/sideLaneCenterY/)).toBeInTheDocument();
   });
 });
+
+describe('waarom de modelrit een regel miste', () => {
+  const failing = (why: unknown) =>
+    ({
+      verdict: 'gezakt',
+      counts: { opmerking: 0, fout: 1, kritiek: 0 },
+      faults: [
+        {
+          expectedId: 'r1',
+          label: '2. Schouderblik rechts',
+          explanation: 'Je ging van strook zonder dit eerst te controleren.',
+          why,
+        },
+      ],
+    }) as unknown as RunRecord;
+
+  it('zet de getallen naast de zin die voor de rijder bedoeld is', () => {
+    // The whole point: the student's sentence says the look did not happen, and the author's line
+    // says it did — at 12,4s, against a lane change at 18,2s. Both are on the screen at once.
+    render(
+      <ValidationPanel
+        {...base}
+        record={failing({
+          kind: 'tooEarly',
+          control: 'SHOULDER_RIGHT',
+          pressedAt: 12.4,
+          anchorAt: 18.2,
+          anchor: 'laneChange',
+          allowedS: 5,
+        })}
+      />,
+    );
+    expect(screen.getByText(/Je ging van strook zonder/)).toBeInTheDocument();
+    const why = screen.getByText(/12,4s/);
+    expect(why).toHaveTextContent('18,2s');
+    expect(why).toHaveTextContent('5,0s');
+  });
+
+  it('noemt het anker waar de regel echt aan hangt', () => {
+    // A sentence about "de strookwissel" on a rule that hangs off a completed turn sends the author
+    // looking for a lane change that is not in the exercise. The debrief made this exact mistake
+    // once, describing every window as "vóór het fietspad" on roads that have none.
+    render(
+      <ValidationPanel
+        {...base}
+        record={failing({
+          kind: 'tooEarly',
+          control: 'INDICATOR_OFF',
+          pressedAt: 4,
+          anchorAt: 9,
+          anchor: 'manoeuvre',
+          allowedS: 3,
+        })}
+      />,
+    );
+    const why = screen.getByText(/4,0s/);
+    expect(why).toHaveTextContent('de manoeuvre');
+    expect(why).not.toHaveTextContent('strookwissel');
+  });
+
+  it('en onderscheidt een blik die te vroeg was van een die nooit gebeurde', () => {
+    // These two produce the same debrief and have opposite fixes — one is a window, the other is a
+    // rider. A panel that said the same thing about both would be no better than the sentence it
+    // was added to explain.
+    const { unmount } = render(
+      <ValidationPanel {...base} record={failing({ kind: 'neverPressed', control: 'SHOULDER_RIGHT' })} />,
+    );
+    expect(screen.getByText(/niet gebruikt/)).toBeInTheDocument();
+    expect(screen.queryByText(/staat.*toe/)).not.toBeInTheDocument();
+    unmount();
+
+    render(
+      <ValidationPanel
+        {...base}
+        record={failing({ kind: 'refused', control: 'INDICATOR_RIGHT', pressedAt: 10.2 })}
+      />,
+    );
+    expect(screen.getByText(/geweigerd door een voorwaarde/)).toBeInTheDocument();
+  });
+});

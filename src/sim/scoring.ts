@@ -17,6 +17,8 @@ import type {
   ExpectedAction,
   ExpectedKind,
   HeadwayBand,
+  MissAnchor,
+  MissReason,
   Outcome,
   RunRecord,
   Scenario,
@@ -179,12 +181,22 @@ function scoreExpected(
       // No manoeuvre means nothing to be late for. The missing manoeuvre is its own row, and
       // marking the rider twice for one omission reads as the debrief padding its case.
       if (!move) return null;
-      const press = pressesOf(events, kind.control)
-        .filter((e) => !consumed.has(e))
+      const usable = pressesOf(events, kind.control).filter((e) => !consumed.has(e));
+      const press = usable
         .filter((e) => e.t <= move.startedAt && move.startedAt - e.t <= kind.withinSeconds)
         .pop();
       if (press) consumed.add(press);
-      return outcomeRow(expected, press !== undefined, windowT, windowD, press?.t ?? null);
+      const row = outcomeRow(expected, press !== undefined, windowT, windowD, press?.t ?? null);
+      // Why it missed, for whoever is *writing* this rule rather than being judged by it. The
+      // difference between "you did not look" and "you looked 5,8s before a rule that allows 5"
+      // is the difference between a rider's mistake and an author's, and only one of them is
+      // fixed by riding again. Costs nothing when the rule passes.
+      if (!press) {
+        row.why = missedLook(
+          kind.control, usable, move.startedAt, kind.withinSeconds, events, 'laneChange', 'before',
+        );
+      }
+      return row;
     }
     case 'speedBand':
       return scoreSpeedBand(expected, kind, samples, windowT, windowD);
@@ -331,6 +343,12 @@ function scoreExpected(
       const limit = turnedAt + kind.withinSeconds;
       const wT: [number, number] = [turnedAt, limit];
       if (!done) {
+        // Same silence as `beforeLaneChange`, mirrored: the press may have happened just before
+        // the manoeuvre finished rather than just after, which is a rule to move and not a rider
+        // to correct. Without the number the two are indistinguishable on the screen.
+        const usable = events.filter(
+          (e) => e.control === kind.control && e.phase === 'press' && !consumed.has(e) && !e.rejected,
+        );
         return {
           ...base(expected),
           status: 'gemist',
@@ -340,6 +358,9 @@ function scoreExpected(
           windowD: null,
           actualT: null,
           actualD: null,
+          why: missedLook(
+            kind.control, usable, turnedAt, kind.withinSeconds, events, 'manoeuvre', 'after',
+          ),
         };
       }
       if (done.t <= limit) {
@@ -646,6 +667,34 @@ function scoreHeadway(
 }
 
 /** The plain good/missed row, for rules whose only question is whether it happened. */
+/**
+ * Which of the four ways a look can fail to count actually happened.
+ *
+ * Ordered by what an author most needs to hear. A press that exists but sits outside the window is
+ * first because it is the one that looks like a broken simulator, and a press that was refused by a
+ * prerequisite is separated from never having pressed at all — those two produce identical debriefs
+ * and have opposite fixes.
+ */
+function missedLook(
+  control: ControlId,
+  usable: ControlEvent[],
+  anchorAt: number,
+  allowedS: number,
+  all: ControlEvent[],
+  anchor: MissAnchor,
+  /** Which side of the anchor the rule wants the press on. */
+  wants: 'before' | 'after',
+): MissReason {
+  const wanted = wants === 'before' ? (e: ControlEvent) => e.t <= anchorAt : (e: ControlEvent) => e.t >= anchorAt;
+  const right = usable.filter(wanted).pop();
+  if (right) return { kind: 'tooEarly', control, pressedAt: right.t, anchorAt, anchor, allowedS };
+  const wrong = usable.find((e) => !wanted(e));
+  if (wrong) return { kind: 'onTheWrongSide', control, pressedAt: wrong.t, anchorAt, anchor };
+  const refused = all.find((e) => e.control === control && e.rejected && e.phase !== 'up');
+  if (refused) return { kind: 'refused', control, pressedAt: refused.t };
+  return { kind: 'neverPressed', control };
+}
+
 function outcomeRow(
   expected: ExpectedAction,
   ok: boolean,

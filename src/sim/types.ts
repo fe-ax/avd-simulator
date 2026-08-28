@@ -433,6 +433,46 @@ export interface UnwantedRule {
 
 export type ResultStatus = 'goed' | 'te vroeg' | 'te laat' | 'gemist' | 'ongewenst';
 
+/**
+ * Why a rule was missed, as facts rather than as the sentence a student reads.
+ *
+ * The debrief's prose is addressed to the rider — *"je ging van strook zonder dit eerst te
+ * controleren"* — and the builder reused it to tell an **author** why their scenario does not work.
+ * It reads as a bug in the ride rather than a mismatch in the reeks, and it sends them looking in
+ * the wrong place: the usual cause is a window that does not reach, not a rider who did not look.
+ * The numbers were always in the record; nothing put them on the screen.
+ *
+ * Optional, and only the builder reads it. A run saved before it existed simply has none, so this
+ * needs no migration in `recorder.ts`.
+ */
+/** What a timed rule hangs off, so a sentence about it can name the right thing. */
+export type MissAnchor = 'laneChange' | 'manoeuvre';
+
+export type MissReason =
+  /** The control was never used at all. The rule is fine; the rider really did not do it. */
+  | { kind: 'neverPressed'; control: ControlId }
+  /**
+   * It *was* done, on the wrong side of the anchor or too far from it. This is the one that reads
+   * as a bug: the author watched the model rider do the thing and be told it did not.
+   *
+   * `anchor` is carried because these rules hang off two different events — a lane change and a
+   * completed manoeuvre — and a sentence that names the wrong one is worse than no sentence. The
+   * debrief already made that mistake once, calling every window "vóór het fietspad" on roads that
+   * have none.
+   */
+  | {
+      kind: 'tooEarly';
+      control: ControlId;
+      pressedAt: number;
+      anchorAt: number;
+      anchor: MissAnchor;
+      allowedS: number;
+    }
+  /** Done, but on the far side of the anchor — which is not a check, it is a glance. */
+  | { kind: 'onTheWrongSide'; control: ControlId; pressedAt: number; anchorAt: number; anchor: MissAnchor }
+  /** Every press was refused by a prerequisite, so none of them could ever have counted. */
+  | { kind: 'refused'; control: ControlId; pressedAt: number };
+
 export interface ActionResult {
   expectedId: string;
   label: string;
@@ -445,6 +485,8 @@ export interface ActionResult {
   windowD: [number, number] | null;
   actualT: number | null;
   actualD: number | null;
+  /** Author-facing: the numbers behind a miss. Never shown to the student. */
+  why?: MissReason;
 }
 
 export type Verdict = 'geslaagd' | 'gezakt';

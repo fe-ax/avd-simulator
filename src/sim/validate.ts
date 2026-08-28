@@ -237,3 +237,36 @@ export function routePath(routes: ScenarioRoutes, step = 2): Vec2[] {
 export function riddenPath(samples: readonly { x: number; y: number }[]): Vec2[] {
   return samples.map((s) => ({ x: s.x, y: s.y }));
 }
+
+/** A rule that names a road user the scenario does not have. */
+export interface DanglingTarget {
+  expectedId: string;
+  label: string;
+  /** What it points at. Empty when the rule was never given a target at all. */
+  actorId: string;
+}
+
+/**
+ * Rules aimed at nobody.
+ *
+ * A `headway` rule arrives from the recipe with `actorId: ''`, and `scoreHeadway` answers a rule
+ * about a road user who does not exist with **no row at all** — which is the right answer to "how
+ * close did you get to nobody" and the wrong thing to show an author. The exercise quietly has one
+ * fewer rule than it appears to, and everything downstream agrees: it is not missed, not failed,
+ * not soft. It is absent.
+ *
+ * Deliberately asked as "does this id resolve" rather than "is this id empty", because the same
+ * silence arrives the other way round: point a rule at a road user, then delete the road user. The
+ * default is only the most common way to end up here, not the only one.
+ */
+export function findDanglingTargets(scenario: Scenario): DanglingTarget[] {
+  const known = new Set(scenario.actors.map((a) => a.id));
+  const out: DanglingTarget[] = [];
+  for (const e of scenario.expected) {
+    if (!('actorId' in e.kind)) continue;
+    const actorId = e.kind.actorId;
+    if (known.has(actorId)) continue;
+    out.push({ expectedId: e.id, label: e.label, actorId });
+  }
+  return out;
+}

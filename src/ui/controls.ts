@@ -51,13 +51,18 @@ const LANE_GROUP_LABELS: Partial<Record<ControlGroup, string>> = {
  * `CheckStrip` the editor's control picker offered eleven buttons and not one look. Six of the
  * Kerkstraat's nine steps are looks, and none of them could be authored.
  */
-export const LOOKS: { id: LookControl; short: string }[] = [
-  { id: 'EYE_LEFT', short: 'Blik L' },
-  { id: 'MIRROR_LEFT', short: 'Spiegel L' },
-  { id: 'EYE_RIGHT', short: 'Blik R' },
-  { id: 'MIRROR_RIGHT', short: 'Spiegel R' },
-  { id: 'SHOULDER_LEFT', short: 'Schoud. L' },
-  { id: 'SHOULDER_RIGHT', short: 'Schoud. R' },
+/**
+ * `short` is for the strip and the picker, where six of these sit in a row and the space is a
+ * button. `label` is for anything that puts one in a sentence — "Schoud. R gebeurde wél, op 13,0s"
+ * reads as a truncation bug rather than as prose, and the builder now writes exactly that sentence.
+ */
+export const LOOKS: { id: LookControl; short: string; label: string }[] = [
+  { id: 'EYE_LEFT', short: 'Blik L', label: 'Blik links' },
+  { id: 'MIRROR_LEFT', short: 'Spiegel L', label: 'Spiegel links' },
+  { id: 'EYE_RIGHT', short: 'Blik R', label: 'Blik rechts' },
+  { id: 'MIRROR_RIGHT', short: 'Spiegel R', label: 'Spiegel rechts' },
+  { id: 'SHOULDER_LEFT', short: 'Schoud. L', label: 'Schouderblik links' },
+  { id: 'SHOULDER_RIGHT', short: 'Schoud. R', label: 'Schouderblik rechts' },
 ];
 
 export const CONTROLS: ControlDef[] = [

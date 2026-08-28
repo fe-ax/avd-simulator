@@ -203,12 +203,22 @@ export function WorldForm({ draft, onChange }: Props) {
             value={world.road.laneWidth}
             onChange={(v) => setWorld({ ...world, road: { ...world.road, laneWidth: v } })}
           />
-          <Num
-            label="Invoegstrook"
-            unit="m"
-            value={world.road.mergeLaneWidth}
-            onChange={(v) => setWorld({ ...world, road: { ...world.road, mergeLaneWidth: v } })}
-          />
+          {/*
+            Only where there is a strook to widen. It is one field on `MotorwayRoad` and it draws
+            the lane right of rijstrook 1 — the invoegstrook on an oprit, the uitvoegstrook on an
+            afrit, and nothing at all on a through road. Offering the number there is offering a
+            control that changes nothing in front of you, which teaches an author to distrust the
+            whole form. The label follows the road for the same reason: on an afrit "Invoegstrook"
+            names the opposite manoeuvre.
+          */}
+          {world.stretch.kind !== 'doorgaand' && (
+            <Num
+              label={world.stretch.kind === 'afrit' ? 'Uitvoegstrook' : 'Invoegstrook'}
+              unit="m"
+              value={world.road.mergeLaneWidth}
+              onChange={(v) => setWorld({ ...world, road: { ...world.road, mergeLaneWidth: v } })}
+            />
+          )}
           <Num
             label="Berm"
             unit="m"
