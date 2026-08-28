@@ -79,7 +79,6 @@ export const rechtsafFietspad: Scenario = {
     road: {
       halfWidth: 3,
       laneCenterX: 1.5,
-      kerbTo: 4.5,
       fietspadFrom: 4.5,
       fietspadTo: 6.5,
       vergeTo: 11,

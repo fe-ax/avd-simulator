@@ -16,7 +16,7 @@ import {
   type Surface,
   type SurfaceKind,
 } from '../sim/roadSurfaces';
-import { PLATE, signGroups, type SignGroup } from '../sim/surfaces/signs';
+import { PLATE, PLATE_CLEARANCE, POST, signGroups, type SignGroup } from '../sim/surfaces/signs';
 import { signMaterial } from './signFaces';
 import { buildRoutes, poseAt } from '../sim/route';
 import type { Scenario } from '../sim/types';
@@ -410,10 +410,10 @@ function signPostGeometry(surface: Surface): Part[] {
   return [{ geometry: post, group: 'sign' }];
 }
 
-const SIGN_POST = { side: 0.12 };
+const SIGN_POST = { side: POST.side };
 
-/** How far the plate stands off the post, so it does not z-fight with it. */
-const PLATE_PROUD = 0.05;
+/** How far the plate stands off the post's centre. The rule lives with the post; see `signs.ts`. */
+const PLATE_PROUD = PLATE_CLEARANCE;
 
 /**
  * One plate for one sign. Which posts belong to it is `signGroups`' answer, not this file's — the
@@ -428,6 +428,8 @@ function plateMesh({ face, at, top, facing }: SignGroup): THREE.Mesh {
   const geometry = new THREE.PlaneGeometry(spec.width, spec.height);
   const mesh = new THREE.Mesh(geometry, signMaterial(face));
   mesh.name = 'sign';
+  // Which sign this is, for anything measuring the scene rather than looking at it.
+  mesh.userData.sign = face;
   // Hung from the top of the post downward, so a taller post raises the plate rather than
   // stretching it — the same reading as `PLATE.post` in the sim.
   mesh.position.set(cx, top - spec.height / 2, -cy);
@@ -605,8 +607,17 @@ function frontageWidth(surface: Surface, facing: Facing): number {
   return Math.max(...values) - Math.min(...values);
 }
 
-function frontage(surface: Surface): { colour: string; geometry: THREE.BufferGeometry }[] {
-  const facing = surface.facing;
+/**
+ * A door and some windows on the side that faces the road.
+ *
+ * Guarded on `kind`, not merely on having a `facing`. It used to infer "this is a building" from
+ * "this has a facing", which held only for as long as houses were the one thing that fronted
+ * anywhere — and the day signs gained a facing so they could look at their own traffic, every sign
+ * post in the Kerkstraat grew a front door and three windows. The roof beside it was already
+ * guarded on kind; this was the same question answered two different ways in one loop.
+ */
+export function frontage(surface: Surface): { colour: string; geometry: THREE.BufferGeometry }[] {
+  const facing = surface.kind === 'house' ? surface.facing : undefined;
   if (!facing) return [];
   const width = frontageWidth(surface, facing);
   const out: { colour: string; geometry: THREE.BufferGeometry }[] = [];

@@ -41,7 +41,11 @@ npm test         # vitest run — two projects: `sim` in node, `ui` in jsdom
 npm run build    # tsc -b && vite build
 ```
 
-Node version is pinned in `.nvmrc`. `npm run build` is the only typecheck that covers everything;
+Node version is pinned in `.nvmrc` (24.x, the current LTS line). The two test projects are defined
+under `test.projects` in `vite.config.ts` — they lived in `vitest.workspace.ts` until Vitest 4
+removed `defineWorkspace`, and that removal is quiet in the worst way: the file is simply ignored,
+so every UI test runs in Node and reports `document is not defined` as though the tests were wrong.
+`npm run build` is the only typecheck that covers everything;
 `npx tsc -b --noEmit` is the quick version.
 
 **Always run `npm test` and `npm run build` before committing, and `rm -rf dist` after building.**
@@ -535,7 +539,7 @@ schouderblik, and says why).
 
 ## Known limitations
 
-- The bundle is ~770 kB because three.js ships whole.
+- The bundle is ~970 kB (270 kB gzipped) because three.js ships whole.
 - Houses are detached boxes with gaps and staggered depths, not a true terrace with shared walls.
 - Long-range junction legibility is still weak; kerbs, lamp posts and the crossing markings help.
 - Touch is out of scope — looking needs a mouse. Pointer lock silently fails in some environments,

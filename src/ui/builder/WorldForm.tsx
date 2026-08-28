@@ -123,7 +123,7 @@ export function WorldForm({ draft, onChange }: Props) {
             unit="m"
             value={world.road.fietspadFrom}
             onChange={(v) =>
-              setWorld({ ...world, road: { ...world.road, fietspadFrom: v, kerbTo: v } })
+              setWorld({ ...world, road: { ...world.road, fietspadFrom: v } })
             }
           />
           <Num

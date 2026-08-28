@@ -16,6 +16,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { junctionGiveWay, junctionSigns } from '../surfaces/junction';
+import { PLATE_CLEARANCE, POST } from '../surfaces/signs';
 import { roadSurfaces, type SignFace, type Surface } from '../roadSurfaces';
 import { ALL_SCENARIOS } from '../scenarios';
 import { referenceRide } from '../referenceRide';
@@ -141,6 +142,16 @@ describe('elk scenario draagt de borden die bij zijn weg horen', () => {
     // Same face and same place along the road, which is what the renderer groups them by.
     expect(posts[0].sign).toEqual(posts[1].sign);
     expect(centre(posts[0]).y).toBeCloseTo(centre(posts[1]).y, 1);
+  });
+});
+
+describe('het bord hangt vóór zijn eigen paal', () => {
+  it('staat verder van het hart van de paal dan de paal zelf reikt', () => {
+    // A post has depth, and a plate hung less proud than half of it comes out with a grey stripe
+    // down the middle of the sign. The renderer used to pick five centimetres against a post whose
+    // front face is already six from its centre. Read as a gap in a colour rather than as a bug,
+    // which is how it survived being looked at and not measured.
+    expect(PLATE_CLEARANCE).toBeGreaterThan(POST.side / 2);
   });
 });
 

@@ -16,8 +16,14 @@
 import type { Facing, SignFace, Surface } from '../roadSurfaces';
 import type { Vec2 } from '../types';
 
-/** Post footprint. Square, and small: this is what `findObstructions` tests against the route. */
-const POST = { side: 0.12 };
+/**
+ * Post footprint. Square, and small: this is what `findObstructions` tests against the route.
+ *
+ * Exported because a renderer hanging a plate on one has to clear it. Half of this is how far the
+ * post's front face stands from its centre, and a plate mounted any less proud than that comes out
+ * with a post-shaped stripe down the middle of it.
+ */
+export const POST = { side: 0.12 };
 
 /**
  * Plate sizes and mounting heights, in metres.
@@ -38,6 +44,18 @@ export const PLATE: Record<SignFace['type'], { width: number; height: number; po
   // Bewegwijzering over an afrit: a board, not a plate, and the reason it needs two posts.
   exit: { width: 4.2, height: 1.6, post: 4.4 },
 };
+
+/**
+ * How far a plate has to stand from its post's centre.
+ *
+ * A post has depth, and the plate is hung on the front of it: mount one less proud than half the
+ * post and the post comes through the middle of the sign. Five centimetres looked like ample
+ * clearance and is less than the six the post's own front face already occupies, so every sign in
+ * the scene rendered with a grey stripe down it. It read as a gap in a colour — invisible in a
+ * screenshot, obvious the moment the pixels were swept — which is why the number is derived here
+ * rather than picked in the renderer.
+ */
+export const PLATE_CLEARANCE = POST.side / 2 + 0.02;
 
 /** A board this wide gets a post at each end rather than one in the middle. */
 const TWO_POSTS_FROM = 2;
