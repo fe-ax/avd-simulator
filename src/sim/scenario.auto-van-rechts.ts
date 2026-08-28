@@ -19,11 +19,15 @@
  *
  * **And it is aimed at you.** As built it stopped short of the carriageway, so a rider who ignored
  * it entirely sailed through with room to spare and passed — nothing was ever nearly hit, and the
- * reason to read the road was theoretical. Its start is now set so that an unbraked car reaches the
- * crossing point at the exact moment a rider who never slows gets there: take the cue away and the
- * two bodies overlap. It stops with its nose at x=2,23 — front wheels a good half metre past the
- * apex of the haaientanden and a metre onto the carriageway — one second after that rider has gone
- * past. Missing a hazard that only misses you because the other driver saved it is a `kritiek`.
+ * reason to read the road was theoretical. Its start is set from the timing rather than picked, so
+ * that an unbraked car is on top of a rider who never slows: take the cue away and the two bodies
+ * overlap by 0,4 m. It stops with its nose at x=2,23 — front wheels a good half metre past the
+ * apex of the haaientanden and a metre onto the carriageway. Missing a hazard that only misses you
+ * because the other driver saved it is a `kritiek`.
+ *
+ * **How early it arrives is the tightest number here.** Six metres further back and the two miss
+ * rather than collide, and the exercise stops being about anything; the sweep that found 167 is in
+ * the PR. Move this and re-run `zicht.test.ts`, which asserts the overlap rather than trusting it.
  *
  * `zicht.test.ts` holds all of that: the sight line, the collision course, both clearances.
  *
@@ -71,7 +75,7 @@ export const autoVanRechts: Scenario = {
       kind: 'auto',
       label: 'Auto van rechts',
       from: {
-        x: 173,
+        x: 167,
         y: 1.5,
       },
       to: {
@@ -82,7 +86,7 @@ export const autoVanRechts: Scenario = {
       length: 4.4,
       cues: [
         {
-          atDist: 145,
+          atDist: 139,
           action: 'stop',
           decel: 8,
         },
