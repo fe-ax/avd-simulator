@@ -67,8 +67,9 @@ Git itself pushes over SSH and does not care; this is only `gh`.
 
 **Perception is a consequence of geometry, not a model of it.**
 
-The first version of this project (preserved on the `third-person-view` branch) had six
-hand-authored gaze cones and a `perceived` flag that a button press flipped. Every round of tuning
+The first version of this project — commit `00f2b76`, the second in this history, top-down only and
+with no `src/scene/` at all — had six hand-authored gaze cones and a `perceived` flag that a button
+press flipped. Every round of tuning
 was an argument about where to put the edge of an abstraction. The blind spot was the gap between
 two numbers.
 
