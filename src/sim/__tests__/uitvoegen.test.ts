@@ -165,6 +165,41 @@ describe('waar je uitvoegt is de hele oefening', () => {
     expect(exitRule({}).severity).toBeNull();
   });
 
+  it.each([-40, -30, -20, -10, -5, 0, 5, 10, 25, 55])(
+    'en %i m ten opzichte van de mond telt ook als meteen',
+    (exitAtM) => {
+      // The bug this pins was the worst kind: the *earliest possible correct action* scored the
+      // *harshest verdict in the exercise*. The good rung ran from the mouth, so a rider who moved
+      // over as the lane opened matched no rung at all, fell through to `missed`, and was told
+      // "je bent nooit van rijstrook gewisseld" — kritiek, for doing the thing being taught.
+      //
+      // The rung now starts where the tarmac starts splitting, forty-five metres before the mouth,
+      // because that is the first moment there is anything to move onto.
+      expect(exitRule({ exitAtM }).severity).toBeNull();
+    },
+  );
+
+  it('maar naar rechts sturen vóór de strook bestaat is een fout, en zegt dat ook', () => {
+    // Not silence and not kritiek: there is no lane there yet, only berm. Before the fourth rung
+    // existed this fell off the end of the ladder and borrowed the "you never changed lane"
+    // sentence, which was the same lie in the other direction.
+    const record = driveExit(uitvoegenSnelweg, { exitAtM: -120 });
+    const row = scoreRun(record, uitvoegenSnelweg).results.find((r) => r.label.startsWith('4.'));
+    expect(row?.severity).toBe('fout');
+    expect(row?.explanation).toMatch(/voordat de uitvoegstrook er was/);
+    expect(row?.explanation).not.toMatch(/nooit van rijstrook/);
+  });
+
+  it('en de uitleg zet de meters aan de juiste kant van het beginpunt', () => {
+    // It said "voorbij het begin" for every distance, including the ones that were before it.
+    const early = driveExit(uitvoegenSnelweg, { exitAtM: -120 });
+    const late = driveExit(uitvoegenSnelweg, { exitAtM: 200 });
+    const row = (r: ReturnType<typeof driveExit>) =>
+      scoreRun(r, uitvoegenSnelweg).results.find((x) => x.label.startsWith('4.'))?.explanation ?? '';
+    expect(row(early)).toMatch(/vóór het begin ervan naar rechts/);
+    expect(row(late)).toMatch(/voorbij het begin ervan in/);
+  });
+
   it('wie er met 130 langs blaast, voegt te laat uit en krijgt daar een fout voor', () => {
     // Not merely marked for speed: the point of the exercise is that the overtake *costs you the
     // exit*. If this ever comes back as an opmerking, the late band moved and the lesson went with

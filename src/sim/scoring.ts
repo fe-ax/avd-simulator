@@ -162,14 +162,24 @@ function scoreExpected(
       const outcome = band?.outcome;
       const praise = outcome && 'praise' in outcome ? outcome.praise : null;
       const fault: Outcome | null = outcome && !('praise' in outcome) ? outcome : null;
+      // Where it happened, said with the right preposition. This printed "voorbij het begin" for
+      // every distance, including the ones that were *before* it — so a rider who moved over early
+      // was told they had gone in too far past a point they had not reached.
       const where = Math.round(Math.abs(at.d));
+      const place =
+        at.d <= 0
+          ? ` Je ging er ${where} m voorbij het begin ervan in.`
+          : ` Je ging al ${where} m vóór het begin ervan naar rechts.`;
+      // A manoeuvre that matched no rung still happened, so the rule's own `missed` sentence — which
+      // exists to say it *never* did — must not be the thing the rider reads. That combination told
+      // somebody who took the exit at the first possible metre that they had never left the
+      // motorway, which is both the harshest verdict in the exercise and flatly untrue.
+      const noRung = 'Je wisselde van rijstrook, maar niet op een plek waar deze regel iets over zegt.';
       return {
         ...base(expected),
         status: praise ? 'goed' : 'ongewenst',
         severity: praise ? null : (fault?.severity ?? expected.missed.severity),
-        explanation:
-          (praise ?? fault?.explanation ?? expected.missed.explanation) +
-          (praise ? '' : ` Je ging er ${where} m voorbij het begin ervan in.`),
+        explanation: (praise ?? fault?.explanation ?? noRung) + (praise ? '' : place),
         windowT,
         windowD,
         actualT: move.startedAt,

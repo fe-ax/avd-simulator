@@ -150,10 +150,10 @@ export const uitvoegenSnelweg: Scenario = {
         direction: 'right',
         bands: [
           {
-            fromD: 0,
+            fromD: 45,
             toD: -60,
             outcome: {
-              praise: 'Je voegde meteen uit, aan het begin van de strook. Precies goed: dan heb je de hele strook nog om af te remmen.',
+              praise: 'Je voegde meteen uit, zodra de strook er was. Precies goed: dan heb je de hele strook nog om af te remmen.',
             },
           },
           {
@@ -170,6 +170,14 @@ export const uitvoegenSnelweg: Scenario = {
             outcome: {
               severity: 'fout',
               explanation: 'Je voegde pas in de tweede helft van de strook uit. Zo snijd je op het laatste moment naar rechts, met steeds minder strook over — meestal omdat je eerst nog langs de vrachtwagens wilde.',
+            },
+          },
+          {
+            fromD: 620,
+            toD: 45,
+            outcome: {
+              severity: 'fout',
+              explanation: 'Je stuurde naar rechts voordat de uitvoegstrook er was. Daar ligt nog geen rijstrook naast je, alleen berm.',
             },
           },
         ],
