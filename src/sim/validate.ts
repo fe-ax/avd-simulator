@@ -176,7 +176,11 @@ export function findHiddenReveals(
   tolerance = 1,
 ): HiddenReveal[] {
   const boxes = roadSurfaces(world, extent)
-    .filter((s) => s.height > HIDES_A_CAR)
+    // A sign is tall and hides nothing: it is a plate on a pole with daylight all round it. Left in,
+    // a four-metre exit board would "hide" the lorry beyond it and this check would tell an author
+    // their motorway was a trick question. The height test is right for the things it was written
+    // for — houses, hedges, a wood — and signs are the first tall thing that is mostly air.
+    .filter((s) => s.height > HIDES_A_CAR && s.kind !== 'sign')
     .map((s) => s.points);
   const out: HiddenReveal[] = [];
 

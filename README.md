@@ -8,6 +8,11 @@ elkaar, druk op de linkerrijstrook) en **Uitvoegen op de A12** (drie vrachtwagen
 linkerrijstrook, en een afrit die je meteen aan het begin op moet). Je kiest ze in de briefing,
 vóór elke rit.
 
+Langs de weg staan borden: de snelheidslimiet, voorrangsweg en haaientandenbord op het kruispunt,
+het fietspadbord in de Kerkstraat, en het blauwe bord boven de afrit. Ze worden afgeleid uit de
+oefening zelf — het getal op het bord *is* de limiet waarop je beoordeeld wordt, niet een tweede
+exemplaar ervan.
+
 Browser-simulator voor het **AVD-deel** (*Verkeersdeelneming*) van het Nederlandse
 motorrijexamen. Je zit op de motor, kijkt met de muis om je heen, en moet de bediening op het
 juiste moment gebruiken. Alles wordt vastgelegd en achteraf teruggespeeld — van bovenaf, of

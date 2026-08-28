@@ -14,6 +14,9 @@ import type {
   Scenario,
   ScenarioWorld,
 } from '../../sim/types';
+// This file grew its own `Num` and `Choice` before `fields.tsx` existed; new primitives come from
+// there rather than being copied a third time.
+import { TextField } from './fields';
 
 interface Props {
   draft: Scenario;
@@ -301,6 +304,23 @@ function StretchFields({
           value={stretch.exit.sweepDeg}
           onChange={(v) => onChange({ ...stretch, exit: { ...stretch.exit, sweepDeg: v } })}
         />
+        {/*
+          What the blue board says. The only thing about the signs on this road that is typed rather
+          than derived — the limit comes from the scenario and the rest from the layout, but no
+          geometry implies "Deventer".
+        */}
+        <TextField
+          label="Richting"
+          value={stretch.destination}
+          placeholder="Deventer"
+          onChange={(v) => onChange({ ...stretch, destination: v })}
+        />
+        <TextField
+          label="Afritnummer"
+          value={stretch.exitNumber ?? ''}
+          placeholder="23"
+          onChange={(v) => onChange({ ...stretch, exitNumber: v === '' ? undefined : v })}
+        />
         <p className="builder-note">
           De uitvoegstrook opent rechts van rijstrook 1, achter blokmarkering. Waar hij begint is
           het punt waar alle vensters vandaan gemeten worden: de controles staan er zoveel meter
@@ -542,6 +562,9 @@ function blankStretch(kind: MotorwayStretch['kind']): MotorwayStretch {
         strookStartY: 0,
         strookLengthM: 300,
         exit: { radius: 150, sweepDeg: 22 },
+        // A placeholder an author will replace, not a blank: an exit board with nothing on it
+        // reads as a bug in the renderer rather than as a field waiting to be filled in.
+        destination: 'Afrit',
       };
   }
 }

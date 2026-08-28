@@ -13,6 +13,7 @@ import {
   type Surface,
 } from '../roadSurfaces';
 import type { UrbanRoad } from '../types';
+import { sign as signPosts } from './signs';
 
 const HOUSE_PITCH = 9;
 const HOUSE_HEIGHT = 5.2;
@@ -216,6 +217,52 @@ export function urbanCrossingSurfaces(road: UrbanRoad, ext: RoadExtent): Surface
       const y = sy * LAMP_CORNER.y;
       out.push(rect('lamp', x - LAMP.radius, y - LAMP.radius, x + LAMP.radius, y + LAMP.radius, LAMP.height));
     }
+  }
+
+  return out;
+}
+
+/**
+ * How far out the signs stand and how far back along the road they sit.
+ *
+ * The A1 goes beyond the fietspad, in the verge, where a sign for the carriageway actually stands
+ * on a road with a vrijliggend fietspad — putting it between the kerb and the fietspad would have
+ * it facing cyclists. The G11 stands at the fietspad's own edge, because that is who it is for.
+ */
+const SIGN_PLACE = { limitBeforeJunction: 62, cyclePathBeforeJunction: 26, outFromVerge: 0.55 };
+
+/**
+ * The two signs this street carries.
+ *
+ * Both are derived: the number is the scenario's own limit, and the G11 exists because this world
+ * *has* a fietspad — which is the same fact `urbanCrossingSurfaces` uses to lay the red surfacing.
+ * A street that stopped having one would stop having the sign, without anybody remembering to.
+ */
+export function urbanCrossingSigns(
+  road: UrbanRoad,
+  ext: RoadExtent,
+  speedLimitKmh?: number,
+): Surface[] {
+  const { fietspadTo, vergeTo } = road;
+  const out: Surface[] = [];
+  const inView = (y: number) => y >= ext.minY && y <= ext.maxY;
+
+  if (speedLimitKmh !== undefined && inView(-SIGN_PLACE.limitBeforeJunction)) {
+    out.push(
+      ...signPosts(
+        { x: fietspadTo + (vergeTo - fietspadTo) * SIGN_PLACE.outFromVerge, y: -SIGN_PLACE.limitBeforeJunction },
+        { type: 'speedLimit', kmh: speedLimitKmh },
+      ),
+    );
+  }
+
+  if (inView(-SIGN_PLACE.cyclePathBeforeJunction)) {
+    out.push(
+      ...signPosts(
+        { x: fietspadTo + (vergeTo - fietspadTo) * 0.25, y: -SIGN_PLACE.cyclePathBeforeJunction },
+        { type: 'cyclePath' },
+      ),
+    );
   }
 
   return out;

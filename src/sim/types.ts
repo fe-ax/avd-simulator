@@ -678,6 +678,15 @@ export type MotorwayStretch =
        * stretch of road nobody is scored on. It is there so the exit reads as an exit.
        */
       exit: { radius: number; sweepDeg: number };
+      /**
+       * What the blue board says. The one thing about a sign nobody can derive: no geometry
+       * implies "Deventer", and an exit that goes nowhere in particular is not an exit anybody
+       * rehearses. Required rather than optional for that reason — a board with no destination is
+       * the kind of data that lies, which `Scenario.world` exists to make unrepresentable.
+       */
+      destination: string;
+      /** The afrit number, if it has one. Shown in the corner of the board, as on the road. */
+      exitNumber?: string;
     };
 
 export interface Scenario {
@@ -726,6 +735,15 @@ export interface Scenario {
  */
 export interface WorldView {
   world: ScenarioWorld;
+  /**
+   * The road's limit, so the top-down view can draw the sign that states it.
+   *
+   * A renderer only ever gets a `ScenarioWorld`, and the limit lives on `Scenario` — so without
+   * this the plan view would be the one place a scenario's signs quietly went missing. That is
+   * exactly the failure layout rule 4 exists to prevent, which is why it is here rather than
+   * threaded in beside the world.
+   */
+  speedLimitKmh: number;
   /** Simulated seconds. Drives anything that blinks, so a replay blinks in step with the run. */
   time: number;
   pose: PoseOnRoute;

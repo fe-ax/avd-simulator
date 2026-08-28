@@ -14,9 +14,9 @@
  * `surfaces/`.
  */
 import type { ScenarioWorld, Vec2 } from './types';
-import { urbanCrossingSurfaces } from './surfaces/urbanCrossing';
-import { junctionGiveWay, junctionSurfaces } from './surfaces/junction';
-import { motorwaySurfaces } from './surfaces/motorway';
+import { urbanCrossingSigns, urbanCrossingSurfaces } from './surfaces/urbanCrossing';
+import { junctionGiveWay, junctionSigns, junctionSurfaces } from './surfaces/junction';
+import { motorwaySigns, motorwaySurfaces } from './surfaces/motorway';
 
 export type SurfaceKind =
   | 'hedge'
@@ -30,10 +30,35 @@ export type SurfaceKind =
   | 'lamp'
   | 'guardrail'
   | 'hectometerPost'
-  | 'tree';
+  | 'tree'
+  | 'sign';
 
 /** Which way a building fronts. Only the 3D scene uses it, to hang a door and windows there. */
 export type Facing = 'north' | 'south' | 'east' | 'west';
+
+/**
+ * What a sign *says*, not what it looks like.
+ *
+ * The five the exercises need, by their RVV codes. Each renderer decides how to draw one — a plate
+ * with a canvas texture in the scene, a coloured mark from above — and neither gets to decide what
+ * it means. That split is the same one the rest of this file exists for: the day a sign's face is
+ * described in a renderer is the day the two views can disagree about what the road is telling you.
+ *
+ * Every one of these is **derived from something the scenario is already scored against** — the
+ * limit, `giveWay`, the presence of a fietspad — so a sign cannot contradict the rule beside it.
+ * Only `destination` is typed by an author, because no geometry implies "Deventer".
+ */
+export type SignFace =
+  /** A1. The number is the scenario's own limit, never a second copy of it. */
+  | { type: 'speedLimit'; kmh: number }
+  /** B1 voorrangsweg: yellow diamond. Stands on the arm that has priority. */
+  | { type: 'priorityRoad' }
+  /** B6 verleen voorrang: white triangle, point down, red border. Faces the arm with the teeth. */
+  | { type: 'giveWay' }
+  /** G11 verplicht fietspad: blue disc, white bicycle. */
+  | { type: 'cyclePath' }
+  /** The blue board over an afrit. */
+  | { type: 'exit'; destination: string; exitNumber?: string };
 
 export interface Surface {
   kind: SurfaceKind;
@@ -43,8 +68,14 @@ export interface Surface {
   height: number;
   /** Index-derived, so neighbouring buildings differ without anything being random. */
   variant?: number;
-  /** For buildings: the side that faces the road, and so carries the front door. */
+  /**
+   * Which way this thing fronts: for a building the side carrying the front door, for a sign the
+   * way its plate looks. One field because it is one question, and a sign that fronts the wrong
+   * way is as wrong as a terrace whose doors open into its own back garden.
+   */
   facing?: Facing;
+  /** For signs: what it says. The footprint is the post; the plate is the renderer's to place. */
+  sign?: SignFace;
 }
 
 export interface RoadExtent {
@@ -66,19 +97,37 @@ export interface RoadExtent {
  * can lay down in whatever way suits it, and emitting it as a polygon would only make both of
  * them slower.
  */
-export function roadSurfaces(world: ScenarioWorld, ext: RoadExtent): Surface[] {
+/**
+ * @param speedLimitKmh The scenario's limit, so the road can carry the sign that states it.
+ *
+ * Optional because it lives on `Scenario` and this function is handed a `ScenarioWorld` — the
+ * validators ask about geometry and have no scenario to hand. Passing it is what makes an A1
+ * appear; omitting it emits no sign at all rather than inventing a number, which is the one thing
+ * a sign must never do. Every other sign here is derivable from the world alone.
+ */
+export function roadSurfaces(
+  world: ScenarioWorld,
+  ext: RoadExtent,
+  speedLimitKmh?: number,
+): Surface[] {
   switch (world.kind) {
     case 'motorway':
-      return motorwaySurfaces(world, ext);
+      return [...motorwaySurfaces(world, ext), ...motorwaySigns(world, ext, speedLimitKmh)];
     case 'junction':
       return [
         ...junctionSurfaces(world.road, ext),
         // Who yields is the scenario's choice, not the geometry's: the same crossroads teaches a
         // different lesson depending on which way the teeth point.
         ...junctionGiveWay(world.road, world.giveWay),
+        // And the signs say the same thing standing up: the teeth and the B6 come off one field,
+        // so they cannot end up in different arms.
+        ...junctionSigns(world.road, world.giveWay, speedLimitKmh),
       ];
     default:
-      return urbanCrossingSurfaces(world.road, ext);
+      return [
+        ...urbanCrossingSurfaces(world.road, ext),
+        ...urbanCrossingSigns(world.road, ext, speedLimitKmh),
+      ];
   }
 }
 

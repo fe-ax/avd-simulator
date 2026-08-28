@@ -65,3 +65,29 @@ export function Num({
     </label>
   );
 }
+
+/**
+ * A labelled line of text, for the handful of things about a road that no geometry implies — an
+ * exit's destination, its number. Named `TextField` rather than `Text` because the DOM already
+ * owns that name globally and the collision only shows up as a baffling JSX error. Deliberately as
+ * plain as `Num`: the two sit in the same form and
+ * a field that looked different would suggest it behaved differently.
+ */
+export function TextField({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className="builder-field">
+      <span>{label}</span>
+      <input type="text" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}

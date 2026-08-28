@@ -323,6 +323,7 @@ function Session({
     const world = engine.world(false);
     return {
       world: world.scenario.world,
+      speedLimitKmh: scenario.speedLimitKmh,
       time: engine.t,
       pose: world.bike.pose,
       speedFactor: world.bike.speed / (scenario.speedLimitKmh / 3.6),

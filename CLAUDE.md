@@ -179,6 +179,7 @@ src/
     route.ts               the racing line, as arcs and straights
     roadSurfaces.ts        the vocabulary, and dispatch on the kind of world
     surfaces/              one generator per kind of road; pure (layout, extent) -> Surface[]
+    surfaces/signs.ts      road signs: posts, plate sizes, and how legs group into one sign
     scenarios.ts           the registry: the ones that ship, plus whatever this browser saved
     library.ts             scenarios somebody made, in localStorage
     scenarioFile.ts        a scenario or a ride as a file you can email
@@ -197,6 +198,7 @@ src/
     buildWorld.ts          roadSurfaces -> meshes; houses, roofs, frontages, lamp posts
     rider.ts               the cockpit, and EYE_HEIGHT (the riding position lives here)
     mirrors.ts             two render targets, two reflected cameras, the focus haze
+    signFaces.ts           sign faces drawn to canvas textures, cached by what they say
     head.ts                pointer lock, yaw/pitch limits, drag fallback
     gazeTargets.ts         dwell state machine; regions -> ControlId events
     gazeOverlay.ts         the DOM dots and reticle
@@ -329,6 +331,24 @@ commit.
 - **Engine constants that are really facts about one scenario belong in the scenario.** `MAX_SPEED`
   was 60 km/h, which read as a fact about motorcycles and was a fact about a 30-zone; it made a
   motorway literally unrideable. Speed ceiling, throttle step and steering mode are scenario data.
+
+**A sign is derived, never authored.** Signs are the only object here that states a rule in words,
+which makes them the only one that can *lie* — a 50 on a road scored against 30, a give-way plate on
+the arm with priority. So none of them is placed: the A1 comes from `speedLimitKmh`, the B1 and B6
+both come off `giveWay` (the same field the haaientanden come off, so paint and plate cannot tell
+opposite stories), and the G11 exists because the world has a fietspad. The single exception is the
+afrit's `destination`, because no geometry implies "Deventer" — and it is required rather than
+optional for the usual reason.
+
+`roadSurfaces` takes the limit as an **optional** third argument, since it is handed a
+`ScenarioWorld` and the limit lives on `Scenario`. Omitting it emits no A1 rather than inventing a
+number. That optionality is also how the plan view silently lost its speed sign for an hour: the
+compiler forces `Record<SurfaceKind, …>` to gain an entry but cannot force an argument to be passed.
+`drawRoad` now takes the whole `WorldView` so there is nothing left to forget.
+
+**Sign posts are not occluders.** `findHiddenReveals` treats anything over two metres as a box that
+hides a car, which is right for houses and a wood and wrong for a plate on a pole. A four-metre exit
+board left in that set reports the lorry beyond it as standing behind a building.
 
 ### Derived, not guessed
 

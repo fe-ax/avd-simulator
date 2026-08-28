@@ -27,7 +27,7 @@ export interface SceneOptions {
 }
 
 export function drawScene(ctx: Ctx, cam: ViewCamera, world: WorldView, opts: SceneOptions) {
-  drawRoad(ctx, cam, world.world);
+  drawRoad(ctx, cam, world);
 
   if (opts.showConflictMarker && opts.conflictPoint) {
     const p = cam.project(opts.conflictPoint.x, opts.conflictPoint.y);
