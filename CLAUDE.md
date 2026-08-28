@@ -276,6 +276,12 @@ commit.
   *ridden* path, for all three manoeuvres, is what caught the arc being wrong the first time.
 - **The fietspad red stops at the crossing** and blokmarkering takes over, same number of blocks
   on each edge.
+- **Haaientanden go in the lane that is arriving, with the apex pointing outwards.** Both halves of
+  that were wrong from the day the junction was written: the rows sat in the lanes *leaving* the
+  junction, aimed at the traffic with priority. Nothing noticed, because teeth are paint — no test
+  about routes, obstructions or tarmac ever looks at them, and from the saddle a row a metre out of
+  place still reads as a row. `haaientanden.test.ts` derives the correct lane from `junctionLanes`
+  rather than hardcoding a sign, so it stays true if the traffic ever changes sides.
 - **The mirror glass tilt is derived from `EYE_HEIGHT`**, not a constant. See below.
 - **A clean ride scores Geslaagd 0/0/0**, in both scenarios. Anything else means the windows or the
   targets moved, not the rules.

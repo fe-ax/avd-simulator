@@ -208,14 +208,23 @@ export function junctionGiveWay(
   const out: Surface[] = [];
   const { halfWidth, sideHalfWidth } = road;
 
+  // Two rules decide where a row goes, and both were wrong here in the same way.
+  //
+  // **The lane is the one arriving, not the one leaving.** Traffic reaching the east mouth is
+  // heading west, and westbound is the *north* half — `junctionLanes` says so, and the scenario's
+  // car sits at y=+1,5 doing exactly that. A row painted across the south half is across the lane
+  // of somebody driving away from the junction, who has nothing to give way to.
+  //
+  // **The apex points at whoever must yield**, which is outwards, away from the junction. Pointing
+  // it inwards aims the teeth at the driver with priority.
   if (giveWay === 'side') {
     // Across both mouths of the side road, so traffic coming out of it yields to you.
-    sharkTeeth(out, halfWidth + 0.6, -sideHalfWidth + 0.1, -0.25, -1);
-    sharkTeeth(out, -halfWidth - 0.6, 0.25, sideHalfWidth - 0.1, 1);
+    sharkTeeth(out, halfWidth + 0.6, 0.25, sideHalfWidth - 0.1, 1);
+    sharkTeeth(out, -halfWidth - 0.6, -sideHalfWidth + 0.1, -0.25, -1);
   } else if (giveWay === 'main') {
     // Across your own road instead: you are the one who has to give way.
-    sharkTeethAlongX(out, -sideHalfWidth - 0.6, -halfWidth + 0.1, -0.25, -1);
-    sharkTeethAlongX(out, sideHalfWidth + 0.6, 0.25, halfWidth - 0.1, 1);
+    sharkTeethAlongX(out, -sideHalfWidth - 0.6, 0.25, halfWidth - 0.1, -1);
+    sharkTeethAlongX(out, sideHalfWidth + 0.6, -halfWidth + 0.1, -0.25, 1);
   }
   return out;
 }
