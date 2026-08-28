@@ -23,6 +23,7 @@ import {
   type OvertakePlan,
   type RidePlan,
 } from './testDriver';
+import { findHiddenReveals, type HiddenReveal } from './validate';
 import type { ActorSpec, RunRecord, Scenario } from './types';
 
 export interface ReferenceRide {
@@ -344,11 +345,37 @@ function discriminationOf(
   }));
 }
 
+/**
+ * Where the model and the screen disagree about what was visible.
+ *
+ * The extent is taken from the ride rather than from a frame, for the same reason the road check
+ * is: ask about the picture and a long ride reports its own tail as missing.
+ */
+function hiddenOf(scenario: Scenario, record: RunRecord): HiddenReveal[] {
+  const path = record.samples;
+  if (path.length === 0) return [];
+  const margin = 80;
+  const xs = path.map((p) => p.x);
+  const ys = path.map((p) => p.y);
+  const actorXs = Object.values(record.actorTracks).flatMap((t) => t.map((a) => a.x));
+  const actorYs = Object.values(record.actorTracks).flatMap((t) => t.map((a) => a.y));
+  const extent = {
+    minX: Math.min(...xs, ...actorXs) - margin,
+    maxX: Math.max(...xs, ...actorXs) + margin,
+    minY: Math.min(...ys, ...actorYs) - margin,
+    maxY: Math.max(...ys, ...actorYs) + margin,
+  };
+  const labels = Object.fromEntries(scenario.actors.map((a) => [a.id, a.label]));
+  return findHiddenReveals(scenario.world, record, labels, extent);
+}
+
 export interface ScenarioAnalysis {
   model: ReferenceRide;
   reveals: Reveal[];
   unscored: ActorSpec[];
   discrimination: RuleDiscrimination[];
+  /** Road users the model credits as seen while a building is in the way. */
+  hidden: HiddenReveal[];
 }
 
 /**
@@ -376,5 +403,6 @@ export function analyseScenario(scenario: Scenario): ScenarioAnalysis {
     reveals: revealsFrom(scenario, ride),
     unscored: model.error ? [] : unscoredActors(scenario, model.record, ride),
     discrimination: model.error ? [] : discriminationOf(scenario, model, ride),
+    hidden: model.error ? [] : hiddenOf(scenario, model.record),
   };
 }

@@ -43,6 +43,7 @@ const EMPTY: Validation = {
   inheritedFrom: null,
   reveals: [],
   discrimination: [],
+  hidden: [],
 };
 
 /** Which module each shipped scenario lives in, so an export can import its base. */
@@ -144,7 +145,7 @@ export function Builder({ onExit, onRide }: { onExit: () => void; onRide: (id: s
   // is a courtesy to the drag rather than a necessity.
   useEffect(() => {
     const id = setTimeout(() => {
-      const { model, reveals, unscored, discrimination } = analyseScenario(draft);
+      const { model, reveals, unscored, discrimination, hidden } = analyseScenario(draft);
       const { record, error } = model;
       if (error) {
         setValidation({ ...EMPTY, error });
@@ -180,6 +181,7 @@ export function Builder({ onExit, onRide }: { onExit: () => void; onRide: (id: s
         inheritedFrom: starter ? null : base.title,
         reveals,
         discrimination,
+        hidden,
       });
     }, SETTLE_MS);
     return () => clearTimeout(id);

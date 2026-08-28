@@ -48,7 +48,15 @@ const MAX_GEAR = 6;
 const SPEED_RAMP_S = 4;
 
 const ACTOR_ACCEL = 1.5;
-const ACTOR_BRAKE = 5.0;
+/**
+ * The ordinary firm stop an actor makes: a driver who saw you late.
+ *
+ * Exported because the cue editor shows it as the default when an author has not asked for
+ * anything harder, and a second copy of the number in the form would drift the first time this one
+ * moved. `sim/` may not import from the UI; the UI reading a constant from here is the direction
+ * that seam allows.
+ */
+export const ACTOR_BRAKE = 5.0;
 /**
  * How long before the rider reaches the fietspad the actor starts to worry. A snorfietser does
  * not stamp on the brakes because a motorbike is merely approaching a crossing — they brake when
