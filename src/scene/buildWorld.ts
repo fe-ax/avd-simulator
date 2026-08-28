@@ -607,8 +607,17 @@ function frontageWidth(surface: Surface, facing: Facing): number {
   return Math.max(...values) - Math.min(...values);
 }
 
-function frontage(surface: Surface): { colour: string; geometry: THREE.BufferGeometry }[] {
-  const facing = surface.facing;
+/**
+ * A door and some windows on the side that faces the road.
+ *
+ * Guarded on `kind`, not merely on having a `facing`. It used to infer "this is a building" from
+ * "this has a facing", which held only for as long as houses were the one thing that fronted
+ * anywhere — and the day signs gained a facing so they could look at their own traffic, every sign
+ * post in the Kerkstraat grew a front door and three windows. The roof beside it was already
+ * guarded on kind; this was the same question answered two different ways in one loop.
+ */
+export function frontage(surface: Surface): { colour: string; geometry: THREE.BufferGeometry }[] {
+  const facing = surface.kind === 'house' ? surface.facing : undefined;
   if (!facing) return [];
   const width = frontageWidth(surface, facing);
   const out: { colour: string; geometry: THREE.BufferGeometry }[] = [];
