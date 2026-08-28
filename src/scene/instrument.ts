@@ -52,7 +52,9 @@ export class Instrument {
       new THREE.PlaneGeometry(WIDTH, HEIGHT),
       // Unlit: an instrument is backlit, and shading it with the sun would leave it unreadable
       // exactly when the rider is in shadow.
-      new THREE.MeshBasicMaterial({ map: this.texture }),
+      // Same reason as the mirror glass: a lit display, not a lit surface. Graded twice it goes
+      // grey, and a speedo you have to squint at is worse than no speedo.
+      new THREE.MeshBasicMaterial({ map: this.texture, toneMapped: false }),
     );
     this.mesh.name = 'instrument';
     this.mesh.position.copy(position);

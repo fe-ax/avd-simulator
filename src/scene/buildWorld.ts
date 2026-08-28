@@ -17,6 +17,7 @@ import {
   type SurfaceKind,
 } from '../sim/roadSurfaces';
 import { PLATE, PLATE_CLEARANCE, POST, signGroups, type SignGroup } from '../sim/surfaces/signs';
+import { disposeMaterials, surfaceMaterial } from './materials';
 import { signMaterial } from './signFaces';
 import { buildRoutes, poseAt } from '../sim/route';
 import type { Scenario } from '../sim/types';
@@ -119,15 +120,19 @@ const EAVES = 0.3;
 const ROOF_COLOUR = '#7d5a4a';
 
 const MATERIALS: Record<string, THREE.Material> = {};
-const detailMaterials: Record<string, THREE.MeshLambertMaterial> = {};
+const detailMaterials: Record<string, THREE.MeshStandardMaterial> = {};
 
-function detailMaterial(colour: string, doubleSided = false): THREE.MeshLambertMaterial {
+function detailMaterial(colour: string, doubleSided = false): THREE.MeshStandardMaterial {
   if (!detailMaterials[colour]) {
-    detailMaterials[colour] = new THREE.MeshLambertMaterial({
+    detailMaterials[colour] = new THREE.MeshStandardMaterial({
       color: new THREE.Color(colour),
       // Roof slopes are built by hand and their winding is not worth policing; three.js flips the
       // normal for a back face, so the shading comes out right either way.
       side: doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+      // Doors and frames are painted joinery; glass is glass. Told apart by how dark they are,
+      // which is crude and holds for the four colours a frontage actually uses.
+      roughness: colour === FRONTAGE.colours.glass ? 0.12 : 0.62,
+      metalness: colour === FRONTAGE.colours.glass ? 0.1 : 0,
     });
   }
   return detailMaterials[colour];
@@ -149,7 +154,7 @@ function material(key: string, colour: string): THREE.Material {
   const existing = MATERIALS[key];
   if (existing) {
     if (import.meta.env.DEV) {
-      const held = (existing as THREE.MeshLambertMaterial).color.getHexString();
+      const held = (existing as THREE.MeshStandardMaterial).color.getHexString();
       const want = new THREE.Color(colour).getHexString();
       if (held !== want) {
         throw new Error(
@@ -160,7 +165,7 @@ function material(key: string, colour: string): THREE.Material {
     }
     return existing;
   }
-  MATERIALS[key] = new THREE.MeshLambertMaterial({ color: new THREE.Color(colour) });
+  MATERIALS[key] = surfaceMaterial(key, colour);
   return MATERIALS[key];
 }
 
@@ -706,13 +711,18 @@ export function buildWorld(scenario: Scenario): THREE.Group {
   // standing on it. It used to be a fixed 400 m square, which covered a 30-zone kruising and
   // stopped 13 m behind the start of the motorway's oprit: grass that runs out first leaves the
   // road running off into the sky.
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(
-      ext.maxX - ext.minX + 2 * WORLD_MARGIN,
-      ext.maxY - ext.minY + 2 * WORLD_MARGIN,
-    ),
-    material('grass', PALETTE.grass),
-  );
+  const groundWidth = ext.maxX - ext.minX + 2 * WORLD_MARGIN;
+  const groundDepth = ext.maxY - ext.minY + 2 * WORLD_MARGIN;
+  const groundGeometry = new THREE.PlaneGeometry(groundWidth, groundDepth);
+  // The one geometry here that does not already carry world-space UVs: a plane is mapped 0..1,
+  // where every shape geometry in `roadSurfaces` comes through in metres. Scaling them up to match
+  // is what lets the grass share the same texture and the same "one tile every n metres" repeat as
+  // everything else, instead of one blade of grass stretched over four hundred metres.
+  const groundUv = groundGeometry.attributes.uv;
+  for (let i = 0; i < groundUv.count; i++) {
+    groundUv.setXY(i, groundUv.getX(i) * groundWidth, groundUv.getY(i) * groundDepth);
+  }
+  const ground = new THREE.Mesh(groundGeometry, material('grass', PALETTE.grass));
   ground.rotation.x = -Math.PI / 2;
   ground.position.set((ext.minX + ext.maxX) / 2, 0, -(ext.minY + ext.maxY) / 2);
   ground.name = 'verge';
@@ -809,10 +819,8 @@ export function disposeWorld(world: THREE.Group) {
   world.traverse((node) => {
     if (node instanceof THREE.Mesh) node.geometry.dispose();
   });
-  for (const key of Object.keys(MATERIALS)) {
-    MATERIALS[key].dispose();
-    delete MATERIALS[key];
-  }
+  for (const key of Object.keys(MATERIALS)) delete MATERIALS[key];
+  disposeMaterials();
   for (const key of Object.keys(detailMaterials)) {
     detailMaterials[key].dispose();
     delete detailMaterials[key];
