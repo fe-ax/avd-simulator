@@ -818,7 +818,11 @@ export function buildWorld(scenario: Scenario): THREE.Group {
     const mesh = mergedMesh(geometries, material(group, colours[group] ?? PALETTE.asphalt), group);
     if (!mesh) continue;
     mesh.castShadow = group.startsWith('house') || CASTS_SHADOW.has(group);
-    mesh.receiveShadow = !mesh.castShadow;
+    // Everything receives. Casting and receiving are separate questions, and tying them together —
+    // `receiveShadow = !castShadow` — meant every surface that mattered was forbidden from taking a
+    // shadow: a terrace could not shade its neighbour, a kerb could not shade the road beside it.
+    // The street came out uniformly lit at every hour, which is most of why it looked like a model.
+    mesh.receiveShadow = true;
     world.add(mesh);
   }
 

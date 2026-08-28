@@ -123,6 +123,9 @@ export class Stage {
   /** Move the rig and the traffic to match one instant of the world. */
   sync(view: WorldView, head: HeadPose) {
     this.bike.position.set(view.pose.x, 0, -view.pose.y);
+    // Carry the shadow box along with the machine, so the map is spent where the rider is looking
+    // rather than on a fixed square at the world origin.
+    this.sky.follow(this.bike.position.x, this.bike.position.z);
     this.bike.rotation.y = headingToYaw(view.pose.heading);
     this.head.rotation.y = head.yaw;
     this.camera.rotation.x = head.pitch;

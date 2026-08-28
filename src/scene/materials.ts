@@ -200,16 +200,24 @@ function brickCourses(rows: number, mortar: string): Recipe['detail'] {
  */
 const RECIPES: Record<string, Recipe> = {
   asphalt: {
-    colour: '#4c4d51', mottle: 0.10, grain: 24, octaves: 5,
-    roughness: [0.72, 0.98], relief: 2.2, tile: 4,
+    // Lighter than the palette entry it came from, and never fully rough.
+    //
+    // Tarmac in sun is not black — it photographs around 40 % grey — but the flat-shaded build
+    // could use a dark swatch because nothing was competing with it. Under a real sky, beside lit
+    // grass, the old value read as a hole in the road. The roughness band stops short of 1 for the
+    // same reason: a perfectly rough surface has no sheen at all, and asphalt has a little.
+    colour: '#5e6167', mottle: 0.085, grain: 24, octaves: 5,
+    roughness: [0.58, 0.86], relief: 1.8, tile: 4,
   },
   fietspad: {
-    colour: '#a04a3f', mottle: 0.075, grain: 28, octaves: 5,
-    roughness: [0.78, 0.98], relief: 1.8, tile: 3,
+    // Redder than before. It is the one surface a student has to identify instantly, and the old
+    // value came out as brown once the light stopped being flat.
+    colour: '#b04a3a', mottle: 0.065, grain: 28, octaves: 5,
+    roughness: [0.62, 0.88], relief: 1.5, tile: 3,
   },
   fietspadEdge: {
-    colour: '#b3564a', mottle: 0.06, grain: 28, octaves: 4,
-    roughness: [0.8, 0.95], relief: 1.4, tile: 3,
+    colour: '#c25643', mottle: 0.055, grain: 28, octaves: 4,
+    roughness: [0.64, 0.88], relief: 1.2, tile: 3,
   },
   kerb: {
     colour: '#b7b3a9', mottle: 0.05, grain: 10, octaves: 4,
@@ -222,14 +230,18 @@ const RECIPES: Record<string, Recipe> = {
     roughness: [0.55, 0.85], relief: 0.8, tile: 2.5,
   },
   house: {
-    colour: '#c3ab93', mottle: 0.05, grain: 16, octaves: 4,
-    roughness: [0.75, 0.95], relief: 1.6, tile: 2.4,
-    detail: brickCourses(12, '#8d7660'),
+    // Six courses per tile over 1,6 m, not twelve over 2,4: at the old scale a course was four
+    // centimetres on a wall twenty metres away, which is below what a mip level keeps. The brick
+    // was there and invisible, which is the worst of both — the cost of the texture and none of
+    // the benefit.
+    colour: '#c3ab93', mottle: 0.055, grain: 16, octaves: 4,
+    roughness: [0.72, 0.93], relief: 2.4, tile: 1.6,
+    detail: brickCourses(6, '#8d7660'),
   },
   houseAlt: {
-    colour: '#b09a86', mottle: 0.05, grain: 16, octaves: 4,
-    roughness: [0.78, 0.95], relief: 1.6, tile: 2.4,
-    detail: brickCourses(12, '#7d6957'),
+    colour: '#b09a86', mottle: 0.055, grain: 16, octaves: 4,
+    roughness: [0.75, 0.93], relief: 2.4, tile: 1.6,
+    detail: brickCourses(6, '#7d6957'),
   },
   roof: {
     colour: '#7d5a4a', mottle: 0.09, grain: 20, octaves: 4,
@@ -244,8 +256,14 @@ const RECIPES: Record<string, Recipe> = {
     roughness: [0.9, 1], relief: 3, tile: 2.6,
   },
   grass: {
-    colour: '#7d9c66', mottle: 0.13, grain: 44, octaves: 5,
-    roughness: [0.88, 1], relief: 2.4, tile: 3,
+    // Duller and greyer than the palette green, and tiled over eleven metres rather than three.
+    //
+    // Verge grass beside a road is dusty and half dead; the palette value is the colour of a lawn
+    // in an advert, and under a bright sky it came out as mint felt. The larger tile is what stops
+    // the repeat lining up — at three metres the same patch recurred four times across the berm and
+    // the eye locks onto it instantly.
+    colour: '#6d7d5c', mottle: 0.155, grain: 34, octaves: 6,
+    roughness: [0.85, 1], relief: 2.0, tile: 11,
   },
   guardrail: {
     colour: '#8b9099', mottle: 0.035, grain: 14, octaves: 3,

@@ -105,6 +105,23 @@ const FOG = { near: 136, far: 320 };
 /** Comfortably inside the camera's 400 m far plane; see the note where it is used. */
 const SKY_SCALE = 600;
 
+/** Half-width of the shadow box, in metres, and how far up the sun sits from its centre. */
+const SHADOW_BOX = 90;
+const SUN_DISTANCE = 220;
+
+/**
+ * How far the rider may move before the shadow map is redrawn.
+ *
+ * The map is frozen rather than redrawn every frame — the scene casting it is static, and redrawing
+ * would cost three passes a frame for a picture that does not change. But a frozen map has to be
+ * re-taken when the box it was taken in has moved out from under the rider. Twenty metres is about
+ * a fifth of the box: often enough that the edge never comes into view, rarely enough that it is a
+ * handful of redraws across a whole ride.
+ */
+const SHADOW_STEP = 20;
+
+const scratchCentre = new THREE.Vector3();
+
 export class SkyRig {
   readonly sun = new THREE.DirectionalLight(0xffffff, 1);
   readonly sky = new Sky();
@@ -114,6 +131,8 @@ export class SkyRig {
   private readonly pmrem: THREE.PMREMGenerator;
   private readonly scene: THREE.Scene;
   private environment: THREE.Texture | null = null;
+  private readonly sunDirection = new THREE.Vector3(0, 1, 0);
+  private readonly shadowCentre = new THREE.Vector3(Infinity, 0, Infinity);
   /** Read by the materials that care — the tarmac, and nothing else. */
   wetness = 0;
 
@@ -137,12 +156,17 @@ export class SkyRig {
     scene.add(this.ambient);
 
     this.sun.castShadow = true;
-    // One orthographic box over the whole built stretch, as before. At this size a 4096 map is
-    // about six centimetres per texel, which is what lets a kerb edge stay an edge.
+    // A box around the rider rather than around the world.
+    //
+    // It used to be a fixed ±120 m at the origin, which is a reasonable frame for a crossroads and
+    // no frame at all for a motorway: the A12 rides from −620 to +300, so nearly every metre of it
+    // fell outside the shadow map and cast nothing. Following the machine means the texels are
+    // spent where the rider is looking, and a smaller box spends them harder — 90 m across a 4096
+    // map is two centimetres per texel, enough for the edge of a kerb.
     this.sun.shadow.mapSize.set(4096, 4096);
     const cam = this.sun.shadow.camera;
-    cam.left = -120; cam.right = 120; cam.top = 120; cam.bottom = -120;
-    cam.near = 1; cam.far = 320;
+    cam.left = -SHADOW_BOX; cam.right = SHADOW_BOX; cam.top = SHADOW_BOX; cam.bottom = -SHADOW_BOX;
+    cam.near = 1; cam.far = SUN_DISTANCE * 2;
     this.sun.shadow.bias = -0.0006;
     this.sun.shadow.normalBias = 0.02;
     scene.add(this.sun);
@@ -171,7 +195,8 @@ export class SkyRig {
     u.sunPosition.value.copy(direction);
 
     // The light sits where the sky says the sun is, so shadows fall the way the picture implies.
-    this.sun.position.copy(direction).multiplyScalar(220);
+    this.sunDirection.copy(direction);
+    this.sun.position.copy(this.sun.target.position).addScaledVector(direction, SUN_DISTANCE);
     this.sun.color.setHex(w.sunColour);
     this.sun.intensity = w.sunIntensity;
     this.sun.shadow.needsUpdate = true;
@@ -193,6 +218,22 @@ export class SkyRig {
     this.scene.environmentIntensity = w.envIntensity;
 
     return w.exposure;
+  }
+
+  /**
+   * Keep the shadow box over the rider.
+   *
+   * Called every frame and does nothing almost every time: the map is only re-taken once the
+   * machine has left the middle of the box by `SHADOW_STEP`, so a whole ride costs a few redraws
+   * rather than three a frame.
+   */
+  follow(x: number, z: number) {
+    if (this.shadowCentre.distanceTo(scratchCentre.set(x, 0, z)) < SHADOW_STEP) return;
+    this.shadowCentre.copy(scratchCentre);
+    this.sun.target.position.copy(this.shadowCentre);
+    this.sun.target.updateMatrixWorld();
+    this.sun.position.copy(this.shadowCentre).addScaledVector(this.sunDirection, SUN_DISTANCE);
+    this.sun.shadow.needsUpdate = true;
   }
 
   dispose() {

@@ -30,7 +30,18 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
  * reads as dirt; what is wanted is the half metre where a kerb meets tarmac and a wall meets a
  * pavement.
  */
-const AO_DISTANCE = 0.6;
+const AO_DISTANCE = 0.35;
+
+/**
+ * How much of the occlusion actually reaches the picture.
+ *
+ * At full strength GTAO darkened the open carriageway — a flat plane with nothing above it, which
+ * by definition is not occluded by anything. Whatever it was reacting to (grazing angles, the
+ * normal map, the sheer scale of the ground), the effect was a road that read as a hole. Occlusion
+ * belongs in the crease where a kerb meets tarmac, and that crease is still there at a third of the
+ * strength; the open road is not.
+ */
+const AO_STRENGTH = 0.35;
 
 export class Composer {
   private readonly composer: EffectComposer;
@@ -58,6 +69,7 @@ export class Composer {
       // occlusion from geometry that fog has already hidden.
       screenSpaceRadius: false,
     });
+    this.ao.blendIntensity = AO_STRENGTH;
     this.composer.addPass(this.ao);
 
     // Takes its size from the composer in this version of three; passing one silently did nothing
