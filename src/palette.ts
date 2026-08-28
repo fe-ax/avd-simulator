@@ -9,6 +9,9 @@ export const PALETTE = {
   fietspad: '#a04a3f',
   fietspadEdge: '#b3564a',
   kerb: '#b7b3a9',
+  // Paving slabs, a shade darker than the band that edges them so the two do not merge into one
+  // grey strip when seen down a long street.
+  trottoir: '#a8a49b',
   lamp: '#5b6068',
   guardrail: '#8b9099',
   hectometerPost: '#1f6b3a',

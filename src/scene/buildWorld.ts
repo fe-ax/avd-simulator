@@ -78,6 +78,7 @@ const LAYER: Record<SurfaceKind, number> = {
   fietspad: 0.12,
   fietspadEdge: 0.13,
   kerb: 0,
+  trottoir: 0,
   paint: 0.02,
   roof: 0, // drawn only in plan view; the extruded footprint says it better here
   hedge: 0,
@@ -764,6 +765,7 @@ export function buildWorld(scenario: Scenario): THREE.Group {
     fietspad: PALETTE.fietspad,
     fietspadEdge: PALETTE.fietspadEdge,
     kerb: PALETTE.kerb,
+    trottoir: PALETTE.trottoir,
     paint: PALETTE.paint,
     hedge: PALETTE.hedge,
     house: PALETTE.house,

@@ -18,6 +18,7 @@ const COLOURS: Record<SurfaceKind, string> = {
   house: PALETTE.house,
   roof: PALETTE.roof,
   kerb: PALETTE.kerb,
+  trottoir: PALETTE.trottoir,
   asphalt: PALETTE.asphalt,
   fietspad: PALETTE.fietspad,
   fietspadEdge: PALETTE.fietspadEdge,

@@ -23,6 +23,7 @@ export type SurfaceKind =
   | 'house'
   | 'roof'
   | 'kerb'
+  | 'trottoir'
   | 'asphalt'
   | 'fietspad'
   | 'fietspadEdge'

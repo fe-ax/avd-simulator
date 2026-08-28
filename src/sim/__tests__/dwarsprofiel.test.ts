@@ -51,21 +51,37 @@ describe('het dwarsprofiel van de Kerkstraat', () => {
 
   it('en elke trottoirband is een band, geen strook grond', () => {
     const kerbs = bandsAt(SLICE_Y).filter((b) => b.kind === 'kerb' && b.from > 0);
-    // One on each edge: a raised surface needs an edge to be raised against, and with a band only
-    // on the road side the red ran straight out into grass where the houses are.
-    expect(kerbs).toHaveLength(2);
+    // Three: one on each edge of the fietspad, and one holding up the stoep.
+    expect(kerbs).toHaveLength(3);
     for (const k of kerbs) expect(k.to - k.from).toBeLessThan(0.4);
-    // They sit against the fietspad, holding it up, rather than out by the carriageway.
+    // They sit against the surface they hold up, rather than out in the berm.
     expect(kerbs[0].to).toBeGreaterThanOrEqual(road.fietspadFrom);
     expect(kerbs[0].from).toBeGreaterThan(road.halfWidth);
     expect(kerbs[1].from).toBeLessThanOrEqual(road.fietspadTo);
   });
 
-  it('en de volgorde vanaf de as is rijbaan, berm, band, fietspad, band', () => {
+  it('en er ligt een stoep tussen het fietspad en de huizen', () => {
+    // The thing that was missing, and the reason this file gained a third test.
+    //
+    // There was four and a bit metres of uninterrupted grass from the fietspad's outer band to the
+    // front hedges, so the terrace had front doors and no way to reach them on foot. Nothing
+    // caught it: a footway is scenery — no route, obstruction or scoring rule looks at one — and
+    // grass beside a road reads as grass beside a road. An instructor spotted it in one glance,
+    // for the second time in this same cross-section.
+    const walk = bandsAt(SLICE_Y).find((b) => b.kind === 'trottoir' && b.from > 0);
+    expect(walk).toBeDefined();
+    // Wide enough for two people, and clear of the fietspad rather than butted against it.
+    expect(walk!.to - walk!.from).toBeGreaterThan(1.5);
+    expect(walk!.from).toBeGreaterThan(road.fietspadTo);
+    // And it stops short of the gardens rather than running under the hedge.
+    expect(walk!.to).toBeLessThanOrEqual(road.vergeTo);
+  });
+
+  it('en de volgorde vanaf de as is rijbaan, berm, band, fietspad, band, band, stoep', () => {
     const order = bandsAt(SLICE_Y)
-      .filter((b) => b.from >= 0 && ['asphalt', 'kerb', 'fietspad'].includes(b.kind))
+      .filter((b) => b.from >= 0 && ['asphalt', 'kerb', 'fietspad', 'trottoir'].includes(b.kind))
       .map((b) => b.kind);
-    expect(order).toEqual(['kerb', 'fietspad', 'kerb']);
+    expect(order).toEqual(['kerb', 'fietspad', 'kerb', 'kerb', 'trottoir']);
     // The rijbaan straddles the centreline, so it starts left of zero; the gap before the first
     // band is the berm, and it is the whole point.
     const rijbaan = bandsAt(SLICE_Y).find((b) => b.kind === 'asphalt')!;

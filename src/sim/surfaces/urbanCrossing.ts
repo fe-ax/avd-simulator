@@ -50,6 +50,21 @@ const HEDGE_GAP = 4.5;
 const KERB_JUNCTION_GAP = 8.5;
 
 /**
+ * The footway, and the strip of grass between it and the fietspad.
+ *
+ * There was none: from the fietspad's outer band to the front hedges ran four and a bit metres of
+ * uninterrupted grass, so the terrace had front doors and no way to reach them on foot. On a Dutch
+ * street with a vrijliggend fietspad the order outward is fietspad, a narrow strip, then the stoep
+ * against the gardens — and a rider is meant to read that strip as the place pedestrians appear
+ * from, which is hard when it is a lawn.
+ *
+ * Given as widths outward from the fietspad rather than as absolute x, so they follow if the road
+ * is ever made wider; `vergeTo` still has to be far enough out to hold them, which the generator
+ * checks rather than trusting.
+ */
+const TROTTOIR = { gap: 0.8, width: 2.4 };
+
+/**
  * Blokmarkering: the two rows of white blocks that mark a fietsoversteek.
  *
  * Where a fietspad crosses a side road the red surfacing stops and the crossing is marked out
@@ -167,6 +182,26 @@ export function urbanCrossingSurfaces(road: UrbanRoad, ext: RoadExtent): Surface
       const outer = sign * to;
       out.push(rect('kerb', inner, ext.minY, outer, -KERB_JUNCTION_GAP, KERB_HEIGHT));
       out.push(rect('kerb', inner, KERB_JUNCTION_GAP, outer, ext.maxY, KERB_HEIGHT));
+    }
+  }
+
+  // The stoep, with its own band on the side the traffic is.
+  //
+  // Interrupted at the junction exactly as the kerb is: the side road crosses it, and a footway
+  // painted straight through the mouth of the Kerkstraat would be a pavement across a road.
+  const walkFrom = fietspadTo + KERB_WIDTH + TROTTOIR.gap;
+  const walkTo = walkFrom + TROTTOIR.width;
+  if (walkTo <= vergeTo) {
+    for (const sign of [1, -1] as const) {
+      for (const [kind, from, to] of [
+        ['kerb', walkFrom - KERB_WIDTH, walkFrom + SEAM],
+        ['trottoir', walkFrom, walkTo],
+      ] as const) {
+        const inner = sign * from;
+        const outer = sign * to;
+        out.push(rect(kind, inner, ext.minY, outer, -KERB_JUNCTION_GAP, KERB_HEIGHT));
+        out.push(rect(kind, inner, KERB_JUNCTION_GAP, outer, ext.maxY, KERB_HEIGHT));
+      }
     }
   }
 
