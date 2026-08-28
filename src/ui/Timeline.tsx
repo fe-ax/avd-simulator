@@ -8,8 +8,9 @@
  * This component is the direct ancestor of the future editing timeline, so it takes results and
  * a time and emits a seek, and knows nothing about the engine.
  */
-import { useCallback, useRef } from 'react';
-import type { ActionResult, RunRecord } from '../sim/types';
+import { useCallback, useMemo, useRef } from 'react';
+import { scenarioById } from '../sim/scenarios';
+import type { ActionResult, ControlId, RunRecord } from '../sim/types';
 
 interface Props {
   record: RunRecord;
@@ -29,6 +30,33 @@ const STATUS_CLASS: Record<ActionResult['status'], string> = {
 
 export function Timeline({ record, currentTime, onSeek, selectedId, onSelect }: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Every press of the control a row is about, so a rider can see what they actually did.
+   *
+   * The timeline showed the window and the one press that was credited, and nothing else — so a
+   * rider who checked the dode hoek twice saw a single mark and no sign of the other look. When the
+   * credited one is the wrong one, that is precisely the information needed to understand why, and
+   * it was the one thing not on the screen.
+   *
+   * Resolved through `scenarioById` off the record's own id, never from whatever is on screen: a
+   * debrief can be reopened long after the session moved on.
+   */
+  const looksByRow = useMemo(() => {
+    const scenario = scenarioById(record.scenarioId);
+    const presses = new Map<ControlId, number[]>();
+    for (const e of record.events) {
+      if (e.phase !== 'press' || e.rejected) continue;
+      presses.set(e.control, [...(presses.get(e.control) ?? []), e.t]);
+    }
+    const out = new Map<string, number[]>();
+    for (const expected of scenario?.expected ?? []) {
+      const control = 'control' in expected.kind ? expected.kind.control : null;
+      if (control) out.set(expected.id, presses.get(control) ?? []);
+    }
+    return out;
+  }, [record]);
+
   const duration = Math.max(record.durationS, 0.001);
   const pct = (t: number) => `${Math.max(0, Math.min(100, (t / duration) * 100))}%`;
 
@@ -70,6 +98,14 @@ export function Timeline({ record, currentTime, onSeek, selectedId, onSelect }: 
               {r.label}
             </div>
             <div className="timeline-lane">
+              {(looksByRow.get(r.expectedId) ?? []).map((t, i) => (
+                <div
+                  key={`look-${i}`}
+                  className="timeline-look"
+                  style={{ left: pct(t) }}
+                  title={`Je deed dit op ${t.toFixed(1).replace('.', ',')}s`}
+                />
+              ))}
               {r.windowT && (
                 <div
                   className="timeline-band"

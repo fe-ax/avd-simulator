@@ -49,23 +49,25 @@ describe('het dwarsprofiel van de Kerkstraat', () => {
     expect(paved).toEqual([]);
   });
 
-  it('en de trottoirband is een band, geen strook grond', () => {
-    const kerb = bandsAt(SLICE_Y).find((b) => b.kind === 'kerb' && b.from > 0);
-    expect(kerb).toBeDefined();
-    // A band, not a metre and a half of it. The seam it overlaps the fietspad by is allowed for.
-    expect(kerb!.to - kerb!.from).toBeLessThan(0.4);
-    // And it sits against the fietspad, holding it up, rather than out by the carriageway.
-    expect(kerb!.to).toBeGreaterThanOrEqual(road.fietspadFrom);
-    expect(kerb!.from).toBeGreaterThan(road.halfWidth);
+  it('en elke trottoirband is een band, geen strook grond', () => {
+    const kerbs = bandsAt(SLICE_Y).filter((b) => b.kind === 'kerb' && b.from > 0);
+    // One on each edge: a raised surface needs an edge to be raised against, and with a band only
+    // on the road side the red ran straight out into grass where the houses are.
+    expect(kerbs).toHaveLength(2);
+    for (const k of kerbs) expect(k.to - k.from).toBeLessThan(0.4);
+    // They sit against the fietspad, holding it up, rather than out by the carriageway.
+    expect(kerbs[0].to).toBeGreaterThanOrEqual(road.fietspadFrom);
+    expect(kerbs[0].from).toBeGreaterThan(road.halfWidth);
+    expect(kerbs[1].from).toBeLessThanOrEqual(road.fietspadTo);
   });
 
-  it('en de volgorde vanaf de as is rijbaan, berm, band, fietspad', () => {
+  it('en de volgorde vanaf de as is rijbaan, berm, band, fietspad, band', () => {
     const order = bandsAt(SLICE_Y)
       .filter((b) => b.from >= 0 && ['asphalt', 'kerb', 'fietspad'].includes(b.kind))
       .map((b) => b.kind);
-    expect(order).toEqual(['kerb', 'fietspad']);
-    // The rijbaan straddles the centreline, so it starts left of zero; the gap before the kerb is
-    // the berm, and it is the whole point.
+    expect(order).toEqual(['kerb', 'fietspad', 'kerb']);
+    // The rijbaan straddles the centreline, so it starts left of zero; the gap before the first
+    // band is the berm, and it is the whole point.
     const rijbaan = bandsAt(SLICE_Y).find((b) => b.kind === 'asphalt')!;
     const kerb = bandsAt(SLICE_Y).find((b) => b.kind === 'kerb' && b.from > 0)!;
     expect(kerb.from - rijbaan.to).toBeGreaterThan(1);

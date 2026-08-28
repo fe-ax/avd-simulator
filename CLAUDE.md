@@ -513,7 +513,14 @@ punished for it.
 Three gradations — `opmerking` → `fout` → `kritiek` (another road user had to intervene). One
 critical or three ordinary faults means *gezakt*. **The ride never aborts.**
 
-Looks that violate discipline are **discarded before crediting**, not penalised twice. Prerequisites
+**A look that happened is a look that happened.** Looks are discarded before crediting only once a
+run is scanning outright — `lookDiscipline.faultAt` violations, the scenario's own declaration of
+where looking stops. Below that they all count, and over-looking earns the remark it deserves and
+nothing more. Discarding every local burst-breaker instead closed a real loophole (mashing every
+control hits every window by accident) by a means that also erased ordinary brisk riding: the
+Kerkstraat's reeks is six looks, and doing it half a second apart rather than a second and a quarter
+lost three of them. An instructor who checked the dode hoek twice — the habit being taught — was
+told *je keek niet in je rechterspiegel*, as a fout, about a mirror they had just used. Prerequisites
 produce a `rejected` event rather than silence (the richtingaanwijzer does nothing before the first
 schouderblik, and says why).
 

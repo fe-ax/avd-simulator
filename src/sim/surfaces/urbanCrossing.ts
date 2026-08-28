@@ -149,16 +149,25 @@ export function urbanCrossingSurfaces(road: UrbanRoad, ext: RoadExtent): Surface
   }
   buildings(out, road, ext);
 
-  // The trottoirband along the fietspad's inner edge, interrupted where the side road crosses.
+  // The trottoirbanden along the fietspad's edges, interrupted where the side road crosses.
   //
   // Everything between it and the carriageway is left alone, so the ground shows through as berm —
   // which is what separates a vrijliggend fietspad from the road it runs beside. This band used to
   // span that whole gap, putting a metre and a half of raised paving between rijbaan and fietspad.
+  //
+  // A band on **both** edges. The fietspad is raised, and a raised surface needs an edge to be
+  // raised against — with one only on the road side, the red ran straight out into grass on the
+  // house side, which is a thing no street does and reads exactly as the mistake it is.
   for (const sign of [1, -1] as const) {
-    const inner = sign * (fietspadFrom - KERB_WIDTH);
-    const outer = sign * (fietspadFrom + SEAM);
-    out.push(rect('kerb', inner, ext.minY, outer, -KERB_JUNCTION_GAP, KERB_HEIGHT));
-    out.push(rect('kerb', inner, KERB_JUNCTION_GAP, outer, ext.maxY, KERB_HEIGHT));
+    for (const [from, to] of [
+      [fietspadFrom - KERB_WIDTH, fietspadFrom + SEAM],
+      [fietspadTo - SEAM, fietspadTo + KERB_WIDTH],
+    ] as const) {
+      const inner = sign * from;
+      const outer = sign * to;
+      out.push(rect('kerb', inner, ext.minY, outer, -KERB_JUNCTION_GAP, KERB_HEIGHT));
+      out.push(rect('kerb', inner, KERB_JUNCTION_GAP, outer, ext.maxY, KERB_HEIGHT));
+    }
   }
 
   out.push(rect('asphalt', -halfWidth, ext.minY, halfWidth, ext.maxY));

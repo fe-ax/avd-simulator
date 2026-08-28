@@ -630,6 +630,24 @@ kbd {
   );
 }
 
+/*
+ * What the rider actually did, under everything else.
+ *
+ * Light and thin on purpose: this is context, not a verdict. The coloured marker for the credited
+ * press sits on top of its own tick, so a row with one look reads as it always did and a row with
+ * two shows the second faintly beside it — which is the whole point, since the timeline used to
+ * give no sign that a second look had happened at all.
+ */
+.timeline-look {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: rgba(198, 204, 216, .45);
+}
+
 .timeline-marker {
   position: absolute;
   top: -1px;
