@@ -394,6 +394,13 @@ function hectometerPostGeometry(surface: Surface): Part[] {
  * for three hundred metres here, and a row of identically proportioned copies at different scales
  * reads as wallpaper rather than as a wood.
  */
+/** The three lobes a crown is built from: a big one, and two smaller ones pushed off its axis. */
+const LOBES = [
+  { scale: 1.0, squash: 1.0, out: 0.0, up: 1.0 },
+  { scale: 0.66, squash: 0.9, out: 0.55, up: 0.78 },
+  { scale: 0.54, squash: 0.85, out: 0.5, up: 1.32 },
+];
+
 const TREE = {
   fallbackHeight: 9,
   /** Crown radius as a fraction of the tree's height, and how far the variant moves it. */
@@ -473,12 +480,32 @@ function treeGeometry(surface: Surface): Part[] {
   const crown = height * (TREE.crownOfHeight + TREE.crownSpread * ((variant >> 1) % 3));
   const rise = (height - trunkTop) / 2;
 
-  // Eight facets round and six up: chunky on purpose, so the wood catches the sun in planes like
-  // everything else in the scene rather than turning into a row of smooth balls. The poles land
-  // exactly on the ellipsoid's axes, so the crown tops out at `height` and not near it.
-  const canopy = new THREE.SphereGeometry(1, 8, 6);
-  canopy.scale(crown, rise, crown);
-  canopy.translate(fp.x, trunkTop + rise, -fp.y);
+  // Three overlapping lobes rather than one ellipsoid.
+  //
+  // A single scaled sphere is an egg, and a treeline of two hundred eggs reads as a row of eggs
+  // however well it is lit — the silhouette is the giveaway at the distance these are seen from,
+  // long before shading is. Three lobes at offsets taken from the variant give a lumpy outline for
+  // three times the triangles of the cheapest possible tree, which on a merged mesh costs a draw
+  // call of nothing.
+  //
+  // Offsets are variant-derived, not random, for the reason the houses are: a treeline has to come
+  // out the same every time it is built, or a replay grows a different wood from the ride.
+  const lobes: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 3; i++) {
+    const spin = ((variant * 7 + i * 5) % 12) / 12;
+    const lean = ((variant + i * 3) % 5) / 5 - 0.5;
+    const scale = LOBES[i].scale;
+    const lobe = new THREE.SphereGeometry(1, 8, 5);
+    lobe.scale(crown * scale, rise * scale * LOBES[i].squash, crown * scale);
+    lobe.translate(
+      fp.x + Math.cos(spin * Math.PI * 2) * crown * LOBES[i].out,
+      trunkTop + rise * LOBES[i].up,
+      -fp.y + Math.sin(spin * Math.PI * 2) * crown * LOBES[i].out + lean * 0.12,
+    );
+    lobes.push(lobe);
+  }
+  const canopy = mergeGeometries(lobes, false)!;
+  lobes.forEach((g) => g.dispose());
 
   // The trunk carries on into the crown, or a tree in a stiff perspective shows daylight at its
   // own neck.
