@@ -167,6 +167,11 @@ export const linksafTegenliggers: Scenario = {
       kind: { type: 'control', control: 'STEER_LEFT' },
       window: { from: 16, to: -6 },
       tolerance: 8,
+      // Auto-sturen is on by default, and with it the sturen controls do nothing at all — so
+      // without this the rider was told "je bent niet linksaf gegaan" about a bend the machine had
+      // just taken for them, as a kritiek. The worst thing this tool can say, about something that
+      // did not happen, on the setting most people will ride first.
+      onlyWhenManualSteering: true,
       praise: 'De bocht in.',
       missed: {
         severity: 'kritiek',
