@@ -5,7 +5,7 @@ practical exam. It is not a driving game: it exists so a student can rehearse **
 looking and acting in traffic**, and then see afterwards exactly when they looked versus when they
 should have.
 
-Five scenarios:
+Eight scenarios:
 
 1. *Rechtsaf de Kerkstraat in* — a right turn across a vrijliggend fietspad, with a snorfiets
    coming up the inside. Teaches the look sequence and the dode hoek.
@@ -27,6 +27,20 @@ Five scenarios:
    with the convoy 80 m ahead, and those two numbers are the exercise: **hold 105 and you reach the
    back of the lorry before you reach the exit.** Shorter, and you could ignore the whole lesson and
    still pass. **Built entirely in the scenario builder** and exported unedited, like scenario 2.
+
+6. *Linksaf de Molenweg in* — a left turn on a voorrangsweg across an oncoming car that is not
+   going to yield. The first exercise that turns left and the first where the rider gives way, and
+   between them they turned up four places that quietly assumed a right turn onto a road where
+   somebody else waits — including that **no junction scenario could raise an incident at all**.
+   Teaches that priority over the side road is not priority over the tegenligger.
+7. *Voorrang van rechts* — a gelijkwaardig kruispunt, the deliberate inverse of 2 on the same
+   crossroads. Nothing painted, nothing signed, and the car takes what is its. The pair is the
+   point: two roads that look identical from the saddle, opposite obligations, and the only thing
+   telling them apart is what is *not* on the tarmac.
+8. *Voorrang verlenen op de zijweg* — the rider behind the haaientanden for once, with the car
+   coming from the **left**, directly after 7 has taught them to look right. Teaches that teeth
+   mean give way to that road, and a road has two directions. Its reveal table is flat for a reason
+   worth reading — see below.
 
 The UI is Dutch. Code, comments and commit messages are English.
 
@@ -99,6 +113,15 @@ scenario 3        full reeks        truck first seen at        3.8s   (left mirr
 scenario 4        every column identical: lorries at 0.0s and 4.8s, cars at 3.0s and 6.0s
 
 scenario 5        every column identical: all three lorries at 0.0s
+
+scenario 6        every column identical: tegenligger at 4,4s (see below)
+
+scenario 7        full reeks        car from the right at      2,1s   (looking right, step 2)
+                  no mirrors                                  2,1s   (no mirror points there)
+                  no looks at all                            13,8s   (once it is nearly on you)
+
+scenario 8        every column identical: car from the left at 11,8s (see below, and it is a bug
+                  in the look vocabulary rather than in the scenario)
 ```
 
 **Perception has no occlusion.** `perception.ts` is purely angular — bearing, distance, a frustum —
@@ -121,6 +144,29 @@ Scenario 4's flat table is not a bug either, and it is a different flatness from
 the same moment whatever you do with your head. What the mirrors change is not *when you see* the
 traffic but *whether you know it is safe to move* — which is why that scenario's proof is the
 incident tests (`ignoreTraffic` puts two cars on the brakes) rather than this table.
+
+Scenario 6 is flat for scenario 2's reason and more so: the tegenligger comes straight at you down
+your own road, so no mirror can reach it and no head movement changes when the forward view finds
+it. The 4,4 s is purely `FORWARD_VIEW.maxDist` — 253 m of closing gap at a combined 27,8 m/s leaves
+130 m at 4,42 s. The reeks there is about the traffic *behind* you and the exercise is about the car
+in front; the lesson is carried by the incident, not by this table.
+
+Scenario 7 is the first row in this project whose three columns genuinely differ, and it is what a
+scenario about looking is supposed to look like. The car sits ~44° off the nose on the approach and
+the forward view reaches 31°, so riding in staring straight ahead really does hide it for eleven and
+a half seconds.
+
+**Scenario 8 is flat for a third reason, and it is the one worth chasing.** Not scenario 4's
+everything-is-ahead-of-you and not scenario 2's no-mirror-reaches-it: here there is something to
+look at and *no look this tool has reaches it*. `EYE_LEFT` turns the head 25° and the forward view
+adds 31°, so a glance covers to 56° off the nose; at the haaientanden the car is 87 m away and 72,9°
+off it. Worse, a car near enough to sit inside 56° at the line is within 35 m of the junction — 2,6 s
+away at fifty — while the rider still needs 5,8 s to cover the last 24 m. **The two requirements are
+geometrically incompatible**, so no retiming of the traffic fixes it. The scenario still teaches and
+still discriminates, but `wasPerceived` is `false` on its incident, which is the same finding wearing
+different clothes: everywhere else here a kritiek means the rider saw the hazard and went anyway. The
+missing piece is a look between the 25° glance and the 102° schouderblik; `BUILDER-GAPS.md` has it.
+Reaching for `SHOULDER_LEFT` to close it would teach a student something false.
 
 Scenario 5 is flat for scenario 4's reason, and completely so: the convoy sits close enough that
 even the lead lorry's tail is inside `FORWARD_VIEW.maxDist` from the first frame. It was not always
@@ -308,8 +354,8 @@ commit.
   place still reads as a row. `haaientanden.test.ts` derives the correct lane from `junctionLanes`
   rather than hardcoding a sign, so it stays true if the traffic ever changes sides.
 - **The mirror glass tilt is derived from `EYE_HEIGHT`**, not a constant. See below.
-- **A clean ride scores Geslaagd 0/0/0**, in both scenarios. Anything else means the windows or the
-  targets moved, not the rules.
+- **A clean ride scores Geslaagd 0/0/0**, in every scenario — `referenceRide` is asked this for
+  all of them. Anything else means the windows or the targets moved, not the rules.
 - **Following distance is a same-lane thing.** `headwaySeconds` skips any sample where the other
   vehicle is more than half a lane off your line. Overtaking means spending seconds level with a
   lorry, where the distance measured along the heading is nearly nothing — without the gate, the
