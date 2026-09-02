@@ -35,6 +35,19 @@ export interface RidePlan {
   /** Stop and let the snorfiets pass. */
   yieldToActor?: boolean;
   /**
+   * There is a give-way line ahead, so be down to walking pace by it whether or not anything is
+   * coming.
+   *
+   * Not the same as `yieldToActor`, and the difference is where you wait. Haaientanden are a place:
+   * you arrive slowly enough to stop *at* them, and a rider still doing forty-two at twenty metres
+   * has not given way even if they get away with it. A left-turner has no line — they are on the
+   * priority road — and waits in the middle of the junction instead, which means slowing early
+   * enough is not the skill being taught there. Applying the line's rule to the turn made the model
+   * rider trickle up at fifteen and never wait at all: the car had gone by the time it arrived, so
+   * the exercise passed without demonstrating its own lesson.
+   */
+  shedForLine?: boolean;
+  /**
    * Ease off when somebody is closing on the same piece of junction at the same moment.
    *
    * Not the same thing as giving way. Giving way is a rule about who goes first; this is the
@@ -88,6 +101,7 @@ const DEFAULTS: Required<Omit<RidePlan, 'onSample'>> = {
   scanConstantly: false,
   steer: true,
   yieldToActor: true,
+  shedForLine: false,
   anticipate: false,
   gear: true,
   slowDown: true,
@@ -185,6 +199,8 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
   }, '2026-01-01T12:00:00.000Z');
 
   const done = new Set<string>();
+  /** Latched while the rider is braking down to walking pace for a give-way line. */
+  let shedding = false;
   let lastScan = -99;
   let scanIndex = 0;
   // Headless stand-in for the gaze system: a look turns the head, and perception follows from
@@ -351,6 +367,40 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
     const stopIn = engine.bike.speed ** 2 / (2 * BRAKE_DECEL) + YIELD_MARGIN_M;
     const hazard =
       (p.yieldToActor && d <= Math.max(12, stopIn) && !actorPast) || (closing && d <= 55 && d > -2);
+
+    // And the line itself is worth slowing for, traffic or no traffic.
+    //
+    // `slowDown` only asks for a lower target speed and lets the machine coast down to it, which is
+    // enough on the Kerkstraat: from thirty to fifteen is five metres of drag and it is done long
+    // before anything matters. From fifty it is not — the rider was still doing forty-two at twenty
+    // metres and had to brake hard at the last moment, which provoked the car it was supposed to be
+    // giving way to. The model rider failed its own exercise while the rider who barged across
+    // passed it, because that one was through before the car arrived.
+    //
+    // Braking distance from here to a walking pace, so it scales itself: at thirty it comes out at
+    // fifteen metres and the rider has coasted below walking pace long before that, so it never
+    // fires; at fifty it is forty-two and it does.
+    //
+    // At half the available deceleration, because this is a rider reading a give-way line, not one
+    // reacting to something. Slowing for a line you can see from a hundred metres away is not an
+    // emergency stop, and computing it at the full rate puts the trigger so late that the hazard
+    // brake gets there first — which is how the model rider ended up doing forty-two at twenty
+    // metres in the first place.
+    //
+    // Latched, because the trigger recedes as the rider slows: the distance needed to shed shrinks
+    // faster than the distance remaining, so an unlatched test releases the brake immediately and
+    // then re-arms, which is the twenty-five-times-a-second chatter that once left 214 brake events
+    // in a record for a debrief to draw.
+    const shedIn =
+      (engine.bike.speed ** 2 - APPROACH_SPEED ** 2) / (2 * (BRAKE_DECEL / 2)) + YIELD_MARGIN_M;
+    // Behind `slowDown`, because a rider who is not easing off for the junction is not easing
+    // off for its line either — and without that gate no sloppy rider can arrive fast, so the rule
+    // about arriving slowly has nobody left to catch.
+    if (p.shedForLine && p.slowDown && d > 0 && d <= shedIn && engine.bike.speed > APPROACH_SPEED) {
+      shedding = true;
+    }
+    if (shedding && (engine.bike.speed <= APPROACH_SPEED || d <= 0)) shedding = false;
+    const mustShed = shedding;
     if (hazard) slowedFor = true;
 
     // Having slowed for something, get going again — or, for the rider who does not, do not.
@@ -367,7 +417,7 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
     // manoeuvre vanishes instead of failing — the check then reports those rules as untestable
     // when the truth is that the harness fell over.
     const crawling = engine.world(false).bike.speed < 4;
-    const wantStop = hazard || (!p.pullAway && slowedFor && d > -55 && !crawling);
+    const wantStop = hazard || mustShed || (!p.pullAway && slowedFor && d > -55 && !crawling);
     if (wantStop !== braking) {
       braking = wantStop;
       dispatch('BRAKE', wantStop ? 'down' : 'up');
@@ -456,6 +506,9 @@ const SAME_LANE_M = 2;
  * Stopping exactly on the conflict point is stopping in the path of the thing you are waiting for.
  */
 const YIELD_MARGIN_M = 3;
+
+/** Walking pace: what a rider who may have to stop should be down to by the give-way line. */
+const APPROACH_SPEED = 15 / 3.6;
 
 const BLOCKING_LOOKAHEAD_M = 45;
 

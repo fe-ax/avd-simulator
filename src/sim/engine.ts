@@ -881,6 +881,12 @@ export class SimEngine {
 
     // Closest point of approach between two constant-velocity bodies, which does not care which
     // way either of them is pointing.
+    //
+    // A braking term has been tried here twice — a rider on the rem is eleven metres short of
+    // where this puts them over the horizon, which sounds like it must matter — and both times the
+    // thing that actually fixed the scoring was elsewhere: once the car's position, once the
+    // rider's approach. Switching the term off left the whole suite green on both occasions. If
+    // you reach for it a third time, write the failing test first.
     const rx = actor.x - bike.pose.x;
     const ry = actor.y - bike.pose.y;
     const vx = Math.cos(actor.heading) * actor.speed - Math.cos(bike.pose.heading) * bike.speed;

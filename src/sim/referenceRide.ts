@@ -84,7 +84,11 @@ function crossingPlanFor(scenario: Scenario): RidePlan {
   // model rider that rode onto a voorrangsweg, turned left across an oncoming car, and called it a
   // clean ride — the tool asserting in Dutch that priority over the side road is priority over
   // everything.
-  const yields = scenario.world.giveWay !== 'side' || scenario.world.manoeuvre === 'left';
+  // Whether there is a line to stop at, which is not the same question as whether you give way.
+  // Teeth on your own road are a place; a left-turner on a voorrangsweg has no line and waits in
+  // the middle of the junction instead.
+  const hasLine = scenario.world.giveWay !== 'side';
+  const yields = hasLine || scenario.world.manoeuvre === 'left';
   return {
     // Easing off is for a rider who is going to have to stop, and that is either because the road
     // bends under them or because somebody else is going first. Reading it off the manoeuvre alone
@@ -94,6 +98,7 @@ function crossingPlanFor(scenario: Scenario): RidePlan {
     slowDown: turning || yields,
     gear: turning,
     yieldToActor: yields,
+    shedForLine: hasLine,
     // Read the traffic even when it is the one that should be stopping. Having priority is not
     // the same as being given it, and that gap is what a hazard exercise is about.
     //
