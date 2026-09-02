@@ -591,7 +591,7 @@ schouderblik, and says why).
 
 ## Known limitations
 
-- The bundle is ~970 kB (270 kB gzipped) because three.js ships whole.
+- The bundle is ~1,09 MB (326 kB gzipped): three.js ships whole, plus the sky and the post chain.
 - Houses are detached boxes with gaps and staggered depths, not a true terrace with shared walls.
 - Long-range junction legibility is still weak; kerbs, lamp posts and the crossing markings help.
 - Touch is out of scope — looking needs a mouse. Pointer lock silently fails in some environments,

@@ -18,6 +18,7 @@ import { RideView } from './ui/RideView';
 import type { CheckState } from './ui/CheckStrip';
 import { RunHistory } from './ui/RunHistory';
 import { RideSettings } from './ui/RideSettings';
+import type { Conditions } from './scene/sky';
 import { Builder } from './ui/builder/Builder';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { clearDraft } from './sim/drafts';
@@ -56,6 +57,9 @@ export default function App() {
   const [scenarioId, setScenarioId] = useState(DEFAULT_SCENARIO.id);
   const [timeScale, setTimeScale] = useState(1);
   const [autoSteer, setAutoSteer] = useState(true);
+  // A display preference, not a fact about the exercise — so it sits here beside tempo rather than
+  // on the run. A ride replayed in different weather grades exactly the same.
+  const [conditions, setConditions] = useState<Conditions>('helder');
   const [openRequest, setOpenRequest] = useState<OpenRequest | null>(null);
   const seq = useRef(0);
 
@@ -125,6 +129,8 @@ export default function App() {
       onTimeScaleChange={setTimeScale}
       autoSteer={autoSteer}
       onAutoSteerChange={setAutoSteer}
+      conditions={conditions}
+      onConditions={setConditions}
     />
   );
 }
@@ -139,6 +145,8 @@ interface SessionProps {
   onTimeScaleChange: (value: number) => void;
   autoSteer: boolean;
   onAutoSteerChange: (value: boolean) => void;
+  conditions: Conditions;
+  onConditions: (value: Conditions) => void;
 }
 
 /** One scenario, from its briefing to the debrief of a run in it. */
@@ -152,6 +160,8 @@ function Session({
   onTimeScaleChange,
   autoSteer,
   onAutoSteerChange,
+  conditions,
+  onConditions,
 }: SessionProps) {
   const { engine, snapshot, start, toBriefing } = useEngine(scenario);
 
@@ -375,6 +385,7 @@ function Session({
         <div className="map-wrap">
           {record === null ? (
             <RideView
+              conditions={conditions}
               scenario={scenario}
               getView={getLiveView}
               head={head}
@@ -396,6 +407,7 @@ function Session({
             </div>
           ) : replayView === 'first' && replayScenario ? (
             <RideView
+              conditions={conditions}
               scenario={replayScenario}
               getView={() => playerRef.current?.scene() ?? null}
               onFrame={onFrame}
@@ -429,6 +441,8 @@ function Session({
               onTimeScaleChange={onTimeScaleChange}
               autoSteer={autoSteer}
               onAutoSteerChange={onAutoSteerChange}
+              conditions={conditions}
+              onConditions={onConditions}
             />
           )}
           {record && !orphan && (
@@ -524,6 +538,8 @@ function Session({
               onTimeScale={onTimeScaleChange}
               autoSteer={autoSteer}
               onAutoSteer={onAutoSteerChange}
+              conditions={conditions}
+              onConditions={onConditions}
               compact
             />
             <div className="sidebar-actions">

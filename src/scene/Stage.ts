@@ -13,7 +13,9 @@ import { headingToYaw } from './coords';
 import { createRider, EYE_HEIGHT, INSTRUMENT_POSITION } from './rider';
 import { Instrument } from './instrument';
 import { Mirrors } from './mirrors';
-import { PALETTE } from '../palette';
+import { SkyRig, type Conditions } from './sky';
+import { Composer } from './composer';
+import { setWetness } from './materials';
 import type { HeadPose } from './head';
 import type { Scenario, WorldView } from '../sim/types';
 
@@ -46,47 +48,30 @@ export class Stage {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly world: THREE.Group;
   private readonly actors = new Map<string, THREE.Group>();
+  private readonly sky: SkyRig;
+  private composer: Composer | null = null;
   private width = 0;
+  private conditions: Conditions = 'helder';
 
   constructor(canvas: HTMLCanvasElement, scenario: Scenario) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Filmic rather than clipped. With physical light values a plain clamp blows the sky to white
+    // and crushes everything in shadow to one flat dark; this is what keeps a kerb readable in the
+    // shade of a terrace and the sky still a sky above it.
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
-    this.scene.background = new THREE.Color(PALETTE.sky);
-    // Fog starts beyond the junction so it never greys out the thing being judged; it exists to
-    // hide the edge of the built world, not to shorten the view.
-    this.scene.fog = new THREE.Fog(new THREE.Color(PALETTE.sky), 95, 260);
-
-    // Enough sky light that nothing reads as a black void, and enough sun that vertical faces —
-    // kerbs, hedges, house walls — separate from the horizontal ones they sit on. Without that
-    // directional component every surface facing up is the same tone and the world goes flat.
-    this.scene.add(new THREE.HemisphereLight(0xdceaf6, 0x8a9c74, 2.4));
-    const sun = new THREE.DirectionalLight(0xfff3e0, 2.2);
-    sun.position.set(-40, 60, 30);
-    sun.castShadow = true;
-    // One orthographic box over the whole built stretch. At this size a 2048 map is about twelve
-    // centimetres per texel, which is plenty for the edge of a terrace.
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.camera.left = -120;
-    sun.shadow.camera.right = 120;
-    sun.shadow.camera.top = 120;
-    sun.shadow.camera.bottom = -120;
-    sun.shadow.camera.near = 1;
-    sun.shadow.camera.far = 260;
-    sun.shadow.bias = -0.0015;
-    sun.shadow.normalBias = 0.02;
+    // The sky is a real sky and the sun stands where it says it does. Both come out of one place
+    // so they cannot disagree — see `sky.ts`, which also explains why weather never shortens the
+    // view.
+    this.sky = new SkyRig(this.scene, this.renderer);
+    this.renderer.toneMappingExposure = this.sky.apply(this.conditions);
     // Everything that casts is static, so the map is drawn once and then frozen. Without this it
     // would be redrawn three times a frame — once for the view and once per mirror — for a
     // picture that never changes. The two vehicles keep their painted blob shadows instead.
-    sun.shadow.autoUpdate = false;
-    sun.shadow.needsUpdate = true;
-    this.scene.add(sun);
-    this.scene.add(sun.target);
-    // A little fill so surfaces facing the rider — the back of the mirrors, their own arms — are
-    // shaded rather than silhouetted.
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    this.sky.sun.shadow.autoUpdate = false;
 
     this.world = buildWorld(scenario);
     this.scene.add(this.world);
@@ -108,6 +93,14 @@ export class Stage {
     this.scene.add(this.bike);
   }
 
+  /** Light and surface only. Never sight distance — `sky.ts` says why at length. */
+  setConditions(conditions: Conditions) {
+    if (conditions === this.conditions) return;
+    this.conditions = conditions;
+    this.renderer.toneMappingExposure = this.sky.apply(conditions);
+    setWetness(this.world, this.sky.wetness);
+  }
+
   resize(cssWidth: number, cssHeight: number) {
     this.width = cssWidth;
     this.renderer.setSize(cssWidth, cssHeight, false);
@@ -118,11 +111,21 @@ export class Stage {
     const neededVertical = 2 * Math.atan(Math.tan(MIN_HORIZONTAL_HALF_FOV) / aspect);
     this.camera.fov = Math.max(FOV, (neededVertical * 180) / Math.PI);
     this.camera.updateProjectionMatrix();
+
+    // The composer owns its own targets, so it is built once the canvas has a real size and
+    // resized with it rather than rebuilt.
+    if (!this.composer) {
+      this.composer = new Composer(this.renderer, this.scene, this.camera, cssWidth, cssHeight);
+    }
+    this.composer.setSize(cssWidth, cssHeight);
   }
 
   /** Move the rig and the traffic to match one instant of the world. */
   sync(view: WorldView, head: HeadPose) {
     this.bike.position.set(view.pose.x, 0, -view.pose.y);
+    // Carry the shadow box along with the machine, so the map is spent where the rider is looking
+    // rather than on a fixed square at the world origin.
+    this.sky.follow(this.bike.position.x, this.bike.position.z);
     this.bike.rotation.y = headingToYaw(view.pose.heading);
     this.head.rotation.y = head.yaw;
     this.camera.rotation.x = head.pitch;
@@ -151,8 +154,13 @@ export class Stage {
     if (this.width === 0) return;
     // Reflections first: they need the scene as it is this frame, and the mirrors hide
     // themselves while rendering so they cannot appear inside one another.
+    //
+    // They go straight to their own targets rather than through the composer — 200 px of glass
+    // does not repay antialiasing, and running the chain three times a frame would make the
+    // mirrors the most expensive thing on screen.
     this.mirrors.render(this.renderer, this.scene, this.camera);
-    this.renderer.render(this.scene, this.camera);
+    if (this.composer) this.composer.render();
+    else this.renderer.render(this.scene, this.camera);
   }
 
   dispose() {
@@ -171,6 +179,8 @@ export class Stage {
     this.actors.clear();
     this.instrument.dispose();
     this.mirrors.dispose();
+    this.composer?.dispose();
+    this.sky.dispose();
     disposeWorld(this.world);
     this.renderer.dispose();
   }

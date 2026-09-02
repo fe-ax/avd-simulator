@@ -47,11 +47,31 @@ export const EYE_HEIGHT = 1.55;
 /** Glass size in metres. Small, like the real thing. */
 export const MIRROR_SIZE = { width: 0.14, height: 0.095 };
 
+/**
+ * The cockpit's own surfaces.
+ *
+ * This is the one part of the scene that is always on screen and always close, so it is the part
+ * where flat shading shows most. Painted bodywork and mirror shells take a sheen; the jacket and
+ * gloves are cloth and leather and take none. Metalness stays low throughout — bike bodywork is
+ * paint over metal, and a high value turns the tank into a mirror of the sky.
+ */
+const CLOTH = new Set([RIDER.jacket, RIDER.glove]);
+const cockpitMaterials = new Map<string, THREE.MeshStandardMaterial>();
+
+function cockpitMaterial(colour: string): THREE.MeshStandardMaterial {
+  const hit = cockpitMaterials.get(colour);
+  if (hit) return hit;
+  const material = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(colour),
+    roughness: CLOTH.has(colour) ? 0.92 : 0.42,
+    metalness: CLOTH.has(colour) ? 0 : 0.2,
+  });
+  cockpitMaterials.set(colour, material);
+  return material;
+}
+
 function box(w: number, h: number, d: number, colour: string): THREE.Mesh {
-  return new THREE.Mesh(
-    new THREE.BoxGeometry(w, h, d),
-    new THREE.MeshLambertMaterial({ color: new THREE.Color(colour) }),
-  );
+  return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cockpitMaterial(colour));
 }
 
 function mirror(side: 'left' | 'right'): THREE.Group {

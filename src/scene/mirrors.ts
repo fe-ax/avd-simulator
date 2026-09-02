@@ -147,7 +147,11 @@ export class Mirrors {
 
     const glass = new THREE.Mesh(
       new THREE.PlaneGeometry(MIRROR_SIZE.width, MIRROR_SIZE.height),
-      new THREE.MeshBasicMaterial({ map: target.texture, side: THREE.DoubleSide }),
+      // `toneMapped: false` because this texture is already a finished picture. The scene behind it
+      // was tone-mapped on the way into the target, and letting the forward view grade it a second
+      // time washes every mirror out — the more so the brighter the day. The glass is a screen
+      // showing an image, not a surface taking light.
+      new THREE.MeshBasicMaterial({ map: target.texture, side: THREE.DoubleSide, toneMapped: false }),
     );
     glass.name = `mirror-${side}-glass`;
     head.add(glass);

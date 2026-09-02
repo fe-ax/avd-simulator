@@ -17,6 +17,7 @@ import {
   type SurfaceKind,
 } from '../sim/roadSurfaces';
 import { PLATE, PLATE_CLEARANCE, POST, signGroups, type SignGroup } from '../sim/surfaces/signs';
+import { disposeMaterials, surfaceMaterial } from './materials';
 import { signMaterial } from './signFaces';
 import { buildRoutes, poseAt } from '../sim/route';
 import type { Scenario } from '../sim/types';
@@ -120,15 +121,19 @@ const EAVES = 0.3;
 const ROOF_COLOUR = '#7d5a4a';
 
 const MATERIALS: Record<string, THREE.Material> = {};
-const detailMaterials: Record<string, THREE.MeshLambertMaterial> = {};
+const detailMaterials: Record<string, THREE.MeshStandardMaterial> = {};
 
-function detailMaterial(colour: string, doubleSided = false): THREE.MeshLambertMaterial {
+function detailMaterial(colour: string, doubleSided = false): THREE.MeshStandardMaterial {
   if (!detailMaterials[colour]) {
-    detailMaterials[colour] = new THREE.MeshLambertMaterial({
+    detailMaterials[colour] = new THREE.MeshStandardMaterial({
       color: new THREE.Color(colour),
       // Roof slopes are built by hand and their winding is not worth policing; three.js flips the
       // normal for a back face, so the shading comes out right either way.
       side: doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+      // Doors and frames are painted joinery; glass is glass. Told apart by how dark they are,
+      // which is crude and holds for the four colours a frontage actually uses.
+      roughness: colour === FRONTAGE.colours.glass ? 0.12 : 0.62,
+      metalness: colour === FRONTAGE.colours.glass ? 0.1 : 0,
     });
   }
   return detailMaterials[colour];
@@ -150,7 +155,7 @@ function material(key: string, colour: string): THREE.Material {
   const existing = MATERIALS[key];
   if (existing) {
     if (import.meta.env.DEV) {
-      const held = (existing as THREE.MeshLambertMaterial).color.getHexString();
+      const held = (existing as THREE.MeshStandardMaterial).color.getHexString();
       const want = new THREE.Color(colour).getHexString();
       if (held !== want) {
         throw new Error(
@@ -161,7 +166,7 @@ function material(key: string, colour: string): THREE.Material {
     }
     return existing;
   }
-  MATERIALS[key] = new THREE.MeshLambertMaterial({ color: new THREE.Color(colour) });
+  MATERIALS[key] = surfaceMaterial(key, colour);
   return MATERIALS[key];
 }
 
@@ -390,6 +395,13 @@ function hectometerPostGeometry(surface: Surface): Part[] {
  * for three hundred metres here, and a row of identically proportioned copies at different scales
  * reads as wallpaper rather than as a wood.
  */
+/** The three lobes a crown is built from: a big one, and two smaller ones pushed off its axis. */
+const LOBES = [
+  { scale: 1.0, squash: 1.0, out: 0.0, up: 1.0 },
+  { scale: 0.66, squash: 0.9, out: 0.55, up: 0.78 },
+  { scale: 0.54, squash: 0.85, out: 0.5, up: 1.32 },
+];
+
 const TREE = {
   fallbackHeight: 9,
   /** Crown radius as a fraction of the tree's height, and how far the variant moves it. */
@@ -469,12 +481,32 @@ function treeGeometry(surface: Surface): Part[] {
   const crown = height * (TREE.crownOfHeight + TREE.crownSpread * ((variant >> 1) % 3));
   const rise = (height - trunkTop) / 2;
 
-  // Eight facets round and six up: chunky on purpose, so the wood catches the sun in planes like
-  // everything else in the scene rather than turning into a row of smooth balls. The poles land
-  // exactly on the ellipsoid's axes, so the crown tops out at `height` and not near it.
-  const canopy = new THREE.SphereGeometry(1, 8, 6);
-  canopy.scale(crown, rise, crown);
-  canopy.translate(fp.x, trunkTop + rise, -fp.y);
+  // Three overlapping lobes rather than one ellipsoid.
+  //
+  // A single scaled sphere is an egg, and a treeline of two hundred eggs reads as a row of eggs
+  // however well it is lit — the silhouette is the giveaway at the distance these are seen from,
+  // long before shading is. Three lobes at offsets taken from the variant give a lumpy outline for
+  // three times the triangles of the cheapest possible tree, which on a merged mesh costs a draw
+  // call of nothing.
+  //
+  // Offsets are variant-derived, not random, for the reason the houses are: a treeline has to come
+  // out the same every time it is built, or a replay grows a different wood from the ride.
+  const lobes: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 3; i++) {
+    const spin = ((variant * 7 + i * 5) % 12) / 12;
+    const lean = ((variant + i * 3) % 5) / 5 - 0.5;
+    const scale = LOBES[i].scale;
+    const lobe = new THREE.SphereGeometry(1, 8, 5);
+    lobe.scale(crown * scale, rise * scale * LOBES[i].squash, crown * scale);
+    lobe.translate(
+      fp.x + Math.cos(spin * Math.PI * 2) * crown * LOBES[i].out,
+      trunkTop + rise * LOBES[i].up,
+      -fp.y + Math.sin(spin * Math.PI * 2) * crown * LOBES[i].out + lean * 0.12,
+    );
+    lobes.push(lobe);
+  }
+  const canopy = mergeGeometries(lobes, false)!;
+  lobes.forEach((g) => g.dispose());
 
   // The trunk carries on into the crown, or a tree in a stiff perspective shows daylight at its
   // own neck.
@@ -707,13 +739,18 @@ export function buildWorld(scenario: Scenario): THREE.Group {
   // standing on it. It used to be a fixed 400 m square, which covered a 30-zone kruising and
   // stopped 13 m behind the start of the motorway's oprit: grass that runs out first leaves the
   // road running off into the sky.
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(
-      ext.maxX - ext.minX + 2 * WORLD_MARGIN,
-      ext.maxY - ext.minY + 2 * WORLD_MARGIN,
-    ),
-    material('grass', PALETTE.grass),
-  );
+  const groundWidth = ext.maxX - ext.minX + 2 * WORLD_MARGIN;
+  const groundDepth = ext.maxY - ext.minY + 2 * WORLD_MARGIN;
+  const groundGeometry = new THREE.PlaneGeometry(groundWidth, groundDepth);
+  // The one geometry here that does not already carry world-space UVs: a plane is mapped 0..1,
+  // where every shape geometry in `roadSurfaces` comes through in metres. Scaling them up to match
+  // is what lets the grass share the same texture and the same "one tile every n metres" repeat as
+  // everything else, instead of one blade of grass stretched over four hundred metres.
+  const groundUv = groundGeometry.attributes.uv;
+  for (let i = 0; i < groundUv.count; i++) {
+    groundUv.setXY(i, groundUv.getX(i) * groundWidth, groundUv.getY(i) * groundDepth);
+  }
+  const ground = new THREE.Mesh(groundGeometry, material('grass', PALETTE.grass));
   ground.rotation.x = -Math.PI / 2;
   ground.position.set((ext.minX + ext.maxX) / 2, 0, -(ext.minY + ext.maxY) / 2);
   ground.name = 'verge';
@@ -783,7 +820,11 @@ export function buildWorld(scenario: Scenario): THREE.Group {
     const mesh = mergedMesh(geometries, material(group, colours[group] ?? PALETTE.asphalt), group);
     if (!mesh) continue;
     mesh.castShadow = group.startsWith('house') || CASTS_SHADOW.has(group);
-    mesh.receiveShadow = !mesh.castShadow;
+    // Everything receives. Casting and receiving are separate questions, and tying them together —
+    // `receiveShadow = !castShadow` — meant every surface that mattered was forbidden from taking a
+    // shadow: a terrace could not shade its neighbour, a kerb could not shade the road beside it.
+    // The street came out uniformly lit at every hour, which is most of why it looked like a model.
+    mesh.receiveShadow = true;
     world.add(mesh);
   }
 
@@ -811,10 +852,8 @@ export function disposeWorld(world: THREE.Group) {
   world.traverse((node) => {
     if (node instanceof THREE.Mesh) node.geometry.dispose();
   });
-  for (const key of Object.keys(MATERIALS)) {
-    MATERIALS[key].dispose();
-    delete MATERIALS[key];
-  }
+  for (const key of Object.keys(MATERIALS)) delete MATERIALS[key];
+  disposeMaterials();
   for (const key of Object.keys(detailMaterials)) {
     detailMaterials[key].dispose();
     delete detailMaterials[key];

@@ -10,6 +10,7 @@ import { GazeTargets } from '../scene/gazeTargets';
 import { MIRROR_SIDES } from '../scene/mirrors';
 import { mirrorInFocus } from '../sim/perception';
 import type { HeadController } from '../scene/head';
+import type { Conditions } from '../scene/sky';
 import type { LookControl, Scenario, WorldView } from '../sim/types';
 import type { CheckState } from './CheckStrip';
 
@@ -32,9 +33,19 @@ interface Props {
   onLockChange?: (locked: boolean) => void;
   /** Called once per frame with elapsed seconds, before the scene is synced. */
   onFrame?: (dt: number) => void;
+  /**
+   * Light and surface only, never visibility.
+   *
+   * Not part of `WorldView`: that contract is for things the simulation knows, and the weather is
+   * something the *viewer* chooses. It changes nothing scored, so a run replayed on a different
+   * day looks different and grades the same.
+   */
+  conditions?: Conditions;
 }
 
-export function RideView({ scenario, getView, head, onLook, onChecks, onLockChange, onFrame }: Props) {
+export function RideView({ scenario, getView, head, onLook, onChecks, onLockChange, onFrame,
+  conditions = 'helder',
+}: Props) {
   const interactive = head !== undefined;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -45,15 +56,26 @@ export function RideView({ scenario, getView, head, onLook, onChecks, onLockChan
   const getViewRef = useRef(getView);
   const onFrameRef = useRef(onFrame);
   const onLockChangeRef = useRef(onLockChange);
+  const conditionsRef = useRef(conditions);
+  const stageRef = useRef<Stage | null>(null);
   getViewRef.current = getView;
+  conditionsRef.current = conditions;
   onFrameRef.current = onFrame;
   onLockChangeRef.current = onLockChange;
+
+  // Applied without rebuilding the stage: rebuilding on a weather change would drop the world and
+  // the ride with it, for something that is one uniform and a handful of light values.
+  useEffect(() => {
+    stageRef.current?.setConditions(conditions);
+  }, [conditions]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const stage = new Stage(canvas, scenario);
+    stageRef.current = stage;
+    stage.setConditions(conditionsRef.current);
     const gaze = new GazeTargets(stage.bike);
     const overlay = new GazeOverlay(wrapRef.current!, interactive);
     const detachHead = head?.attach(canvas, (locked) => onLockChangeRef.current?.(locked));
@@ -134,6 +156,7 @@ export function RideView({ scenario, getView, head, onLook, onChecks, onLockChan
     raf = requestAnimationFrame(frame);
 
     return () => {
+      stageRef.current = null;
       cancelAnimationFrame(raf);
       observer.disconnect();
       detachHead?.();

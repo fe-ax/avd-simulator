@@ -1,4 +1,5 @@
 import { TIME_SCALES } from '../sim/engine';
+import { CONDITION_LABELS, type Conditions } from '../scene/sky';
 import { steeringIsInert, type SteeringScenario } from './controls';
 
 interface Props {
@@ -6,6 +7,8 @@ interface Props {
   onTimeScale: (value: number) => void;
   autoSteer: boolean;
   onAutoSteer: (value: boolean) => void;
+  conditions: Conditions;
+  onConditions: (value: Conditions) => void;
   /** Only the steering mode is read, and the type says so. */
   scenario: SteeringScenario;
   compact?: boolean;
@@ -27,6 +30,8 @@ export function RideSettings({
   onTimeScale,
   autoSteer,
   onAutoSteer,
+  conditions,
+  onConditions,
   scenario,
   compact,
 }: Props) {
@@ -64,6 +69,29 @@ export function RideSettings({
             >
               {formatTempo(scale)}
               {scale === 1 && <span className="tempo-tag">examen</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="settings-row">
+        <span className="settings-label">Weer</span>
+        {/*
+          Light, never visibility. The conditions change how the street is lit and how wet the road
+          reads; none of them shortens the view, because perception is angular and would go on
+          crediting looks at traffic the weather had hidden. `sky.ts` has the long version.
+        */}
+        <div className="tempo-options" role="radiogroup" aria-label="Weer">
+          {(Object.keys(CONDITION_LABELS) as Conditions[]).map((key) => (
+            <button
+              key={key}
+              type="button"
+              role="radio"
+              aria-checked={conditions === key}
+              className={`tempo-btn${conditions === key ? ' active' : ''}`}
+              onClick={() => onConditions(key)}
+            >
+              {CONDITION_LABELS[key]}
             </button>
           ))}
         </div>
