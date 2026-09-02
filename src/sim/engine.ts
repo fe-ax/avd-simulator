@@ -879,6 +879,8 @@ export class SimEngine {
     // A rider who has stopped is not taking anybody's priority, whatever is passing in front.
     if (bike.speed < 1.2) return false;
 
+    // Closest point of approach between two constant-velocity bodies, which does not care which
+    // way either of them is pointing.
     const rx = actor.x - bike.pose.x;
     const ry = actor.y - bike.pose.y;
     const vx = Math.cos(actor.heading) * actor.speed - Math.cos(bike.pose.heading) * bike.speed;
@@ -886,11 +888,12 @@ export class SimEngine {
 
     const vv = vx * vx + vy * vy;
     if (vv < 0.01) return false;
-    // When the two are closest, clamped forward: a pass that already happened is not a conflict,
-    // and one beyond the horizon is not yet anybody's problem.
+    // Clamped forward: a pass that already happened is not a conflict, and one beyond the horizon
+    // is not yet anybody's problem.
     const t = Math.max(0, Math.min(JUNCTION_ALARM_S, -(rx * vx + ry * vy) / vv));
     return Math.hypot(rx + vx * t, ry + vy * t) <= JUNCTION_CONFLICT_M;
   }
+
 
   /**
    * Move one rijstrook. `dir` is +1 for left, matching the offsets, which grow leftward.

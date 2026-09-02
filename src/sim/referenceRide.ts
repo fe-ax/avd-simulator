@@ -86,7 +86,12 @@ function crossingPlanFor(scenario: Scenario): RidePlan {
   // everything.
   const yields = scenario.world.giveWay !== 'side' || scenario.world.manoeuvre === 'left';
   return {
-    slowDown: turning,
+    // Easing off is for a rider who is going to have to stop, and that is either because the road
+    // bends under them or because somebody else is going first. Reading it off the manoeuvre alone
+    // said a rider going straight over a gelijkwaardig kruispunt should arrive at the limit — so
+    // the model rider rode into the car that had priority, at thirty, and the scenario reported
+    // itself unrideable. You cannot give way at a speed you cannot stop from.
+    slowDown: turning || yields,
     gear: turning,
     yieldToActor: yields,
     // Read the traffic even when it is the one that should be stopping. Having priority is not
