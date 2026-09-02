@@ -3,7 +3,7 @@
  * clock advanced by hand — so tests and the scenario-tuning harness exercise the real physics,
  * perception and scoring rather than a mock of them.
  */
-import { SimEngine } from './engine';
+import { BRAKE_DECEL, SimEngine } from './engine';
 import { GAZE_DURATION_S, isLookControl, LOOK_DIRECTIONS } from './perception';
 import { poseAt } from './route';
 import { scoreRun } from './scoring';
@@ -34,6 +34,19 @@ export interface RidePlan {
   shoulderTooFarBack?: boolean;
   /** Stop and let the snorfiets pass. */
   yieldToActor?: boolean;
+  /**
+   * There is a give-way line ahead, so be down to walking pace by it whether or not anything is
+   * coming.
+   *
+   * Not the same as `yieldToActor`, and the difference is where you wait. Haaientanden are a place:
+   * you arrive slowly enough to stop *at* them, and a rider still doing forty-two at twenty metres
+   * has not given way even if they get away with it. A left-turner has no line — they are on the
+   * priority road — and waits in the middle of the junction instead, which means slowing early
+   * enough is not the skill being taught there. Applying the line's rule to the turn made the model
+   * rider trickle up at fifteen and never wait at all: the car had gone by the time it arrived, so
+   * the exercise passed without demonstrating its own lesson.
+   */
+  shedForLine?: boolean;
   /**
    * Ease off when somebody is closing on the same piece of junction at the same moment.
    *
@@ -88,6 +101,7 @@ const DEFAULTS: Required<Omit<RidePlan, 'onSample'>> = {
   scanConstantly: false,
   steer: true,
   yieldToActor: true,
+  shedForLine: false,
   anticipate: false,
   gear: true,
   slowDown: true,
@@ -165,12 +179,28 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
   const engine = new SimEngine(scenario);
   engine.timeScale = p.timeScale;
   engine.autoSteer = p.autoSteer;
+
+  // Which way this exercise turns.
+  //
+  // Every control below used to name the right-hand one, which was true of every crossroads that
+  // existed and is a fact about those scenarios rather than about riding. A left turn driven by a
+  // rider who signals right and checks the right shoulder is not a sloppy rider; it is a broken
+  // harness, and it reports the scenario as unrideable.
+  const turning: 'left' | 'right' =
+    scenario.world.kind === 'junction' && scenario.world.manoeuvre === 'left' ? 'left' : 'right';
+  const SHOULDER = turning === 'left' ? 'SHOULDER_LEFT' : 'SHOULDER_RIGHT';
+  const SHOULDER_OTHER = turning === 'left' ? 'SHOULDER_RIGHT' : 'SHOULDER_LEFT';
+  const INDICATOR = turning === 'left' ? 'INDICATOR_LEFT' : 'INDICATOR_RIGHT';
+  const INDICATOR_OTHER = turning === 'left' ? 'INDICATOR_RIGHT' : 'INDICATOR_LEFT';
+  const STEER = turning === 'left' ? 'STEER_LEFT' : 'STEER_RIGHT';
   let record: RunRecord | null = null;
   engine.arm((r) => {
     record = r;
   }, '2026-01-01T12:00:00.000Z');
 
   const done = new Set<string>();
+  /** Latched while the rider is braking down to walking pace for a give-way line. */
+  let shedding = false;
   let lastScan = -99;
   let scanIndex = 0;
   // Headless stand-in for the gaze system: a look turns the head, and perception follows from
@@ -188,7 +218,7 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
   ) => {
     if (isLookControl(control) && phase === 'press') {
       const aim = LOOK_DIRECTIONS[control];
-      const overshoot = p.shoulderTooFarBack && control === 'SHOULDER_RIGHT';
+      const overshoot = p.shoulderTooFarBack && (control === 'SHOULDER_RIGHT' || control === 'SHOULDER_LEFT');
       engine.headPose.yaw = ((overshoot ? -138 : aim.yaw) * Math.PI) / 180;
       engine.headPose.pitch = (aim.pitch * Math.PI) / 180;
       headHold = GAZE_DURATION_S;
@@ -237,12 +267,12 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
     if (p.mirrors && d <= at(60, 70)) once('mirrorR', () => dispatch('MIRROR_RIGHT'));
     // Announcing first and checking afterwards: both steps land inside their own window, so
     // only the order is wrong.
-    if (p.signalBeforeLooking && d <= 58) once('indEarly', () => dispatch('INDICATOR_RIGHT'));
+    if (p.signalBeforeLooking && d <= 58) once('indEarly', () => dispatch(INDICATOR));
     if (p.shoulderPrep && d <= (rush ? 122 : 50)) {
-      once('shoulderPrep', () => dispatch('SHOULDER_RIGHT'));
+      once('shoulderPrep', () => dispatch(SHOULDER));
     }
-    if (p.indicatorWrongSide && d <= 44) once('indL', () => dispatch('INDICATOR_LEFT'));
-    if (p.indicator && d <= 40) once('ind', () => dispatch('INDICATOR_RIGHT'));
+    if (p.indicatorWrongSide && d <= 44) once('indL', () => dispatch(INDICATOR_OTHER));
+    if (p.indicator && d <= 40) once('ind', () => dispatch(INDICATOR));
 
     if (p.scanConstantly && engine.t - lastScan > 0.25) {
       lastScan = engine.t;
@@ -266,9 +296,9 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
       });
     }
     if (p.eyes && d <= 24) once('eyeLFinal', () => dispatch('EYE_LEFT'));
-    if (p.shoulderWrongSide && d <= 14) once('wrongShoulder', () => dispatch('SHOULDER_LEFT'));
-    if (p.shoulder && d <= 14) once('shoulder', () => dispatch('SHOULDER_RIGHT'));
-    if (p.steer && d <= 11) once('steer', () => dispatch('STEER_RIGHT'));
+    if (p.shoulderWrongSide && d <= 14) once('wrongShoulder', () => dispatch(SHOULDER_OTHER));
+    if (p.shoulder && d <= 14) once('shoulder', () => dispatch(SHOULDER));
+    if (p.steer && d <= 11) once('steer', () => dispatch(STEER));
 
     // Has the hazard gone by yet?
     //
@@ -326,7 +356,51 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
     } else {
       closing = false;
     }
-    const hazard = (p.yieldToActor && d <= 12 && !actorPast) || (closing && d <= 55 && d > -2);
+    // Where to start braking is a fact about the speed you are carrying, not a number.
+    //
+    // Twelve metres flat is fine on the Kerkstraat, where the rider is already down to walking pace
+    // by the time anything matters. On a 50 road it is not: braking at 38 km/h needs twelve and a
+    // half metres to stop, so the rider that "gave way" rolled a metre *past* the conflict point
+    // and came to rest in the middle of the junction, two metres from a car doing fifty. It scored
+    // as a gevaarzetting, which was the correct reading of what it did — a model rider failing its
+    // own exercise, and the exercise was not the thing that was wrong.
+    const stopIn = engine.bike.speed ** 2 / (2 * BRAKE_DECEL) + YIELD_MARGIN_M;
+    const hazard =
+      (p.yieldToActor && d <= Math.max(12, stopIn) && !actorPast) || (closing && d <= 55 && d > -2);
+
+    // And the line itself is worth slowing for, traffic or no traffic.
+    //
+    // `slowDown` only asks for a lower target speed and lets the machine coast down to it, which is
+    // enough on the Kerkstraat: from thirty to fifteen is five metres of drag and it is done long
+    // before anything matters. From fifty it is not — the rider was still doing forty-two at twenty
+    // metres and had to brake hard at the last moment, which provoked the car it was supposed to be
+    // giving way to. The model rider failed its own exercise while the rider who barged across
+    // passed it, because that one was through before the car arrived.
+    //
+    // Braking distance from here to a walking pace, so it scales itself: at thirty it comes out at
+    // fifteen metres and the rider has coasted below walking pace long before that, so it never
+    // fires; at fifty it is forty-two and it does.
+    //
+    // At half the available deceleration, because this is a rider reading a give-way line, not one
+    // reacting to something. Slowing for a line you can see from a hundred metres away is not an
+    // emergency stop, and computing it at the full rate puts the trigger so late that the hazard
+    // brake gets there first — which is how the model rider ended up doing forty-two at twenty
+    // metres in the first place.
+    //
+    // Latched, because the trigger recedes as the rider slows: the distance needed to shed shrinks
+    // faster than the distance remaining, so an unlatched test releases the brake immediately and
+    // then re-arms, which is the twenty-five-times-a-second chatter that once left 214 brake events
+    // in a record for a debrief to draw.
+    const shedIn =
+      (engine.bike.speed ** 2 - APPROACH_SPEED ** 2) / (2 * (BRAKE_DECEL / 2)) + YIELD_MARGIN_M;
+    // Behind `slowDown`, because a rider who is not easing off for the junction is not easing
+    // off for its line either — and without that gate no sloppy rider can arrive fast, so the rule
+    // about arriving slowly has nobody left to catch.
+    if (p.shedForLine && p.slowDown && d > 0 && d <= shedIn && engine.bike.speed > APPROACH_SPEED) {
+      shedding = true;
+    }
+    if (shedding && (engine.bike.speed <= APPROACH_SPEED || d <= 0)) shedding = false;
+    const mustShed = shedding;
     if (hazard) slowedFor = true;
 
     // Having slowed for something, get going again — or, for the rider who does not, do not.
@@ -343,7 +417,7 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
     // manoeuvre vanishes instead of failing — the check then reports those rules as untestable
     // when the truth is that the harness fell over.
     const crawling = engine.world(false).bike.speed < 4;
-    const wantStop = hazard || (!p.pullAway && slowedFor && d > -55 && !crawling);
+    const wantStop = hazard || mustShed || (!p.pullAway && slowedFor && d > -55 && !crawling);
     if (wantStop !== braking) {
       braking = wantStop;
       dispatch('BRAKE', wantStop ? 'down' : 'up');
@@ -426,6 +500,16 @@ export interface MergePlan {
 const SAME_LANE_M = 2;
 
 /** How far ahead a stopped obstruction starts to matter. About a rider's thinking distance at 50. */
+/**
+ * Metres of room a yielding rider leaves between where it stops and the point it must not cross.
+ *
+ * Stopping exactly on the conflict point is stopping in the path of the thing you are waiting for.
+ */
+const YIELD_MARGIN_M = 3;
+
+/** Walking pace: what a rider who may have to stop should be down to by the give-way line. */
+const APPROACH_SPEED = 15 / 3.6;
+
 const BLOCKING_LOOKAHEAD_M = 45;
 
 /** How close to your line it has to reach before you would slow for it. */

@@ -1,17 +1,33 @@
 # AVD Simulator
 
-Vijf oefeningen: **Rechtsaf de Kerkstraat in** (afslaan over een vrijliggend fietspad),
-**Auto van rechts remt** (rechtdoor over een kruispunt terwijl er van rechts een auto veel te hard
-aan komt en vol op de rem gaat), **Invoegen op de A12** (van de oprit het gat in tussen een auto
-vóór je en een vrachtwagen achter je), **Inhalen op de A12** (twee vrachtwagens kort achter
-elkaar, druk op de linkerrijstrook) en **Uitvoegen op de A12** (drie vrachtwagens op 90 waar je op inloopt, een lege
-linkerrijstrook, en een afrit die je meteen aan het begin op moet). Je kiest ze in de briefing,
-vóór elke rit.
+Acht oefeningen. Vijf gaan over hoe je iets doet, drie over wie er voorgaat.
+
+**Rechtsaf de Kerkstraat in** (afslaan over een vrijliggend fietspad), **Auto van rechts remt**
+(rechtdoor over een kruispunt terwijl er van rechts een auto veel te hard aan komt en vol op de rem
+gaat), **Invoegen op de A12** (van de oprit het gat in tussen een auto vóór je en een vrachtwagen
+achter je), **Inhalen op de A12** (twee vrachtwagens kort achter elkaar, druk op de
+linkerrijstrook) en **Uitvoegen op de A12** (drie vrachtwagens op 90 waar je op inloopt, een lege
+linkerrijstrook, en een afrit die je meteen aan het begin op moet).
+
+En dan de drie over voorrang, die je het beste op volgorde rijdt:
+
+- **Linksaf de Molenweg in** — je rijdt op een voorrangsweg en slaat linksaf, en er komt een auto
+  je tegemoet die rechtdoor gaat. Jouw voorrang gaat over de zijweg, niet over die tegenligger.
+- **Voorrang van rechts** — een kruispunt zonder borden en zonder haaientanden. Geen borden
+  betekent niet dat niemand voorrang heeft: het betekent dat verkeer van rechts voorgaat. Dezelfde
+  kruising als *Auto van rechts remt*, met precies de omgekeerde verplichting.
+- **Voorrang verlenen op de zijweg** — nu sta jij achter de haaientanden. De auto komt van
+  **links**, meteen nadat de vorige oefening je heeft geleerd naar rechts te kijken. Haaientanden
+  betekenen niet "verkeer van rechts voor laten gaan"; ze gelden voor die hele weg, en een weg
+  heeft twee richtingen.
+
+Je kiest ze in de briefing, vóór elke rit.
 
 Langs de weg staan borden: de snelheidslimiet, voorrangsweg en haaientandenbord op het kruispunt,
 het fietspadbord in de Kerkstraat, en het blauwe bord boven de afrit. Ze worden afgeleid uit de
 oefening zelf — het getal op het bord *is* de limiet waarop je beoordeeld wordt, niet een tweede
-exemplaar ervan.
+exemplaar ervan. Bij *Voorrang van rechts* staat er daarom niets: dat kruispunt hoort leeg te zijn,
+en die leegte is de hele oefening.
 
 Browser-simulator voor het **AVD-deel** (*Verkeersdeelneming*) van het Nederlandse
 motorrijexamen. Je zit op de motor, kijkt met de muis om je heen, en moet de bediening op het
@@ -28,6 +44,12 @@ waarvan zes kijken; bij *auto van rechts remt* gaat het om twee — op tijd gas 
 weer doorrijden. Bij *uitvoegen op de A12* zit de les niet in het kijken alleen maar in
 *waar* je uitvoegt: aan het begin van de uitvoegstrook is goed, in de tweede helft is een fout. Er
 staat niets in de weg om er met 130 langs te gaan — en dat is precies wat de oefening afstraft.
+
+Bij de drie voorrangsoefeningen zit de les niet in een reeks handelingen maar in één beslissing:
+ga je, of wacht je. Wie doorrijdt terwijl een ander voorgaat, krijgt een **kritiek** — de zwaarste
+beoordeling die het programma geeft, want de ander moest ingrijpen om jou te ontwijken. In alle drie
+komt de andere weggebruiker daadwerkelijk tot op een paar meter van je af; dat is nagerekend en
+niet geschat.
 
 ## Draaien
 

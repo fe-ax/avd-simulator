@@ -122,6 +122,12 @@ describe('elk scenario draagt de borden die bij zijn weg horen', () => {
     'invoegen-snelweg-v1': ['speedLimit'],
     'inhalen-snelweg-v1': ['speedLimit'],
     'uitvoegen-snelweg-v1': ['speedLimit', 'exit'],
+    'linksaf-tegenliggers-v1': ['speedLimit', 'priorityRoad', 'giveWay'],
+    // The bare one, and its bareness is the exercise: a gelijkwaardig kruispunt carries nothing at
+    // all beyond the limit, and the rule that fills the silence is the one in the rider's head. If
+    // a priority sign ever appears here the scenario has stopped being about anything.
+    'voorrang-van-rechts-v1': ['speedLimit'],
+    'zijweg-voorrang-verlenen-v1': ['speedLimit', 'priorityRoad', 'giveWay'],
   };
 
   it.each(ALL_SCENARIOS.map((s) => [s.id, s] as const))('%s', (id, scenario) => {

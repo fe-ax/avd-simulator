@@ -33,7 +33,8 @@ const KMH = 1 / 3.6;
 // Longitudinal model. Deliberately minimal: only what the exercise actually scores.
 const ACCEL = 2.2; // m/s^2 when below target speed
 const COAST_DECEL = 1.2; // m/s^2 when above target speed and not braking
-const BRAKE_DECEL = 4.5; // m/s^2 while the rem is held
+/** m/s^2 while the rem is held. Exported so a rider can work out where it has to start braking. */
+export const BRAKE_DECEL = 4.5;
 const MAX_GEAR = 6;
 
 /**
@@ -76,6 +77,17 @@ const ACTOR_REVERSE = 1.6;
 const ACTOR_ALARM_HORIZON_S = 1.3;
 const ACTOR_ALARM_TTC_S = 1.6;
 const ACTOR_HALF_LENGTH = 0.9;
+
+/**
+ * How near two bodies have to come on a crossroads before one of them has to brake, and how far
+ * ahead to look for it.
+ *
+ * Under a lane's width on purpose. Lane centres sit three metres apart, so anything at or above
+ * that would call every ordinary pass an emergency — including the one the rider is supposed to
+ * wait for.
+ */
+const JUNCTION_CONFLICT_M = 2.4;
+const JUNCTION_ALARM_S = 2.2;
 
 /**
  * Seconds a lane change takes end to end. About sixty metres at motorway speed — an unhurried,
@@ -612,11 +624,21 @@ export class SimEngine {
       heading: h + Math.atan2(lateral, Math.max(bike.speed, 0.1)),
     };
 
+    // Where the assigned manoeuvre is finished, asked of the route rather than reconstructed here.
+    //
+    // This used to sum `decisionS` and the second turn segment, which is the right answer only on a
+    // road that actually branches. A junction has one route and puts `decisionS` past the end of it
+    // deliberately, so that sum was unreachable and `manoeuvreCompletedAt` stayed null for every
+    // junction scenario ever written — every `afterTurn` rule there produced no row at all rather
+    // than a miss, and so looked scored while scoring nothing.
+    const endS = this.routes.manoeuvreEndS;
+    const hasBranch = this.routes.decisionS <= this.routes.turn.total;
     if (
       this.scenario.steering === 'branch' &&
-      bike.branch === 'turn' &&
+      endS !== null &&
+      (!hasBranch || bike.branch === 'turn') &&
       this.manoeuvreCompletedAt === null &&
-      bike.s >= this.routes.decisionS + this.routes.turn.lengths[1]
+      bike.s >= endS
     ) {
       this.manoeuvreCompletedAt = this.t;
     }
@@ -809,6 +831,7 @@ export class SimEngine {
   private actorConflicts(actor: ActorState): boolean {
     const bike = this.bike;
     if (this.routes.kind === 'motorway') return this.actorCutIn(actor);
+    if (this.scenario.world.kind === 'junction') return this.junctionConflict(actor);
     if (bike.branch !== 'turn') return false;
 
     const { crossEntryS, crossExitS, crossYSpan } = this.routes;
@@ -830,6 +853,53 @@ export class SimEngine {
     const ttc = gapToStrip / Math.max(actor.speed, 0.1);
     return gapToStrip <= 0 || ttc < ACTOR_ALARM_TTC_S;
   }
+
+
+  /**
+   * Two bodies arriving at the same place at the same time, on a plain crossroads.
+   *
+   * The crossing next door asks a narrower question — is somebody coming *up* the fietspad into the
+   * strip I am about to sweep — and it is the right question there, where the hazard always
+   * approaches from behind along one axis. On a junction it is the wrong one twice over: a
+   * left-turner meets a car coming the other way, and a car from the right holds its y for the
+   * whole ride, so measuring the gap along y says "already through" from the first frame.
+   *
+   * Worse, the branch guard above can never pass here. A junction has one route and leaves `branch`
+   * at 'approach' for the whole ride, so **no junction scenario could raise an incident at all** —
+   * a failure to give way simply went unrecorded, and the exercise had no teeth. *Auto van rechts
+   * remt* hid that for months, because its car brakes on a scripted cue rather than because
+   * anything is in its way.
+   *
+   * So this is closest point of approach between two constant-velocity bodies, which does not care
+   * which way either of them is pointing. The threshold is deliberately tighter than a lane: two
+   * vehicles passing in opposite lanes are three metres apart, and that is not an incident.
+   */
+  private junctionConflict(actor: ActorState): boolean {
+    const bike = this.bike;
+    // A rider who has stopped is not taking anybody's priority, whatever is passing in front.
+    if (bike.speed < 1.2) return false;
+
+    // Closest point of approach between two constant-velocity bodies, which does not care which
+    // way either of them is pointing.
+    //
+    // A braking term has been tried here twice — a rider on the rem is eleven metres short of
+    // where this puts them over the horizon, which sounds like it must matter — and both times the
+    // thing that actually fixed the scoring was elsewhere: once the car's position, once the
+    // rider's approach. Switching the term off left the whole suite green on both occasions. If
+    // you reach for it a third time, write the failing test first.
+    const rx = actor.x - bike.pose.x;
+    const ry = actor.y - bike.pose.y;
+    const vx = Math.cos(actor.heading) * actor.speed - Math.cos(bike.pose.heading) * bike.speed;
+    const vy = Math.sin(actor.heading) * actor.speed - Math.sin(bike.pose.heading) * bike.speed;
+
+    const vv = vx * vx + vy * vy;
+    if (vv < 0.01) return false;
+    // Clamped forward: a pass that already happened is not a conflict, and one beyond the horizon
+    // is not yet anybody's problem.
+    const t = Math.max(0, Math.min(JUNCTION_ALARM_S, -(rx * vx + ry * vy) / vv));
+    return Math.hypot(rx + vx * t, ry + vy * t) <= JUNCTION_CONFLICT_M;
+  }
+
 
   /**
    * Move one rijstrook. `dir` is +1 for left, matching the offsets, which grow leftward.

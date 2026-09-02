@@ -144,3 +144,27 @@ covered it in three places, and one of those notices was on the screen at the mo
 was missing. The habit that keeps this file honest is trying to *reproduce* the gap first, from a
 clean draft, rather than trusting the note. Every wall in this round's list survived that test.
 The one that did not was the one written from memory.
+
+**There is no look between the glance and the schouderblik.** `EYE_LEFT` turns the head 25° and the
+forward view reaches 31° beyond it, so a glance covers to 56° off the nose; the next thing available
+is `SHOULDER_LEFT` at 102°. Nothing in between — and a rider stopped at haaientanden looking along a
+priority road turns their head about 70°, which is precisely the hole.
+
+*Voorrang verlenen op de zijweg* is built on that hole and says so in its own header. Its last look
+was meant to be the one that finds the car; at the give-way line the car is 87 m away and **72,9°
+off the nose**, so the glance cannot reach it and all three columns of its reveal table read the
+same. Working it backwards is worse than the measurement: a car near enough to sit inside 56° at the
+line is within 35 m of the junction, which at fifty is 2,6 s away, and the rider still needs 5,8 s
+to cover the last 24 m. **The two requirements are geometrically incompatible**, so no amount of
+retiming the traffic fixes it.
+
+The tempting patch is to score `SHOULDER_LEFT` there, and it is worse than the gap. A schouderblik
+is for the blind spot beside you; asking for one at a stop line teaches a student something false,
+and this project's whole claim is that what it says is right. The real fix is a `HEAD_LEFT` /
+`HEAD_RIGHT` pair at about 70° with the gaze targets and instrument dots to match — a change to the
+look vocabulary, which is why it is here rather than done.
+
+Note what carried the scenario anyway: the rules still discriminate and the incident still fires, so
+a rider who crosses meets the car at 2,4 m and takes a `kritiek`. But `wasPerceived` is **false** on
+that incident, which is the same finding wearing different clothes — everywhere else in this project
+a kritiek means the rider saw the hazard and went anyway. Worth reading as a signal, not a detail.
