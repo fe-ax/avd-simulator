@@ -75,15 +75,29 @@ function mergePlanFor(scenario: Scenario): MergePlan {
 function crossingPlanFor(scenario: Scenario): RidePlan {
   if (scenario.world.kind !== 'junction') return {};
   const turning = scenario.world.manoeuvre !== 'straight';
+  // Yielding is for a road user who has priority over you, and whether one does is what the
+  // haaientanden say — **except when you are turning left**, where the traffic coming the other way
+  // goes first whatever the paint says about the side road.
+  //
+  // That exception is not a special case bolted on; it is the exact thing a left-turn exercise
+  // teaches, and the mistake examiners actually watch for. Reading it off `giveWay` alone gave a
+  // model rider that rode onto a voorrangsweg, turned left across an oncoming car, and called it a
+  // clean ride — the tool asserting in Dutch that priority over the side road is priority over
+  // everything.
+  const yields = scenario.world.giveWay !== 'side' || scenario.world.manoeuvre === 'left';
   return {
     slowDown: turning,
     gear: turning,
-    // Yielding is for a road user who has priority over you. Whether one does is what the
-    // haaientanden say.
-    yieldToActor: scenario.world.giveWay !== 'side',
+    yieldToActor: yields,
     // Read the traffic even when it is the one that should be stopping. Having priority is not
     // the same as being given it, and that gap is what a hazard exercise is about.
-    anticipate: true,
+    //
+    // But that is a virtue only for a rider entitled to go. One who must give way is already
+    // stopping, so anticipation is the same act under a second name — and turning both on means
+    // neither can be tested: the rider labelled "wie geen voorrang geeft" quietly anticipated
+    // instead, arrived slowly, upset nobody and passed. The scenario then reported its own hazard
+    // as an unscored road user, which is the tool saying out loud that its traffic is decoration.
+    anticipate: !yields,
   };
 }
 
@@ -287,6 +301,7 @@ function sloppyRiders(scenario: Scenario): SloppyRider[] {
     { label: 'wie niet kijkt', plan: REVEAL_NO_LOOKS },
     { label: 'wie niet afremt', plan: { slowDown: false, gear: false } },
     { label: 'wie geen voorrang geeft', plan: { yieldToActor: false } },
+    { label: 'wie niet aangeeft', plan: { indicator: false } },
     // Rides straight on past the turn. Nothing on a scenario whose opdracht *is* straight on —
     // which is right: there the manoeuvre is not a thing you can get wrong.
     { label: 'wie de bocht mist', plan: { steer: false } },

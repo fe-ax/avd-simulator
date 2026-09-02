@@ -3,7 +3,7 @@
  * clock advanced by hand — so tests and the scenario-tuning harness exercise the real physics,
  * perception and scoring rather than a mock of them.
  */
-import { SimEngine } from './engine';
+import { BRAKE_DECEL, SimEngine } from './engine';
 import { GAZE_DURATION_S, isLookControl, LOOK_DIRECTIONS } from './perception';
 import { poseAt } from './route';
 import { scoreRun } from './scoring';
@@ -165,6 +165,20 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
   const engine = new SimEngine(scenario);
   engine.timeScale = p.timeScale;
   engine.autoSteer = p.autoSteer;
+
+  // Which way this exercise turns.
+  //
+  // Every control below used to name the right-hand one, which was true of every crossroads that
+  // existed and is a fact about those scenarios rather than about riding. A left turn driven by a
+  // rider who signals right and checks the right shoulder is not a sloppy rider; it is a broken
+  // harness, and it reports the scenario as unrideable.
+  const turning: 'left' | 'right' =
+    scenario.world.kind === 'junction' && scenario.world.manoeuvre === 'left' ? 'left' : 'right';
+  const SHOULDER = turning === 'left' ? 'SHOULDER_LEFT' : 'SHOULDER_RIGHT';
+  const SHOULDER_OTHER = turning === 'left' ? 'SHOULDER_RIGHT' : 'SHOULDER_LEFT';
+  const INDICATOR = turning === 'left' ? 'INDICATOR_LEFT' : 'INDICATOR_RIGHT';
+  const INDICATOR_OTHER = turning === 'left' ? 'INDICATOR_RIGHT' : 'INDICATOR_LEFT';
+  const STEER = turning === 'left' ? 'STEER_LEFT' : 'STEER_RIGHT';
   let record: RunRecord | null = null;
   engine.arm((r) => {
     record = r;
@@ -188,7 +202,7 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
   ) => {
     if (isLookControl(control) && phase === 'press') {
       const aim = LOOK_DIRECTIONS[control];
-      const overshoot = p.shoulderTooFarBack && control === 'SHOULDER_RIGHT';
+      const overshoot = p.shoulderTooFarBack && (control === 'SHOULDER_RIGHT' || control === 'SHOULDER_LEFT');
       engine.headPose.yaw = ((overshoot ? -138 : aim.yaw) * Math.PI) / 180;
       engine.headPose.pitch = (aim.pitch * Math.PI) / 180;
       headHold = GAZE_DURATION_S;
@@ -237,12 +251,12 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
     if (p.mirrors && d <= at(60, 70)) once('mirrorR', () => dispatch('MIRROR_RIGHT'));
     // Announcing first and checking afterwards: both steps land inside their own window, so
     // only the order is wrong.
-    if (p.signalBeforeLooking && d <= 58) once('indEarly', () => dispatch('INDICATOR_RIGHT'));
+    if (p.signalBeforeLooking && d <= 58) once('indEarly', () => dispatch(INDICATOR));
     if (p.shoulderPrep && d <= (rush ? 122 : 50)) {
-      once('shoulderPrep', () => dispatch('SHOULDER_RIGHT'));
+      once('shoulderPrep', () => dispatch(SHOULDER));
     }
-    if (p.indicatorWrongSide && d <= 44) once('indL', () => dispatch('INDICATOR_LEFT'));
-    if (p.indicator && d <= 40) once('ind', () => dispatch('INDICATOR_RIGHT'));
+    if (p.indicatorWrongSide && d <= 44) once('indL', () => dispatch(INDICATOR_OTHER));
+    if (p.indicator && d <= 40) once('ind', () => dispatch(INDICATOR));
 
     if (p.scanConstantly && engine.t - lastScan > 0.25) {
       lastScan = engine.t;
@@ -266,9 +280,9 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
       });
     }
     if (p.eyes && d <= 24) once('eyeLFinal', () => dispatch('EYE_LEFT'));
-    if (p.shoulderWrongSide && d <= 14) once('wrongShoulder', () => dispatch('SHOULDER_LEFT'));
-    if (p.shoulder && d <= 14) once('shoulder', () => dispatch('SHOULDER_RIGHT'));
-    if (p.steer && d <= 11) once('steer', () => dispatch('STEER_RIGHT'));
+    if (p.shoulderWrongSide && d <= 14) once('wrongShoulder', () => dispatch(SHOULDER_OTHER));
+    if (p.shoulder && d <= 14) once('shoulder', () => dispatch(SHOULDER));
+    if (p.steer && d <= 11) once('steer', () => dispatch(STEER));
 
     // Has the hazard gone by yet?
     //
@@ -326,7 +340,17 @@ export function driveRun(scenario: Scenario, plan: RidePlan = {}): RunRecord {
     } else {
       closing = false;
     }
-    const hazard = (p.yieldToActor && d <= 12 && !actorPast) || (closing && d <= 55 && d > -2);
+    // Where to start braking is a fact about the speed you are carrying, not a number.
+    //
+    // Twelve metres flat is fine on the Kerkstraat, where the rider is already down to walking pace
+    // by the time anything matters. On a 50 road it is not: braking at 38 km/h needs twelve and a
+    // half metres to stop, so the rider that "gave way" rolled a metre *past* the conflict point
+    // and came to rest in the middle of the junction, two metres from a car doing fifty. It scored
+    // as a gevaarzetting, which was the correct reading of what it did — a model rider failing its
+    // own exercise, and the exercise was not the thing that was wrong.
+    const stopIn = engine.bike.speed ** 2 / (2 * BRAKE_DECEL) + YIELD_MARGIN_M;
+    const hazard =
+      (p.yieldToActor && d <= Math.max(12, stopIn) && !actorPast) || (closing && d <= 55 && d > -2);
     if (hazard) slowedFor = true;
 
     // Having slowed for something, get going again — or, for the rider who does not, do not.
@@ -426,6 +450,13 @@ export interface MergePlan {
 const SAME_LANE_M = 2;
 
 /** How far ahead a stopped obstruction starts to matter. About a rider's thinking distance at 50. */
+/**
+ * Metres of room a yielding rider leaves between where it stops and the point it must not cross.
+ *
+ * Stopping exactly on the conflict point is stopping in the path of the thing you are waiting for.
+ */
+const YIELD_MARGIN_M = 3;
+
 const BLOCKING_LOOKAHEAD_M = 45;
 
 /** How close to your line it has to reach before you would slow for it. */

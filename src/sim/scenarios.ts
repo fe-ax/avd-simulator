@@ -22,6 +22,7 @@ import { inhalenSnelweg } from './scenario.inhalen-snelweg';
 import { invoegenSnelweg } from './scenario.invoegen-snelweg';
 import { rechtsafFietspad } from './scenario.rechtsaf-fietspad';
 import { uitvoegenSnelweg } from './scenario.uitvoegen-snelweg';
+import { linksafTegenliggers } from './scenario.linksaf-tegenliggers';
 import type { Scenario } from './types';
 
 /** The ones that ship, in the order they are offered to the student, easiest first. */
@@ -31,6 +32,7 @@ export const ALL_SCENARIOS: readonly Scenario[] = [
   invoegenSnelweg,
   inhalenSnelweg,
   uitvoegenSnelweg,
+  linksafTegenliggers,
 ];
 
 /** What a fresh session starts on, and the fallback for an id that is no longer in the registry. */

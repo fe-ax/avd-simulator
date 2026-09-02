@@ -139,6 +139,19 @@ interface CommonRoutes {
   conflictS: number;
   /** How far past the conflict the ride continues before it is called finished. */
   runOutM: number;
+  /**
+   * Arc length at which the assigned manoeuvre is finished, or null when there is not one.
+   *
+   * The engine used to work this out itself, as `decisionS + turn.lengths[1]`, which is the end of
+   * the turn branch on a crossing that *has* a branch. A junction has one route and puts
+   * `decisionS` past the end deliberately, so that sum was unreachable and `manoeuvreCompletedAt`
+   * stayed null for every junction scenario ever written — which silently disabled every
+   * `afterTurn` rule on one, since `scoreExpected` returns no row at all when the manoeuvre never
+   * completed. A rule that cannot fire is invisible: it does not fail, it simply is not there.
+   *
+   * Saying it here instead means each route builder answers for its own shape.
+   */
+  manoeuvreEndS: number | null;
 }
 
 export type ScenarioRoutes =
@@ -278,6 +291,10 @@ function buildJunctionRoutes(world: Extract<ScenarioWorld, { kind: 'junction' }>
     straight: spine,
     // One route, no branch: the manoeuvre is the assignment, not a choice made with the bars.
     decisionS: spine.total + 1,
+    // Turning ends where the arc does. Going straight on is not a manoeuvre you can finish, so
+    // there is nothing for an `afterTurn` rule to hang off and it says so rather than guessing.
+    manoeuvreEndS:
+      manoeuvre === 'straight' ? null : spine.lengths[0] + spine.lengths[1],
     conflictS,
     runOutM,
     crossEntryS: conflictS,
@@ -315,6 +332,8 @@ function buildMotorwayRoutes(world: Extract<ScenarioWorld, { kind: 'motorway' }>
       turn: spine,
       straight: spine,
       decisionS: spine.total + 1,
+      // On a motorway the manoeuvre is a lane change, which the engine timestamps as it happens.
+      manoeuvreEndS: null,
       conflictS: spine.total,
       runOutM: 0,
       laneOffsets: lanes.centres.map((c) => lanes.centres[0] - c),
@@ -342,6 +361,7 @@ function buildMotorwayRoutes(world: Extract<ScenarioWorld, { kind: 'motorway' }>
       turn: spine,
       straight: spine,
       decisionS: spine.total + 1,
+      manoeuvreEndS: null,
       // The mouth, not the end. Every window then reads the way it would be said out loud: the
       // checks are so many metres before the exit opens, and where you enter it is a window on the
       // other side of that — which the existing convention already spells as negative.
@@ -387,6 +407,7 @@ function buildMotorwayRoutes(world: Extract<ScenarioWorld, { kind: 'motorway' }>
     straight: spine,
     // No branch here: put the decision past the end so the engine's branch logic never fires.
     decisionS: spine.total + 1,
+    manoeuvreEndS: null,
     conflictS,
     runOutM,
     // Index 0 is the invoegstrook itself, then each rijstrook further left.
@@ -468,6 +489,10 @@ function buildCrossingRoutes(
     turn,
     straight,
     decisionS: segmentLength(approachSeg),
+    // Exactly what the engine used to compute for itself, moved to where the shape is known. The
+    // rider may go straight on here instead, so this is the end of the *turn* branch and the
+    // engine still checks they took it.
+    manoeuvreEndS: segmentLength(approachSeg) + turn.lengths[1],
     conflictS: findSAtX(turn, scenario.conflictX),
     runOutM: 42,
     crossEntryS,

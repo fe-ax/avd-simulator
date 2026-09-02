@@ -11,11 +11,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { analyseScenario, referenceRide } from '../referenceRide';
+import { ALL_SCENARIOS } from '../scenarios';
 import { autoVanRechts } from '../scenario.auto-van-rechts';
-import { rechtsafFietspad } from '../scenario.rechtsaf-fietspad';
-import { inhalenSnelweg } from '../scenario.inhalen-snelweg';
-import { uitvoegenSnelweg } from '../scenario.uitvoegen-snelweg';
-import { invoegenSnelweg } from '../scenario.invoegen-snelweg';
 import type { Scenario } from '../types';
 
 const byId = (s: Scenario, id: string) => {
@@ -75,17 +72,40 @@ describe('welke regels vangen iets', () => {
    */
   const KNOWN_OPEN: Record<string, string[]> = {};
 
-  it.each([
-    ['rechtsaf-fietspad-v1', rechtsafFietspad],
-    ['auto-van-rechts-v1', autoVanRechts],
-    ['invoegen-snelweg-v1', invoegenSnelweg],
-    ['inhalen-snelweg-v1', inhalenSnelweg],
-    ['uitvoegen-snelweg-v1', uitvoegenSnelweg],
-  ])('%s: elke regel wordt gemist door een slordige rijder, op de bekende na', (id, s) => {
-    const open = analyseScenario(s as Scenario)
-      .discrimination.filter((r) => r.failedBy.length === 0)
-      .map((r) => r.expectedId)
-      .sort();
-    expect(open).toEqual((KNOWN_OPEN[id] ?? []).slice().sort());
-  });
+  // Taken from the registry rather than listed, so a scenario added tomorrow is held to this bar
+  // without anybody remembering to add it. Naming the five by hand meant a sixth could ship with a
+  // rule nothing could fail and this file would stay green while saying it covered everything.
+  it.each(ALL_SCENARIOS.map((s) => [s.id, s] as const))(
+    '%s: elke regel wordt gemist door een slordige rijder, op de bekende na',
+    (id, s) => {
+      const open = analyseScenario(s as Scenario)
+        .discrimination.filter((r) => r.failedBy.length === 0)
+        .map((r) => r.expectedId)
+        .sort();
+      expect(open).toEqual((KNOWN_OPEN[id] ?? []).slice().sort());
+    },
+  );
+
+  /**
+   * And no scenario keeps a road user it never scores.
+   *
+   * An actor nothing can be judged against is scenery wearing a label — it costs the student
+   * attention and gives nothing back. The left-turn exercise shipped in exactly that state for a
+   * while: the oncoming car could not raise an incident, because `actorConflicts` refused every
+   * junction outright, so the hazard the whole scenario is about was decoration.
+   *
+   * The motorway convoy is the honest exception. Two of its three lorries are the wall that makes
+   * the exercise a wall; there is no manoeuvre that can conflict with them and no rule that should.
+   */
+  const SCENERY: Record<string, string[]> = {
+    'uitvoegen-snelweg-v1': ['Voorste vrachtwagen', 'Tweede vrachtwagen'],
+  };
+
+  it.each(ALL_SCENARIOS.map((s) => [s.id, s] as const))(
+    '%s: elke weggebruiker wordt ergens beoordeeld',
+    (id, s) => {
+      const unscored = analyseScenario(s as Scenario).unscored.map((a) => a.label).sort();
+      expect(unscored).toEqual((SCENERY[id] ?? []).slice().sort());
+    },
+  );
 });

@@ -122,6 +122,7 @@ describe('elk scenario draagt de borden die bij zijn weg horen', () => {
     'invoegen-snelweg-v1': ['speedLimit'],
     'inhalen-snelweg-v1': ['speedLimit'],
     'uitvoegen-snelweg-v1': ['speedLimit', 'exit'],
+    'linksaf-tegenliggers-v1': ['speedLimit', 'priorityRoad', 'giveWay'],
   };
 
   it.each(ALL_SCENARIOS.map((s) => [s.id, s] as const))('%s', (id, scenario) => {
